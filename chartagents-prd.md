@@ -34,13 +34,14 @@ chartagents closes this gap: a pip-installable library where `create_chart_agent
 
 **One-liner:** *Claude gives a person a chart in a chat. chartagents gives your application a charting capability behind an API.*
 
-### The five pillars
+### The six pillars
 
 1. **Embeddable, not conversational-only.** Output is a programmatic contract — typed artifacts (ECharts JSON, Plotly figure, PNG/SVG, HTML, and the validated ChartSpec itself) that drop directly into the caller's frontend, PDF export, or report pipeline. Not an artifact trapped in a chat session.
 2. **Data never leaves your infrastructure.** Profiling runs via DuckDB against data where it lives (local files, S3/Parquet) or pushes down to the source engine (warehouse connections). Only metadata — schema, statistics, small samples — ever reaches the LLM. The execution sandbox is pluggable and self-hostable.
 3. **Engineered reliability.** A deterministic rail (validated spec → hand-written renderer, zero generated code) handles the common majority of requests (working hypothesis: ~80%; validated in Phase 0, see §11); an agentic custom-code rail handles the rest; every chart passes a lint + VLM-critique + interactivity review gate before delivery. Reproducible by contract: every chart is anchored to its saved ChartSpec, and spec → artifact rendering is bit-stable across runs. (Planning is an LLM call and, like any model call, can vary between invocations — the spec, not the prompt, is the reproducibility anchor.) Published eval benchmark backs the quality claim.
-4. **Cost and latency as a dial — including zero.** `quality="fast" | "balanced" | "best"` controls the review-loop budget per request; data refresh and re-render of an existing chart cost **zero LLM tokens** by design; conversational edits are token-cheap patches, not rewrites.
+4. **Cost and latency as a dial.** `quality="fast" | "balanced" | "best"` controls the review-loop budget per request; conversational edits are token-cheap patches, not full rewrites. (Refresh at *zero* cost is prominent enough to stand as its own pillar — see pillar 6.)
 5. **Model-agnostic and customizable.** Any model via LangChain (including self-hosted for regulated environments). Org chart conventions — brand palettes, annotation rules, house style — ship as skills that apply to every generated chart.
+6. **Generate once, refresh forever — at zero LLM cost.** A chart is a *saved spec*, not a one-off image. Re-rendering it against fresh data is a pure replay of the stored transform (deterministic rail: re-run the query → renderer; custom rail: re-call `make_chart(data)`) — no model call, no re-planning — so a scheduled dashboard of *any* size refreshes on a cron at **$0 inference cost** and sub-second latency (§7.7, P0.11). A drifted schema fails loud with a typed `SchemaDriftError` rather than drawing a silently-wrong chart. This is a durability guarantee a chat assistant cannot structurally offer — it falls directly out of the ChartSpec contract (pillar 3).
 
 
 
