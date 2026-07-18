@@ -1,0 +1,8 @@
+# Session working files — regenerated per session, deliberately not tracked
+HANDOFF.md
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/

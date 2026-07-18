@@ -16,6 +16,8 @@
 
 ---
 
+
+
 ## 1. Problem statement
 
 Every application team that wants "chart this data" as a product feature today faces the same build-vs-buy dead end. Building it means wiring together an LLM, a data-profiling layer, a code sandbox, a rendering pipeline, and a quality-review loop — months of infrastructure work that has nothing to do with their product. Buying it doesn't exist: consumer AI assistants (Claude, ChatGPT) produce excellent charts, but only inside their own chat UIs, on uploaded data, with no programmatic contract an application can depend on.
@@ -26,17 +28,22 @@ chartagents closes this gap: a pip-installable library where `create_chart_agent
 
 ---
 
+
+
 ## 2. Positioning and USP
 
 **One-liner:** *Claude gives a person a chart in a chat. chartagents gives your application a charting capability behind an API.*
 
-### The five pillars
+### The six pillars
 
 1. **Embeddable, not conversational-only.** Output is a programmatic contract — typed artifacts (ECharts JSON, Plotly figure, PNG/SVG, HTML, and the validated ChartSpec itself) that drop directly into the caller's frontend, PDF export, or report pipeline. Not an artifact trapped in a chat session.
 2. **Data never leaves your infrastructure.** Profiling runs via DuckDB against data where it lives (local files, S3/Parquet) or pushes down to the source engine (warehouse connections). Only metadata — schema, statistics, small samples — ever reaches the LLM. The execution sandbox is pluggable and self-hostable.
 3. **Engineered reliability.** A deterministic rail (validated spec → hand-written renderer, zero generated code) handles the common majority of requests (working hypothesis: ~80%; validated in Phase 0, see §11); an agentic custom-code rail handles the rest; every chart passes a lint + VLM-critique + interactivity review gate before delivery. Reproducible by contract: every chart is anchored to its saved ChartSpec, and spec → artifact rendering is bit-stable across runs. (Planning is an LLM call and, like any model call, can vary between invocations — the spec, not the prompt, is the reproducibility anchor.) Published eval benchmark backs the quality claim.
-4. **Cost and latency as a dial — including zero.** `quality="fast" | "balanced" | "best"` controls the review-loop budget per request; data refresh and re-render of an existing chart cost **zero LLM tokens** by design; conversational edits are token-cheap patches, not rewrites.
+4. **Cost and latency as a dial.** `quality="fast" | "balanced" | "best"` controls the review-loop budget per request; conversational edits are token-cheap patches, not full rewrites. (Refresh at *zero* cost is prominent enough to stand as its own pillar — see pillar 6.)
 5. **Model-agnostic and customizable.** Any model via LangChain (including self-hosted for regulated environments). Org chart conventions — brand palettes, annotation rules, house style — ship as skills that apply to every generated chart.
+6. **Generate once, refresh forever — at zero LLM cost.** A chart is a *saved spec*, not a one-off image. Re-rendering it against fresh data is a pure replay of the stored transform (deterministic rail: re-run the query → renderer; custom rail: re-call `make_chart(data)`) — no model call, no re-planning — so a scheduled dashboard of *any* size refreshes on a cron at **$0 inference cost** and sub-second latency (§7.7, P0.11). A drifted schema fails loud with a typed `SchemaDriftError` rather than drawing a silently-wrong chart. This is a durability guarantee a chat assistant cannot structurally offer — it falls directly out of the ChartSpec contract (pillar 3).
+
+
 
 ### "But Claude already does this"
 
@@ -47,6 +54,8 @@ Yes — for an individual, in a chat, with an uploaded file. chartagents is for 
 Text-to-SQL systems (e.g., Snowflake Cortex Analyst) answer "*what data*"; chartagents answers "*what chart*." They are complements, not competitors — Cortex Analyst returns generated SQL whose execution yields a small result set, and Snowflake's own agent stack merely returns a bare Vega-Lite spec for charting: no review loop, no custom rail, no quality gate. chartagents is the quality-assured visualization layer downstream of any text-to-SQL system (see §7.4, DataSource flavor 3).
 
 ---
+
+
 
 ## 3. Target users and personas
 
@@ -61,6 +70,8 @@ Text-to-SQL systems (e.g., Snowflake Cortex Analyst) answer "*what data*"; chart
 Explicitly **not** a target: the individual analyst doing ad-hoc exploration in a chat — the Claude app already serves them well (see Non-goals).
 
 ---
+
+
 
 ## 4. User stories
 
@@ -93,15 +104,19 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 
 ---
 
+
+
 ## 5. Goals
 
 1. **Time-to-first-chart under 15 minutes** from `pip install chartagents` to a rendered chart from a natural-language instruction (measured via docs quickstart user testing).
 2. **≥ 95% executable-output rate and ≥ 85% rubric pass rate** on the public eval benchmark (≥ 150 cases, see P0.10) at `quality="balanced"`, scored by an **independent judge** — a model distinct from both the planner and the in-loop critique VLM, calibrated against human double-scoring each release (LLM judges measurably favor their own generations; see §14). At n = 150, the 95% confidence interval on a 95% rate is roughly ±3.5 pp — narrow enough to publish; at n = 30 it would be ±8 pp, which is not. (LIDA's ~3.5% visualization error rate is directional prior art only — its metric and task definition differ, so we cite it as context, not as a head-to-head comparison.)
-3. **≥ 75% of benchmark requests served by the deterministic rail**, keeping **median cost per chart ≤ $0.05 at `balanced`** (provisional target assuming a Sonnet-class planner and small critique model; finalized from measured token counts in Phase 2 and published with the benchmark); **refresh of an existing chart costs zero LLM tokens**.
+3. **≥ 75% of benchmark requests served by the deterministic rail**, keeping **median cost per chart ≤ $0.05 at** `balanced` (provisional target assuming a Sonnet-class planner and small critique model; finalized from measured token counts in Phase 2 and published with the benchmark); **refresh of an existing chart costs zero LLM tokens**.
 4. **Handle a 10 GB Parquet source with < 500 MB peak agent-process memory** — proof of the profile-don't-load architecture.
 5. **Adoption:** 1,000 GitHub stars / 10k monthly PyPI downloads within 6 months of v1.0 (proxy for "the default chart agent" positioning).
 
 ---
+
+
 
 ## 6. Non-goals
 
@@ -114,7 +129,11 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 
 ---
 
+
+
 ## 7. Architecture overview
+
+
 
 ### 7.1 Core principle
 
@@ -153,6 +172,8 @@ Orchestration: LangGraph graph with a deterministic skeleton (profile → plan �
   - *Tier 2, VLM critique (only if lints pass):* rubric — readability, truthfulness to data, chart-type appropriateness, aesthetics; approve or emit structured feedback. Bounded loop (budget set by `quality`), best-of-so-far selection. (Prior art: METAL's generate→critique→revise loop shows monotonic quality gains with compute.)
   - *Tier 3, interactivity verification (HTML outputs):* Playwright loads the artifact; asserts no console errors, plot painted, hover produces tooltip; screenshots for the VLM.
 - **Skills.** deepagents-style SKILL.md bundles for chart-domain knowledge (time-series conventions, per-library gotchas) and **user-extensible org conventions** (brand palette, "always annotate fiscal-year boundaries").
+
+
 
 ### 7.4 DataSource abstraction — three flavors (decided)
 
@@ -239,6 +260,8 @@ One best chart per request. The planner internally sketches 2–3 candidates bef
 
 ---
 
+
+
 ## 8. ChartSpec v1 outline
 
 Design tension to hold: **rich enough for the common majority of requests (~80% hypothesis, §7.3), small enough that a deterministic renderer fully implements it.** Library-agnostic by construction — it describes *what the chart is*, never how a library draws it.
@@ -258,7 +281,11 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 
 ---
 
+
+
 ## 9. Requirements
+
+
 
 ### P0 — Must have (v1.0 cannot ship without)
 
@@ -279,6 +306,8 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 | P0.12 | In-memory result-set DataSource (flavor 3)                                                                                                  | Given a DataFrame/Arrow table (e.g., a text-to-SQL result), `create_chart` completes without file I/O and without re-uploading data anywhere                                                                                                                                                                                                                                     |
 
 
+
+
 ### P1 — Nice to have (fast follows)
 
 - Plotly adapter; `web` sandbox runtime profile (Node + headless Chromium) enabling D3/custom-JS on the custom rail.
@@ -291,6 +320,8 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 - E2B sandbox backend.
 - Candidate-chart metadata exposed for conversational pivots.
 
+
+
 ### P2 — Future considerations (design for, don't build)
 
 - **Screenshot as style reference** ("make my data look like this chart"): a VLM step extracts *style and structure only* — chart type, layout, palette, annotation patterns — into a draft ChartSpec; user's data fills encodings; normal two-rail routing applies; review gate adds visual-similarity comparison against the reference. Prior art: ChartMimic's Customized Mimic task (reference image + own data); frontier models capable but unsolved (GPT-4o 83.2). Design hook now: planner input signature is `instruction + optional reference_image` from day one. Numeric data extraction from images is a non-goal (§6.6).
@@ -301,6 +332,8 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 - Reference HTTP server + JS client SDK; per-tenant theming registry.
 
 ---
+
+
 
 ## 10. Success metrics
 
@@ -323,6 +356,8 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 
 ---
 
+
+
 ## 11. Phased milestones
 
 
@@ -340,6 +375,8 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 No hard external deadlines. Dependency watch-items: deepagents API stability (pre-1.0 churn risk — pin versions), VLM cost/latency for the review loop (model choice per tier is configurable).
 
 ---
+
+
 
 ## 12. Risks and mitigations
 
@@ -360,6 +397,8 @@ No hard external deadlines. Dependency watch-items: deepagents API stability (pr
 
 ---
 
+
+
 ## 13. Resolved decisions (formerly open questions)
 
 
@@ -376,19 +415,22 @@ No hard external deadlines. Dependency watch-items: deepagents API stability (pr
 | Untrusted-metadata handling      | Profiled content treated as attacker-influenced: delimited data blocks, structured planner output, injection-pattern lint, sandbox containment (§7.3, §12)                                                                               |
 | Stateless refinement persistence | Cross-process `history=` requires a persistent VFS backend (local disk / LangGraph store); unresolvable references raise a typed error (§7.8)                                                                                            |
 | Refresh schema drift             | Schema check before refresh; drifted spec-referenced fields raise typed `SchemaDriftError`; additive drift ignored (§7.7, P0.11)                                                                                                         |
+| Minimum Python version           | `requires-python = ">=3.11"` — the hard floor imposed by matplotlib + deepagents (both forbid 3.10), chosen for maximum reach. CI matrix 3.11–3.14. The SPEC-0 line (3.12) was considered and declined in favor of reach (research #8, §13) |
+| Arrow internal interchange       | Adopted. Zero-copy verified DuckDB↔Arrow (both ways) and Polars↔Arrow; pandas zero-copy only when Arrow-backed. Guardrails: pin a tested `(duckdb, pyarrow)` pair and bump together; treat zero-copy as a fast path with copy fallbacks (multi-chunk / object-dtype / NumPy-backed pandas copy — cheap, since flavor-3 sets are small by construction); note pyarrow's ~100 MB weight in packaging + sandbox image sizing (research #8, §7.4) |
 
 
 **Still open:**
 
 - **[Product, non-blocking]** Naming check: `chartagents` availability on PyPI and trademark scan.
-- **[Engineering, non-blocking]** Minimum supported Python version and Arrow as the internal interchange format (leaning yes — zero-copy with DuckDB and DataFrames).
 
 ---
+
+
 
 ## 14. Appendix — evidence base (from design research)
 
 - Iterative generate→critique→revise loops measurably improve chart quality and scale with compute budget (METAL, 2025).
-- Cross-language viz-agent errors concentrate in layout/readability (~42%) and data consistency (~32%) — the exact failure classes our lints + truthfulness check target (DV-World benchmark).
+- Cross-language viz-agent errors concentrate in layout/readability (~~42%) and data consistency (~~32%) — the exact failure classes our lints + truthfulness check target (DV-World benchmark).
 - LLM plotting-code error rates track library familiarity (Matplotlib 1.8% vs Plotly 22% incorrect-code in PandasPlotBench) — motivates the deterministic rail, adapter defaults, and codegen library bias.
 - Editing outperforms from-scratch generation (GPT-4o: 93.6 ChartEdit vs 83.2 ChartMimic) — motivates patch-mode chart updates.
 - Grammar-agnostic spec-first generation achieves low error rates (LIDA, VER ≈ 3.5%) — motivates ChartSpec as the contract.
