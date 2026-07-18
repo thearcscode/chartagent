@@ -1,12 +1,14 @@
 # chartagents — Product Requirements Document
 
-| | |
-|---|---|
-| **Status** | Draft v0.3 — review hardening pass, ready for design-doc phase |
-| **Author** | Sharim Pervez, with Claude |
-| **Date** | July 9, 2026 |
-| **Product** | `chartagents` — an embeddable, agentic chart-creation library for Python |
+
+|             |                                                                                               |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| **Status**  | Draft v0.3 — review hardening pass, ready for design-doc phase                                |
+| **Author**  | Sharim Pervez, with Claude                                                                    |
+| **Date**    | July 9, 2026                                                                                  |
+| **Product** | `chartagents` — an embeddable, agentic chart-creation library for Python                      |
 | **License** | Apache-2.0 (decided — patent grant, enterprise-friendly, matches ECharts/LangChain ecosystem) |
+
 
 **Changelog v0.3:** review hardening — determinism claim rescoped to spec-anchored reproducibility; ~80% deterministic-rail share explicitly marked a hypothesis with a Phase 0 validation gate; benchmark enlarged to ≥150 cases with an independent judge and human calibration (LLM-as-judge self-preference bias addressed); prompt injection via profiled metadata added as a first-class risk with mitigations; `raw_sql` escape scoped to file-like sources in v1; VFS persistence requirement for stateless refinement specified; schema-drift behavior on zero-LLM refresh specified; provisional cost-per-chart target published; observability hooks added to P1; team-size assumption stated.
 
@@ -48,11 +50,13 @@ Text-to-SQL systems (e.g., Snowflake Cortex Analyst) answer "*what data*"; chart
 
 ## 3. Target users and personas
 
-| Persona | Description | What they need |
-|---|---|---|
-| **P1 — SaaS product engineer** (primary) | Adding a "describe the chart you want" feature to a customer-facing product | Simple API, structured JSON output for their web frontend, predictable cost/latency, consistent results, brand theming, zero-LLM refresh |
-| **P2 — Data platform / internal-tools engineer** (primary) | Exposing self-serve visualization over a warehouse or lakehouse to non-technical colleagues | Connection-based data access (no uploads), large-data handling, self-hostable sandbox, auditability |
-| **P3 — AI application developer** (secondary) | Building a larger agentic app (report generator, analyst copilot, text-to-SQL frontend) that needs charting as one capability | Composability with LangChain/LangGraph, in-memory result-set input, streaming events, conversation-history pass-through |
+
+| Persona                                                    | Description                                                                                                                   | What they need                                                                                                                           |
+| ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **P1 — SaaS product engineer** (primary)                   | Adding a "describe the chart you want" feature to a customer-facing product                                                   | Simple API, structured JSON output for their web frontend, predictable cost/latency, consistent results, brand theming, zero-LLM refresh |
+| **P2 — Data platform / internal-tools engineer** (primary) | Exposing self-serve visualization over a warehouse or lakehouse to non-technical colleagues                                   | Connection-based data access (no uploads), large-data handling, self-hostable sandbox, auditability                                      |
+| **P3 — AI application developer** (secondary)              | Building a larger agentic app (report generator, analyst copilot, text-to-SQL frontend) that needs charting as one capability | Composability with LangChain/LangGraph, in-memory result-set input, streaming events, conversation-history pass-through                  |
+
 
 Explicitly **not** a target: the individual analyst doing ad-hoc exploration in a chat — the Claude app already serves them well (see Non-goals).
 
@@ -61,6 +65,7 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 ## 4. User stories
 
 **P1 — SaaS product engineer**
+
 - As a SaaS engineer, I want to call `agent.create_chart(data, instruction)` and receive ECharts JSON, so that I can render the chart in my existing web frontend with one `<div>`.
 - As a SaaS engineer, I want to re-render a saved ChartSpec against fresh data with a single no-LLM call, so that my dashboards refresh on schedule at zero inference cost.
 - As a SaaS engineer, I want a `quality` knob per request, so that I can serve free-tier users cheaply and premium users with the full review loop.
@@ -68,18 +73,21 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 - As a SaaS engineer, I want to persist a chart's spec and re-render it identically at any time, so that my product behaves predictably even as models and prompts evolve.
 
 **P2 — Data platform engineer**
+
 - As a platform engineer, I want to point the agent at a 50 GB Parquet dataset on S3 or a warehouse connection, so that charts are produced without the data being uploaded anywhere or loaded fully into memory.
 - As a platform engineer, I want aggregation pushed down to my warehouse for connection sources, so that compute happens where the data and governance already live.
 - As a platform engineer, I want to run the code sandbox on my own infrastructure, and get real isolation on Linux without a Docker dependency, so that generated code never executes outside my security boundary.
 - As a platform engineer, I want a structured review report with every chart, so that I can log why a chart was approved and what the loop fixed.
 
 **P3 — AI application developer**
+
 - As an AI app developer, I want to hand chartagents the result set my text-to-SQL system (e.g., Cortex Analyst) already produced, so that I get a reviewed, production-grade chart instead of a bare spec.
 - As an AI app developer, I want to pass prior `result.messages` back into the next call, so that my users can refine charts conversationally ("now break that down quarterly") while my service stays stateless.
 - As an AI app developer, I want edits to existing charts to be token-cheap patches rather than full regenerations, so that refinement loops are fast and affordable.
 - As an AI app developer, I want streaming progress events (profiling → planning → rendering → reviewing), so that I can show live status in my UI.
 
 **Edge cases**
+
 - As any caller, when the data source is unreadable or the instruction is unanswerable from the schema, I want a structured, typed error (not a hallucinated chart), so that my app can handle it gracefully.
 - As any caller, when the review loop exhausts its budget without passing, I want the best-so-far chart returned with `review.passed = False` and the failing checks listed, so that I can decide whether to show it.
 
@@ -129,6 +137,8 @@ flowchart TD
     GATE -- pass --> OUT[/"Artifacts<br/>spec · echarts JSON · png/svg · html · review report"/]
 ```
 
+
+
 Orchestration: LangGraph graph with a deterministic skeleton (profile → plan → route → render → review, review-fail edge back through revision) and **deepagents** subagent/planning/filesystem machinery inside the genuinely open-ended stages (planner exploration, reviewer repair). 
 
 ### 7.3 Key components
@@ -146,11 +156,13 @@ Orchestration: LangGraph graph with a deterministic skeleton (profile → plan �
 
 ### 7.4 DataSource abstraction — three flavors (decided)
 
-| Flavor | Examples | Engine | Profiling cost |
-|---|---|---|---|
-| **File-like** | local CSV/Parquet/JSON, S3/HTTP URLs, user uploads (app saves file, passes path) | **DuckDB** — embedded engine reading data in place; for remote Parquet, httpfs range-requests fetch only footers + needed column chunks (a 50 GB file profiles by transferring MBs); CSVs stream chunk-wise, never accumulated | Low, bounded memory |
-| **Connection-like** | Snowflake, Postgres, BigQuery connections | **Pushdown** — the ChartSpec transform block compiles to the source's SQL dialect and runs in *their* engine; data and governance stay put | Near-zero (metadata queries) |
-| **In-memory result set** | DataFrame / Arrow table / list-of-dicts — e.g., the executed output of a text-to-SQL system such as Snowflake Cortex Analyst (which returns generated SQL whose warehouse execution yields a small result set) | DuckDB queries the frame zero-copy | Trivial — data is already small |
+
+| Flavor                   | Examples                                                                                                                                                                                                       | Engine                                                                                                                                                                                                                         | Profiling cost                  |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------- |
+| **File-like**            | local CSV/Parquet/JSON, S3/HTTP URLs, user uploads (app saves file, passes path)                                                                                                                               | **DuckDB** — embedded engine reading data in place; for remote Parquet, httpfs range-requests fetch only footers + needed column chunks (a 50 GB file profiles by transferring MBs); CSVs stream chunk-wise, never accumulated | Low, bounded memory             |
+| **Connection-like**      | Snowflake, Postgres, BigQuery connections                                                                                                                                                                      | **Pushdown** — the ChartSpec transform block compiles to the source's SQL dialect and runs in *their* engine; data and governance stay put                                                                                     | Near-zero (metadata queries)    |
+| **In-memory result set** | DataFrame / Arrow table / list-of-dicts — e.g., the executed output of a text-to-SQL system such as Snowflake Cortex Analyst (which returns generated SQL whose warehouse execution yields a small result set) | DuckDB queries the frame zero-copy                                                                                                                                                                                             | Trivial — data is already small |
+
 
 Flavor 3 makes chartagents the natural downstream of any text-to-SQL product: their layer decides *what data*, chartagents decides — and quality-assures — *what chart*.
 
@@ -160,14 +172,16 @@ Flavor 3 makes chartagents the natural downstream of any text-to-SQL product: th
 
 In-sandbox by stage: profiling scans (trusted code but untrusted *content* — defense-in-depth; also runs sandbox-side when the sandbox is remote/near the data); transform queries on both rails (LLM-derived); all custom-rail generated code (always, no exceptions); rasterization and Playwright checks (executes generated HTML/JS; `web` runtime profile).
 
-**`SandboxBackend` protocol:** `upload(path)`, `run(code) -> {stdout, stderr, artifacts}`, `download(path)`. Backends and tiers:
+`**SandboxBackend` protocol:** `upload(path)`, `run(code) -> {stdout, stderr, artifacts}`, `download(path)`. Backends and tiers:
 
-| Tier | Backend | Isolation | Availability |
-|---|---|---|---|
-| 1 | `subprocess` | Resource limits (rlimits), restricted env — weakest tier, honest docs | Everywhere |
-| 2 | `bwrap` (bubblewrap) | Linux user namespaces: private mount/pid/net namespaces, read-only binds, no daemon, no Docker dependency | Linux with unprivileged user namespaces |
-| 3 | `docker` | Container isolation | Wherever Docker runs |
-| 4 | `e2b` (and similar) | Firecracker microVM — strongest; for untrusted-data production | Cloud / self-hosted |
+
+| Tier | Backend              | Isolation                                                                                                 | Availability                            |
+| ---- | -------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| 1    | `subprocess`         | Resource limits (rlimits), restricted env — weakest tier, honest docs                                     | Everywhere                              |
+| 2    | `bwrap` (bubblewrap) | Linux user namespaces: private mount/pid/net namespaces, read-only binds, no daemon, no Docker dependency | Linux with unprivileged user namespaces |
+| 3    | `docker`             | Container isolation                                                                                       | Wherever Docker runs                    |
+| 4    | `e2b` (and similar)  | Firecracker microVM — strongest; for untrusted-data production                                            | Cloud / self-hosted                     |
+
 
 **Default behavior (decided):** `sandbox="local"` **auto-detects** — probe for bwrap → use it; unavailable (macOS/Windows, or namespaces disabled) → fall back to `subprocess` with a logged warning naming the active tier. Explicit `sandbox="bwrap" | "subprocess" | "docker" | "e2b"` (or a custom backend instance) overrides. Docker+ recommended for production in docs. (macOS `sandbox-exec` tier is a P2 consideration.)
 
@@ -188,6 +202,8 @@ flowchart TD
     PATCH --> DONE
     REGEN --> DONE
 ```
+
+
 
 Not fragile placeholder-patching — **parameterization by design**: specs separate transform from encoding; ECharts option objects separate `series[].data` from config (callers may even patch data client-side); generated code takes data as a parameter. Patch-mode editing is also the *more reliable* path — editing outscores from-scratch generation for frontier models (e.g., GPT-4o: 93.6 on ChartEdit vs 83.2 on ChartMimic).
 
@@ -228,7 +244,7 @@ One best chart per request. The planner internally sketches 2–3 candidates bef
 Design tension to hold: **rich enough for the common majority of requests (~80% hypothesis, §7.3), small enough that a deterministic renderer fully implements it.** Library-agnostic by construction — it describes *what the chart is*, never how a library draws it.
 
 - `spec_version` — semantic version, required. Adapters declare `supports_spec <= X`.
-- `data` — source reference + **transform block (decided):** a declarative operation menu — `filter`, `group_by`, `aggregate`, `pivot`, `sort`, `limit`, window basics — compiled by *our* code to the target engine's SQL (DuckDB or pushdown dialect); plus a clearly-flagged `raw_sql` escape hatch for cases the menu can't express. **`raw_sql` is scoped to file-like sources (DuckDB) in v1**, where it is validated read-only and single-statement against a single, known dialect. Connection-like sources (flavor 2) get the declarative menu only until dialect-aware validation ships — "read-only" is not reliably checkable across warehouse dialects (side-effectful functions, external functions, comment tricks), and pushdown runs inside the caller's governance boundary, so the conservative default wins. Menu-first mirrors the two-rail philosophy at the transform level.
+- `data` — source reference + **transform block (decided):** a declarative operation menu — `filter`, `group_by`, `aggregate`, `pivot`, `sort`, `limit`, window basics — compiled by *our* code to the target engine's SQL (DuckDB or pushdown dialect); plus a clearly-flagged `raw_sql` escape hatch for cases the menu can't express. `**raw_sql` is scoped to file-like sources (DuckDB) in v1**, where it is validated read-only and single-statement against a single, known dialect. Connection-like sources (flavor 2) get the declarative menu only until dialect-aware validation ships — "read-only" is not reliably checkable across warehouse dialects (side-effectful functions, external functions, comment tricks), and pushdown runs inside the caller's governance boundary, so the conservative default wins. Menu-first mirrors the two-rail philosophy at the transform level.
 - `mark` — `bar | line | area | scatter | pie/donut | heatmap | histogram | boxplot` (v1 set; grown by custom-rail telemetry).
 - `encodings` — channels (`x`, `y`, `color`, `size`, `facet`, `tooltip`) each with field, type (quantitative/temporal/ordinal/nominal), scale, axis config. Deterministic encoding rules enforced at validation (e.g., cardinality caps on `color`).
 - `layers` — bounded composition (e.g., line + point, bar + reference line).
@@ -246,20 +262,22 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 
 ### P0 — Must have (v1.0 cannot ship without)
 
-| # | Requirement | Acceptance criteria (abridged) |
-|---|---|---|
-| P0.1 | `create_chart_agent()` public API with one-shot + `history=` conversational calls | Given a CSV path and instruction, when `create_chart` is called, then a result with ≥1 requested artifact, a validated spec, and serializable messages is returned; given prior messages, refinement instructions resolve against them |
-| P0.2 | DuckDB profiler with no full-data load (file-like sources) | Given a 10 GB Parquet file, when profiled, then peak agent memory < 500 MB and `profile.json` < 10 KB |
-| P0.3 | ChartSpec v1 grammar + validation, incl. declarative transform menu + flagged read-only `raw_sql` escape (file-like sources only in v1, §8) | Invalid specs rejected with typed errors before rendering; `raw_sql` containing writes/multi-statements rejected; `raw_sql` against a connection-like source rejected with a typed error; spec round-trips JSON ↔ Pydantic losslessly |
-| P0.4 | Deterministic rail with ECharts + Matplotlib adapters; adapters receive materialized aggregate rows | Given a spec within capability profile, rendering involves zero LLM-generated code and produces identical output on repeated runs |
-| P0.5 | Custom-code rail with `python` runtime profile; generated code parameterized as `make_chart(data)` | Given a request the grammar can't express, the router records the reason; code executes only in the sandbox; re-invoking with new data requires no LLM call |
-| P0.6 | Sandbox protocol + tiered local backends (`bwrap` auto-detect → `subprocess` fallback) + `docker` | On Linux with user namespaces, `sandbox="local"` selects bwrap and generated code cannot read host paths outside binds; on fallback, active tier is logged; docker backend enforces container isolation |
-| P0.7 | Review gate tier 1 (lints) + tier 2 (VLM, bounded loop) | Charts failing lints never reach the VLM; loop respects `quality` budget; on exhaustion, best-so-far returned with `review.passed=False` and failing checks listed |
-| P0.8 | Data-truthfulness check | Given a rendered chart, plotted aggregate values match an independent re-execution of the transform within tolerance, else the chart fails review |
-| P0.9 | Typed structured errors | Unreadable source / unanswerable instruction produce typed errors, never a fabricated chart |
-| P0.10 | Eval benchmark in CI | ≥ 150 dataset+instruction pairs across the chart taxonomy (a ≥ 30-pair smoke subset runs on every prompt/model change; the full set runs nightly and pre-release); rubric scored by a judge model distinct from the planner and the in-loop critique VLM; ≥ 20% of cases human-double-scored per release to calibrate the judge; published numbers always come from the full set |
-| P0.11 | Zero-LLM refresh API — `chartagents.render(spec, data)` / `result.refresh()` | Given a saved spec and a new data snapshot with the same schema, an updated artifact is produced with zero LLM calls, on both rails; given a snapshot where a spec-referenced column is renamed/dropped/retyped, a typed `SchemaDriftError` is raised naming the drifted fields — never a silently wrong chart (§7.7) |
-| P0.12 | In-memory result-set DataSource (flavor 3) | Given a DataFrame/Arrow table (e.g., a text-to-SQL result), `create_chart` completes without file I/O and without re-uploading data anywhere |
+
+| #     | Requirement                                                                                                                                 | Acceptance criteria (abridged)                                                                                                                                                                                                                                                                                                                                                   |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0.1  | `create_chart_agent()` public API with one-shot + `history=` conversational calls                                                           | Given a CSV path and instruction, when `create_chart` is called, then a result with ≥1 requested artifact, a validated spec, and serializable messages is returned; given prior messages, refinement instructions resolve against them                                                                                                                                           |
+| P0.2  | DuckDB profiler with no full-data load (file-like sources)                                                                                  | Given a 10 GB Parquet file, when profiled, then peak agent memory < 500 MB and `profile.json` < 10 KB                                                                                                                                                                                                                                                                            |
+| P0.3  | ChartSpec v1 grammar + validation, incl. declarative transform menu + flagged read-only `raw_sql` escape (file-like sources only in v1, §8) | Invalid specs rejected with typed errors before rendering; `raw_sql` containing writes/multi-statements rejected; `raw_sql` against a connection-like source rejected with a typed error; spec round-trips JSON ↔ Pydantic losslessly                                                                                                                                            |
+| P0.4  | Deterministic rail with ECharts + Matplotlib adapters; adapters receive materialized aggregate rows                                         | Given a spec within capability profile, rendering involves zero LLM-generated code and produces identical output on repeated runs                                                                                                                                                                                                                                                |
+| P0.5  | Custom-code rail with `python` runtime profile; generated code parameterized as `make_chart(data)`                                          | Given a request the grammar can't express, the router records the reason; code executes only in the sandbox; re-invoking with new data requires no LLM call                                                                                                                                                                                                                      |
+| P0.6  | Sandbox protocol + tiered local backends (`bwrap` auto-detect → `subprocess` fallback) + `docker`                                           | On Linux with user namespaces, `sandbox="local"` selects bwrap and generated code cannot read host paths outside binds; on fallback, active tier is logged; docker backend enforces container isolation                                                                                                                                                                          |
+| P0.7  | Review gate tier 1 (lints) + tier 2 (VLM, bounded loop)                                                                                     | Charts failing lints never reach the VLM; loop respects `quality` budget; on exhaustion, best-so-far returned with `review.passed=False` and failing checks listed                                                                                                                                                                                                               |
+| P0.8  | Data-truthfulness check                                                                                                                     | Given a rendered chart, plotted aggregate values match an independent re-execution of the transform within tolerance, else the chart fails review                                                                                                                                                                                                                                |
+| P0.9  | Typed structured errors                                                                                                                     | Unreadable source / unanswerable instruction produce typed errors, never a fabricated chart                                                                                                                                                                                                                                                                                      |
+| P0.10 | Eval benchmark in CI                                                                                                                        | ≥ 150 dataset+instruction pairs across the chart taxonomy (a ≥ 30-pair smoke subset runs on every prompt/model change; the full set runs nightly and pre-release); rubric scored by a judge model distinct from the planner and the in-loop critique VLM; ≥ 20% of cases human-double-scored per release to calibrate the judge; published numbers always come from the full set |
+| P0.11 | Zero-LLM refresh API — `chartagents.render(spec, data)` / `result.refresh()`                                                                | Given a saved spec and a new data snapshot with the same schema, an updated artifact is produced with zero LLM calls, on both rails; given a snapshot where a spec-referenced column is renamed/dropped/retyped, a typed `SchemaDriftError` is raised naming the drifted fields — never a silently wrong chart (§7.7)                                                            |
+| P0.12 | In-memory result-set DataSource (flavor 3)                                                                                                  | Given a DataFrame/Arrow table (e.g., a text-to-SQL result), `create_chart` completes without file I/O and without re-uploading data anywhere                                                                                                                                                                                                                                     |
+
 
 ### P1 — Nice to have (fast follows)
 
@@ -287,6 +305,7 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 ## 10. Success metrics
 
 **Leading (days–weeks post-launch)**
+
 - Quickstart completion: ≥ 60% of docs-quickstart sessions reach a rendered chart (target: < 15 min).
 - Benchmark executable-output rate ≥ 95%; rubric pass ≥ 85% at `balanced` (full ≥ 150-case set, independent judge + human calibration per P0.10; measured in CI, published with confidence intervals).
 - Deterministic-rail share ≥ 75% on benchmark; custom-rail reasons logged 100%.
@@ -294,6 +313,7 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 - Median latency: deterministic rail < 10 s; custom rail < 60 s at `balanced`; refresh < 2 s (measurement: benchmark harness, p50/p95).
 
 **Lagging (weeks–months)**
+
 - PyPI monthly downloads (10k @ 6 months), GitHub stars (1k @ 6 months).
 - ≥ 5 public production integrations / case studies @ 6 months, at least one downstream of a text-to-SQL system.
 - Custom-rail share trending *down* release-over-release (grammar absorbing telemetry).
@@ -305,13 +325,15 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 
 ## 11. Phased milestones
 
-| Phase | Scope | Exit criteria |
-|---|---|---|
-| **0 — Spec & spike** (2–3 wks) | ChartSpec v1 Pydantic draft incl. transform menu + `raw_sql` validation; pressure-test against a 50-request corpus (20 nasty + 30 representative real requests); DuckDB profiler prototype; adapter protocol RFC; bwrap detection spike | Spec survives pressure tests or revisions documented; **measured deterministic-rail share on the corpus published internally — if < 60%, grammar scope and cost model revisited before Phase 1** (validates the ~80% hypothesis, §7.3); profiler meets P0.2 numbers; bwrap/subprocess auto-detect works on target platforms |
-| **1 — Deterministic core** (4–6 wks) | Profiler + planner + ChartSpec validation + ECharts/Matplotlib adapters + lints + tiered local & docker sandboxes + in-memory DataSource + zero-LLM render API + eval harness v0 | P0.1–P0.4, P0.6, P0.9–P0.12 green; deterministic rail works end-to-end incl. refresh |
-| **2 — Agentic quality** (4–6 wks) | Custom-code rail (python profile, parameterized codegen); VLM review loop; data-truthfulness check; quality dial | P0.5, P0.7, P0.8 green; benchmark targets hit at `balanced` |
-| **3 — v1.0 launch** (2–3 wks) | Docs (incl. text-to-SQL integration guide), quickstart, published benchmark results, API freeze, PyPI release under Apache-2.0 | All P0 acceptance criteria pass in CI; launch post with benchmark table |
-| **4 — Fast follows** | P1 list (web runtime, Playwright tier 3, Plotly adapter, pushdown connections, patch-mode formalization, streaming, skills, E2B) | Driven by launch telemetry, esp. custom-rail reasons |
+
+| Phase                                | Scope                                                                                                                                                                                                                                   | Exit criteria                                                                                                                                                                                                                                                                                                               |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0 — Spec & spike** (2–3 wks)       | ChartSpec v1 Pydantic draft incl. transform menu + `raw_sql` validation; pressure-test against a 50-request corpus (20 nasty + 30 representative real requests); DuckDB profiler prototype; adapter protocol RFC; bwrap detection spike | Spec survives pressure tests or revisions documented; **measured deterministic-rail share on the corpus published internally — if < 60%, grammar scope and cost model revisited before Phase 1** (validates the ~80% hypothesis, §7.3); profiler meets P0.2 numbers; bwrap/subprocess auto-detect works on target platforms |
+| **1 — Deterministic core** (4–6 wks) | Profiler + planner + ChartSpec validation + ECharts/Matplotlib adapters + lints + tiered local & docker sandboxes + in-memory DataSource + zero-LLM render API + eval harness v0                                                        | P0.1–P0.4, P0.6, P0.9–P0.12 green; deterministic rail works end-to-end incl. refresh                                                                                                                                                                                                                                        |
+| **2 — Agentic quality** (4–6 wks)    | Custom-code rail (python profile, parameterized codegen); VLM review loop; data-truthfulness check; quality dial                                                                                                                        | P0.5, P0.7, P0.8 green; benchmark targets hit at `balanced`                                                                                                                                                                                                                                                                 |
+| **3 — v1.0 launch** (2–3 wks)        | Docs (incl. text-to-SQL integration guide), quickstart, published benchmark results, API freeze, PyPI release under Apache-2.0                                                                                                          | All P0 acceptance criteria pass in CI; launch post with benchmark table                                                                                                                                                                                                                                                     |
+| **4 — Fast follows**                 | P1 list (web runtime, Playwright tier 3, Plotly adapter, pushdown connections, patch-mode formalization, streaming, skills, E2B)                                                                                                        | Driven by launch telemetry, esp. custom-rail reasons                                                                                                                                                                                                                                                                        |
+
 
 **Resourcing assumption:** the timeline above assumes 2 full-time engineers (phases largely sequential, with benchmark construction parallelizable). One engineer stretches the total to roughly 6–8 months; scale expectations accordingly.
 
@@ -321,38 +343,43 @@ No hard external deadlines. Dependency watch-items: deepagents API stability (pr
 
 ## 12. Risks and mitigations
 
-| Risk | Mitigation |
-|---|---|
-| deepagents API churn (young library) | Deterministic LangGraph skeleton owns the pipeline; deepagents used at the "agentic joints" behind our own thin interface; version pinning |
-| VLM review cost makes `best` uneconomical | Tiered gate ensures lints filter most failures cheaply; loop budget capped; model per tier configurable (small model for critique) |
-| Grammar too small → custom rail overused (reliability + cost suffer) | Escape-reason telemetry is a P0; grammar growth is the standing roadmap input |
-| Sandbox friction kills adoption | Tiered local default (bwrap → subprocess) needs zero setup; active tier logged honestly; docker one-liner; cloud backends strictly optional |
-| Weak isolation on subprocess fallback misunderstood as "secure" | Loud tier logging, explicit docs matrix, `require_isolation=True` option that errors instead of falling back |
-| "Claude/ChatGPT does this free" perception | Positioning discipline (§2): embed-ability, data locality, reliability contract; publish the benchmark |
-| Benchmark gamed by overfitting prompts to it | Hold-out set rotated per release; community-contributed cases |
+
+| Risk                                                                                                                                                                            | Mitigation                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| deepagents API churn (young library)                                                                                                                                            | Deterministic LangGraph skeleton owns the pipeline; deepagents used at the "agentic joints" behind our own thin interface; version pinning                                                                                                          |
+| VLM review cost makes `best` uneconomical                                                                                                                                       | Tiered gate ensures lints filter most failures cheaply; loop budget capped; model per tier configurable (small model for critique)                                                                                                                  |
+| Grammar too small → custom rail overused (reliability + cost suffer)                                                                                                            | Escape-reason telemetry is a P0; grammar growth is the standing roadmap input                                                                                                                                                                       |
+| Sandbox friction kills adoption                                                                                                                                                 | Tiered local default (bwrap → subprocess) needs zero setup; active tier logged honestly; docker one-liner; cloud backends strictly optional                                                                                                         |
+| Weak isolation on subprocess fallback misunderstood as "secure"                                                                                                                 | Loud tier logging, explicit docs matrix, `require_isolation=True` option that errors instead of falling back                                                                                                                                        |
+| "Claude/ChatGPT does this free" perception                                                                                                                                      | Positioning discipline (§2): embed-ability, data locality, reliability contract; publish the benchmark                                                                                                                                              |
+| Benchmark gamed by overfitting prompts to it                                                                                                                                    | Hold-out set rotated per release; community-contributed cases                                                                                                                                                                                       |
 | Prompt injection via untrusted data content — column names/sample values in `profile.json` carry adversarial instructions into planner prompts (indirect prompt injection, §14) | Delimited/escaped data blocks with data-not-instructions framing; planner output constrained to validated ChartSpec; Tier 1 injection-pattern lint flags suspect sources; custom-rail blast radius contained by sandbox + truthfulness check (§7.3) |
-| Benchmark quality claims circular — same VLM critiques in-loop and judges the benchmark; LLM judges favor their own generations (§14) | Judge model distinct from planner and critique VLM; ≥ 20% human double-scoring per release to calibrate the judge; published numbers carry confidence intervals (P0.10) |
-| Deterministic-rail share hypothesis (~80%) proves too optimistic → cost/reliability story weakens | Measured in Phase 0 pressure tests and on the benchmark before Phase 1 locks the cost model; if share < 60%, grammar scope and published cost targets are revisited before launch (§11) |
+| Benchmark quality claims circular — same VLM critiques in-loop and judges the benchmark; LLM judges favor their own generations (§14)                                           | Judge model distinct from planner and critique VLM; ≥ 20% human double-scoring per release to calibrate the judge; published numbers carry confidence intervals (P0.10)                                                                             |
+| Deterministic-rail share hypothesis (~80%) proves too optimistic → cost/reliability story weakens                                                                               | Measured in Phase 0 pressure tests and on the benchmark before Phase 1 locks the cost model; if share < 60%, grammar scope and published cost targets are revisited before launch (§11)                                                             |
+
 
 ---
 
 ## 13. Resolved decisions (formerly open questions)
 
-| Question | Decision |
-|---|---|
-| Transform block expressiveness | Declarative operation menu compiled by our code, plus flagged `raw_sql` escape validated read-only/single-statement — file-like (DuckDB) sources only in v1; menu-only for connection pushdown until dialect-aware validation ships (§8) |
-| Adapter data handoff | Materialized aggregate rows (small by construction); query handles deferred to P2 |
-| Local sandbox default | Tiered auto-detect: bwrap where available (Linux user namespaces) → subprocess + rlimits fallback with logged tier; explicit override and `require_isolation` flag; docker+ recommended for production |
-| License | Apache-2.0 |
-| Telemetry | Fully offline by default; explicit opt-in flag for anonymous stats |
-| Screenshot reference | In scope as P2, style/structure extraction only; numeric extraction is a non-goal |
-| Reproducibility contract | Anchored to the saved ChartSpec (spec → artifact rendering is bit-stable); LLM planning is not claimed deterministic (§2) |
-| Benchmark judging | ≥ 150 cases; judge model distinct from planner and critique VLM; ≥ 20% human double-scoring per release; published with confidence intervals (Goal 2, P0.10) |
-| Untrusted-metadata handling | Profiled content treated as attacker-influenced: delimited data blocks, structured planner output, injection-pattern lint, sandbox containment (§7.3, §12) |
-| Stateless refinement persistence | Cross-process `history=` requires a persistent VFS backend (local disk / LangGraph store); unresolvable references raise a typed error (§7.8) |
-| Refresh schema drift | Schema check before refresh; drifted spec-referenced fields raise typed `SchemaDriftError`; additive drift ignored (§7.7, P0.11) |
+
+| Question                         | Decision                                                                                                                                                                                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Transform block expressiveness   | Declarative operation menu compiled by our code, plus flagged `raw_sql` escape validated read-only/single-statement — file-like (DuckDB) sources only in v1; menu-only for connection pushdown until dialect-aware validation ships (§8) |
+| Adapter data handoff             | Materialized aggregate rows (small by construction); query handles deferred to P2                                                                                                                                                        |
+| Local sandbox default            | Tiered auto-detect: bwrap where available (Linux user namespaces) → subprocess + rlimits fallback with logged tier; explicit override and `require_isolation` flag; docker+ recommended for production                                   |
+| License                          | Apache-2.0                                                                                                                                                                                                                               |
+| Telemetry                        | Fully offline by default; explicit opt-in flag for anonymous stats                                                                                                                                                                       |
+| Screenshot reference             | In scope as P2, style/structure extraction only; numeric extraction is a non-goal                                                                                                                                                        |
+| Reproducibility contract         | Anchored to the saved ChartSpec (spec → artifact rendering is bit-stable); LLM planning is not claimed deterministic (§2)                                                                                                                |
+| Benchmark judging                | ≥ 150 cases; judge model distinct from planner and critique VLM; ≥ 20% human double-scoring per release; published with confidence intervals (Goal 2, P0.10)                                                                             |
+| Untrusted-metadata handling      | Profiled content treated as attacker-influenced: delimited data blocks, structured planner output, injection-pattern lint, sandbox containment (§7.3, §12)                                                                               |
+| Stateless refinement persistence | Cross-process `history=` requires a persistent VFS backend (local disk / LangGraph store); unresolvable references raise a typed error (§7.8)                                                                                            |
+| Refresh schema drift             | Schema check before refresh; drifted spec-referenced fields raise typed `SchemaDriftError`; additive drift ignored (§7.7, P0.11)                                                                                                         |
+
 
 **Still open:**
+
 - **[Product, non-blocking]** Naming check: `chartagents` availability on PyPI and trademark scan.
 - **[Engineering, non-blocking]** Minimum supported Python version and Arrow as the internal interchange format (leaning yes — zero-copy with DuckDB and DataFrames).
 
@@ -370,3 +397,4 @@ No hard external deadlines. Dependency watch-items: deepagents API stability (pr
 - Reference-image chart generation is a studied task (ChartMimic: Direct/Customized Mimic; 4,800 curated triplets) — motivates the P2 screenshot feature and its style-only scoping.
 - LLM-integrated applications that feed retrieved/ingested content into prompts are exploitable via indirect prompt injection — adversarial instructions embedded in data act like code (Greshake et al., "Not what you've signed up for," AISec 2023) — motivates treating profiled metadata as attacker-influenced input (§7.3, §12).
 - LLM evaluators systematically score their own generations higher than human annotators do, with self-preference driven by self-recognition (Panickssery et al., "LLM Evaluators Recognize and Favor Their Own Generations," NeurIPS 2024) — motivates the independent benchmark judge and human calibration (Goal 2, P0.10).
+
