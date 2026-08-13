@@ -1,0 +1,834 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How ChartSpec v1 tests that a chart is valid — Simple English</title>
+<style>
+  :root {
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --ink: #1c1b1a;
+    --ink-soft: #55524e;
+    --rule: #e2ded8;
+    --accent: #2f5d8a;
+    --accent-soft: #eaf1f8;
+    --good: #1e6b4a;
+    --good-soft: #e6f3ec;
+    --bad: #a03028;
+    --bad-soft: #fbeae8;
+    --warn: #8a6420;
+    --warn-soft: #fbf2e0;
+    --code-bg: #f4f1ec;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17181a;
+      --panel: #1e2023;
+      --ink: #e8e6e3;
+      --ink-soft: #a8a49f;
+      --rule: #33363a;
+      --accent: #8ab4dd;
+      --accent-soft: #1c2a38;
+      --good: #74c79c;
+      --good-soft: #16281f;
+      --bad: #e08a80;
+      --bad-soft: #2c1b19;
+      --warn: #d9b26a;
+      --warn-soft: #2a2317;
+      --code-bg: #16181b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 17px/1.65 Georgia, "Iowan Old Style", "Times New Roman", serif;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 3rem 1.25rem 6rem; }
+  h1 { font-size: 2.1rem; line-height: 1.2; margin: 0 0 .6rem; letter-spacing: -.01em; }
+  h2 {
+    font-size: 1.5rem; margin: 3.2rem 0 1rem; padding-top: 1.2rem;
+    border-top: 1px solid var(--rule); letter-spacing: -.01em;
+  }
+  h3 { font-size: 1.15rem; margin: 2.2rem 0 .7rem; }
+  h4 { font-size: 1rem; margin: 1.6rem 0 .5rem; }
+  p { margin: 0 0 1.1rem; }
+  a { color: var(--accent); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .sub { color: var(--ink-soft); font-size: 1.05rem; margin-bottom: 1.6rem; }
+  .meta {
+    font-family: var(--mono); font-size: .8rem; color: var(--ink-soft);
+    border: 1px solid var(--rule); border-radius: 8px; padding: .7rem .9rem;
+    background: var(--panel); margin-bottom: 2rem;
+  }
+  .meta div { margin: .15rem 0; }
+  code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); padding: .1em .3em; border-radius: 4px; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--rule); border-radius: 8px;
+    padding: .9rem 1rem; overflow-x: auto; white-space: pre; margin: 0 0 1.2rem;
+  }
+  pre code { background: none; padding: 0; font-size: .82rem; line-height: 1.55; }
+  .filename {
+    font-family: var(--mono); font-size: .74rem; color: var(--ink-soft);
+    margin: 0 0 .35rem; letter-spacing: .02em;
+  }
+  .toc {
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 10px;
+    padding: 1rem 1.2rem; margin-bottom: 2.4rem;
+  }
+  .toc h2 { font-size: .8rem; margin: 0 0 .6rem; padding: 0; border: 0;
+    text-transform: uppercase; letter-spacing: .1em; color: var(--ink-soft);
+    font-family: var(--mono); }
+  .toc ol { margin: 0; padding-left: 1.2rem; }
+  .toc li { margin: .3rem 0; }
+  .callout {
+    border-left: 4px solid var(--accent); background: var(--accent-soft);
+    padding: .85rem 1rem; border-radius: 0 8px 8px 0; margin: 0 0 1.3rem;
+    font-size: .95rem;
+  }
+  .callout.good { border-color: var(--good); background: var(--good-soft); }
+  .callout.warn { border-color: var(--warn); background: var(--warn-soft); }
+  .callout.bad { border-color: var(--bad); background: var(--bad-soft); }
+  .callout .tag {
+    display: block; font-family: var(--mono); font-size: .68rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ink-soft); margin-bottom: .3rem;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: .88rem; margin: 0 0 1.3rem; }
+  .scroller { overflow-x: auto; margin-bottom: 1.3rem; }
+  .scroller table { margin-bottom: 0; min-width: 34rem; }
+  th, td { border: 1px solid var(--rule); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: var(--panel); font-family: var(--mono); font-size: .76rem;
+    text-transform: uppercase; letter-spacing: .05em; font-weight: normal; color: var(--ink-soft); }
+  caption, .caption {
+    caption-side: bottom; text-align: left; font-size: .82rem; color: var(--ink-soft);
+    padding-top: .5rem; font-style: italic;
+  }
+  .flow { display: flex; flex-direction: column; gap: .35rem; margin: 0 0 .6rem; }
+  .stage {
+    border: 1px solid var(--rule); background: var(--panel); border-radius: 8px;
+    padding: .6rem .8rem; font-size: .88rem;
+  }
+  .stage .label {
+    display: block; font-family: var(--mono); font-size: .68rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-soft); margin-bottom: .2rem;
+  }
+  .stage.new { border-color: var(--good); background: var(--good-soft); border-style: dashed; }
+  .stage.det { border-color: var(--accent); background: var(--accent-soft); }
+  .arrow { font-family: var(--mono); font-size: .76rem; color: var(--ink-soft); padding-left: .8rem; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin: 0 0 .6rem; }
+  @media (max-width: 40rem) { .cols { grid-template-columns: 1fr; } }
+  .panel {
+    border: 1px solid var(--rule); border-radius: 8px; padding: .8rem .9rem;
+    background: var(--panel); font-size: .88rem;
+  }
+  .panel h4 {
+    margin: 0 0 .5rem; font-family: var(--mono); font-size: .7rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--ink-soft);
+  }
+  .panel.before { border-color: var(--bad); }
+  .panel.after { border-color: var(--good); }
+  .panel pre { margin: 0; background: transparent; border: 0; padding: 0; }
+  .panel pre code { font-size: .76rem; }
+  ul.tight { padding-left: 1.2rem; }
+  ul.tight li { margin: .35rem 0; }
+  .quiz { margin-top: 1.4rem; }
+  .q {
+    border: 1px solid var(--rule); border-radius: 10px; background: var(--panel);
+    padding: 1rem 1.1rem; margin-bottom: 1.1rem;
+  }
+  .q .qnum {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--ink-soft); display: block; margin-bottom: .35rem;
+  }
+  .q .qtext { font-size: 1rem; margin: 0 0 .8rem; }
+  .opts { display: flex; flex-direction: column; gap: .4rem; }
+  .opt {
+    text-align: left; font: inherit; font-size: .9rem; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--rule); border-radius: 8px;
+    padding: .55rem .7rem; cursor: pointer; display: flex; gap: .55rem; align-items: baseline;
+  }
+  .opt:hover:not([disabled]) { border-color: var(--accent); }
+  .opt[disabled] { cursor: default; }
+  .opt .mark { font-family: var(--mono); font-size: .78rem; min-width: 1.2rem; color: var(--ink-soft); }
+  .opt.is-correct { border-color: var(--good); background: var(--good-soft); }
+  .opt.is-correct .mark { color: var(--good); }
+  .opt.is-wrong { border-color: var(--bad); background: var(--bad-soft); }
+  .opt.is-wrong .mark { color: var(--bad); }
+  .feedback {
+    margin-top: .8rem; font-size: .89rem; border-left: 3px solid var(--rule);
+    padding-left: .8rem; color: var(--ink-soft);
+  }
+  .feedback[hidden] { display: none; }
+  .feedback b { color: var(--ink); }
+  .footnote { font-size: .85rem; color: var(--ink-soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>How ChartSpec v1 tests that a chart is valid</h1>
+<p class="sub">A prototype changes one paragraph of the requirements document into rules that a
+computer can run. The prototype then shows that one rule in that paragraph is not a grammar rule.</p>
+
+<div class="meta">
+  <div>project &nbsp;&nbsp;chartagents</div>
+  <div>subject &nbsp;&nbsp;the prototype in <code>prototypes/chartspec-v1/</code></div>
+  <div>branch &nbsp;&nbsp;&nbsp;research/python-arrow</div>
+  <div>written &nbsp;&nbsp;18 July 2026 · this Simple English version 13 August 2026</div>
+</div>
+
+<div class="callout">
+  <span class="tag">Read this first</span>
+  <p>This page uses ASD-STE100 Simplified Technical English. The sentences are short. Each term has
+  one meaning only. The glossary below gives that meaning.</p>
+  <p>This page is about new code, not about a change to code that was already there. So the word
+  <em>before</em> on this page has two meanings. It means the text in the requirements document, or
+  it means an earlier state of the prototype. Each example says which one it is.</p>
+</div>
+
+<div class="callout warn">
+  <span class="tag">About the glossary</span>
+  <p>The repository has no <code>CONTEXT.md</code> file yet, but <code>docs/agents/domain.md</code>
+  says that this file must hold the project terms. The glossary below comes from
+  <code>chartagents-prd.md</code> and from <code>prototypes/chartspec-v1/chartspec_draft.py</code>.
+  Move it into <code>CONTEXT.md</code> when someone makes that file.</p>
+</div>
+
+<h3>Glossary</h3>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><strong>chartagents</strong></td><td>The Python library. It gets data and an instruction, and it makes a chart.</td></tr>
+    <tr><td><strong>data source</strong></td><td>A CSV file, a Parquet file, a warehouse connection, or a result set in memory.</td></tr>
+    <tr><td><strong>profiler</strong></td><td>The component that reads the data with DuckDB and measures it.</td></tr>
+    <tr><td><strong><code>profile.json</code></strong></td><td>The file that the profiler writes. It holds the schema, the cardinality, the null rates, the minimum and maximum values, and some sample rows.</td></tr>
+    <tr><td><strong>cardinality</strong></td><td>The number of different values in a column.</td></tr>
+    <tr><td><strong>planner</strong></td><td>The component that calls the language model.</td></tr>
+    <tr><td><strong>ChartSpec</strong></td><td>The structured description of one chart. It is the contract between the planner and the renderer adapters.</td></tr>
+    <tr><td><strong>mark</strong></td><td>The shape on the page: a bar, a line, or a point.</td></tr>
+    <tr><td><strong>channel</strong></td><td>A visual property that can hold data: <code>x</code>, <code>y</code>, <code>color</code>, <code>size</code>, <code>facet</code>, or <code>tooltip</code>.</td></tr>
+    <tr><td><strong>encoding</strong></td><td>The map from one data column to one channel.</td></tr>
+    <tr><td><strong>data type</strong></td><td>One of four classes for a column: quantitative, temporal, ordinal, or nominal.</td></tr>
+    <tr><td><strong>transform block</strong></td><td>The part of the ChartSpec that changes the data before the renderer draws it.</td></tr>
+    <tr><td><strong>rail router</strong></td><td>The component that selects the rail for a request.</td></tr>
+    <tr><td><strong>deterministic rail</strong></td><td>The path with no generated code. Trusted code draws the chart.</td></tr>
+    <tr><td><strong>custom-code rail</strong></td><td>The path where the language model writes code and a sandbox runs it.</td></tr>
+    <tr><td><strong>renderer adapter</strong></td><td>The code that draws a ChartSpec with one chart library.</td></tr>
+    <tr><td><strong>review gate</strong></td><td>The quality check after the renderer. It has three tiers.</td></tr>
+    <tr><td><strong>refresh</strong></td><td>A new render of a saved ChartSpec with new data and with no call to the language model.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<div class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#background">Background: why a chart needs a contract</a></li>
+    <li><a href="#idea">The idea: one grammar, two types of error</a></li>
+    <li><a href="#code">The code: how the rules are written</a></li>
+    <li><a href="#quiz">Quiz</a></li>
+  </ol>
+</div>
+
+<h2 id="background">1. Background: why a chart needs a contract</h2>
+
+<p>chartagents is a Python library. It gets a data set and a sentence, for example "monthly revenue
+by region, last two years". It then makes a finished chart.</p>
+
+<p>A language model does part of this work. But a language model is not sufficiently reliable to make
+the final chart. Because of this, the design divides the work into two paths.</p>
+
+<ul class="tight">
+  <li><strong>The deterministic rail.</strong> Most requests are usual requests: a bar chart, a line
+  chart, or a scatter plot. The team estimates that these are approximately 80% of all requests. On
+  this rail, the language model only fills in a structured form. Trusted code then draws the
+  chart.</li>
+  <li><strong>The custom-code rail.</strong> The other requests are unusual. Two examples are a Sankey
+  diagram and a hand-tuned annotation layout. On this rail, the language model writes code, and a
+  sandbox runs that code.</li>
+</ul>
+
+<div class="callout">
+  <span class="tag">Definition · ChartSpec</span>
+  <p>The ChartSpec is the structured form that the language model fills in. It is a small description
+  of <em>what the chart is</em>. It does not say how one chart library draws the chart. The system
+  saves the ChartSpec, gives it a version, compares it with other ChartSpecs, and runs it again.</p>
+</div>
+
+<p>All the later steps use this contract. A saved ChartSpec makes a refresh possible at no token
+cost. When new data arrives, the library runs the transform block again and draws the chart again.
+It does not call the language model. The rail router also reads the ChartSpec to select the rail.
+So the question "is this ChartSpec valid?" is not a small quality check. It is the gate that lets
+trusted code draw the chart.</p>
+
+<h3>What was there before</h3>
+
+<p>Before this prototype, the ChartSpec was only eight bullet points in the requirements document.
+This is the related bullet point, in full:</p>
+
+<pre><code>encodings — channels (x, y, color, size, facet, tooltip) each with field,
+type (quantitative/temporal/ordinal/nominal), scale, axis config.
+Deterministic encoding rules enforced at validation
+(e.g., cardinality caps on color).</code></pre>
+
+<p>The text is correct, but it is short. The task of the prototype was to find the full meaning of
+this text. The most important result is in the last line of the text.</p>
+
+<h2 id="idea">2. The idea: one grammar, two types of error</h2>
+
+<p>First, look at a ChartSpec that is correct. It shows revenue with time, and it divides the revenue
+by region:</p>
+
+<pre><code>{
+  "mark":  {"type": "bar", "stack": "stacked"},
+  "encodings": {
+    "x":     {"field": "month",       "type": "temporal"},
+    "y":     {"field": "revenue_sum", "type": "quantitative"},
+    "color": {"field": "region",      "type": "nominal"}
+  }
+}</code></pre>
+
+<p>The four data types classify what a column holds:</p>
+
+<ul class="tight">
+  <li><strong>quantitative</strong> — a number. You can calculate a mean value from it.</li>
+  <li><strong>temporal</strong> — a date or a time.</li>
+  <li><strong>ordinal</strong> — categories in a known sequence.</li>
+  <li><strong>nominal</strong> — categories with no sequence.</li>
+</ul>
+
+<p>Now look at two ChartSpecs that are not correct. The two errors are different types of error.</p>
+
+<div class="cols">
+  <div class="panel before">
+    <h4>Error type A — the grammar is wrong</h4>
+    <p>A histogram puts one column into bins. It then counts the rows in each bin. The count is the
+    task of the chart, so a <code>y</code> channel is a contradiction:</p>
+<pre><code>{"mark": {"type": "histogram"},
+ "encodings": {
+   "x": {"field": "revenue_sum", ...},
+   "y": {"field": "count", ...}}}</code></pre>
+    <p>You can find this error <strong>with no data</strong>.</p>
+  </div>
+  <div class="panel after">
+    <h4>Error type B — the grammar is correct, but no renderer can draw the chart</h4>
+    <p>This ChartSpec gives a color to each bar, by product SKU. The structure is correct.
+    <code>color</code> is a legal channel for a bar mark, and <code>nominal</code> is a legal data
+    type:</p>
+<pre><code>{"mark": {"type": "bar"},
+ "encodings": {
+   "x": {"field": "month", ...},
+   "color": {"field": "sku",
+             "type": "nominal"}}}</code></pre>
+    <p>But if the <code>sku</code> column holds 830 different values, the chart shows 830 colors.
+    You cannot find this error <strong>from the ChartSpec alone</strong>.</p>
+  </div>
+</div>
+<p class="caption">Figure 1. Two ChartSpecs that are not valid. The ChartSpec on the left disobeys the
+grammar. The ChartSpec on the right obeys the grammar and disagrees with the data.</p>
+
+<p>This is the result of the prototype. The requirements document puts the cardinality cap with the
+grammar rules. That is not possible. Cardinality is a property of the data. The profiler measures it
+and writes it into <code>profile.json</code>. The ChartSpec never holds it. So a check of the cap at
+construction time is not possible.</p>
+
+<div class="callout warn">
+  <span class="tag">Result · agree to this before you continue</span>
+  <p>Validation has <strong>two phases</strong>. Only the first phase is a property of the grammar.
+  Thus a ChartSpec can be fully valid, but no renderer can draw it with one specified data set.</p>
+  <p>These are different errors, and they occur at different times. The planner must use the second
+  error as data for a repair, not as a permanent failure. The message "there are too many colors, use
+  the first 10 values and one <em>other</em> group" tells the planner how to correct the
+  ChartSpec.</p>
+</div>
+
+<div class="flow" role="img" aria-label="The two validation phases and then the rail router.">
+  <div class="stage det">
+    <span class="label">Phase 1 — grammar validation</span>
+    <code>ChartSpec.model_validate(raw)</code> · needs the ChartSpec only · Does the mark support
+    these channels? Are the data types correct? Is this combination of layers permitted?
+  </div>
+  <div class="arrow">↓ a valid ChartSpec, for example bar / x=month / color=sku</div>
+  <div class="stage">
+    <span class="label">Phase 2 — validation against the profile</span>
+    <code>validate_against_profile(spec, profile)</code> · needs <code>profile.json</code> · Do the
+    columns exist? Is the cardinality of <code>sku</code>, which is 830, below the cap of 12?
+  </div>
+  <div class="arrow">↓ a ChartSpec that is legal <em>and</em> possible to draw</div>
+  <div class="stage new">
+    <span class="label">Rail router</span>
+    Compares the ChartSpec with the capabilities of the selected renderer adapter. Then sends the
+    request to the deterministic rail or to the custom-code rail.
+  </div>
+</div>
+<p class="caption">Figure 2. The validation pipeline. Each stage needs more data than the stage above
+it. This is why you cannot make one stage from the two. Phase 1 runs when the system reads a
+ChartSpec. Phase 2 runs only after the profiler measures a data set.</p>
+
+<h2 id="code">3. The code: how the rules are written</h2>
+
+<p>The prototype is one file, <code>prototypes/chartspec-v1/chartspec_draft.py</code>. It uses
+Pydantic. Pydantic is a Python library that changes a class definition into a validator that runs at
+run time. If you declare a field as <code>int</code>, Pydantic rejects a string. This gives the easy
+half of phase 1 at no cost. The other half is the set of rules that Pydantic cannot express alone.</p>
+
+<h3>3.1 Marks are objects, not names</h3>
+
+<p>The usual method is one list of eight strings, one string for each chart type. The prototype uses
+a different method. Each mark is a small object with a <code>type</code> field that identifies it
+(<code>chartspec_draft.py:116</code>):</p>
+
+<p class="filename">chartspec_draft.py — the mark union</p>
+<pre><code>class BarMark(_MarkBase):
+    type: Literal["bar"] = "bar"
+    orientation: Literal["vertical", "horizontal"] = "vertical"
+    stack: Literal["none", "stacked", "normalized"] = "none"
+
+class PieMark(_MarkBase):
+    type: Literal["pie"] = "pie"
+    inner_radius_ratio: float = Field(default=0.0, ge=0.0, lt=1.0)  # &gt; 0 =&gt; donut
+
+Mark = Annotated[
+    BarMark | LineMark | AreaMark | ScatterMark
+    | PieMark | HeatmapMark | HistogramMark | BoxplotMark,
+    Field(discriminator="type"),
+]</code></pre>
+
+<p>Each mark has settings that no other mark uses. Bars stack or do not stack. A histogram has a
+number of bins. A box plot has a whisker convention. A list of strings has no location for these
+settings. Then you must put them in a general <code>style</code> object, and that object collects
+settings that apply to one chart library only. A library-agnostic contract must prevent this.</p>
+
+<p>There is also a good secondary result. A donut is not a ninth mark. A donut is a pie mark with a
+hole, which is <code>inner_radius_ratio &gt; 0</code>.</p>
+
+<div class="callout">
+  <span class="tag">Definition · discriminated union</span>
+  <p>A set of possible shapes, where one field tells you which shape you have. Pydantic reads
+  <code>type: "pie"</code> and then validates against <code>PieMark</code> only. Thus Pydantic rejects
+  an <code>inner_radius_ratio</code> field on a bar mark. It does not ignore that field.</p>
+</div>
+
+<h3>3.2 The contract for each mark is a table</h3>
+
+<p>Which channels does each mark require, permit, and constrain? The prototype gives the answer as
+data (<code>chartspec_draft.py:201</code>). It does not use <code>if</code> statements:</p>
+
+<p class="filename">chartspec_draft.py — MARK_RULES (short form)</p>
+<pre><code>MARK_RULES: dict[str, MarkRule] = {
+    "bar": MarkRule(
+        required=frozenset({"x", "y"}),
+        allowed=frozenset({"x", "y", "color", "facet", "tooltip"}),
+    ),
+    "pie": MarkRule(
+        required=frozenset({"color", "y"}),          # category + value
+        allowed=frozenset({"color", "y", "tooltip"}),
+        type_constraints={"color": _CAT, "y": _Q},
+    ),
+    "histogram": MarkRule(                            # the code computes y
+        required=frozenset({"x"}),
+        allowed=frozenset({"x", "color", "facet", "tooltip"}),
+        type_constraints={"x": _Q},
+    ),
+    ...
+}</code></pre>
+
+<p>A table has three uses at the same time:</p>
+
+<ul class="tight">
+  <li>The validator reads it as input.</li>
+  <li>A person reads it as the specification of what each renderer adapter must support.</li>
+  <li>The prompt builder reads it to tell the planner what it can emit.</li>
+</ul>
+
+<p>Note the rule for <code>pie</code>. The category goes on <code>color</code> and the value goes on
+<code>y</code>. There is no special <code>theta</code> channel. This keeps the number of channel names
+at six, which is the number in the requirements document. The cost is that each reader must learn
+this map one time.</p>
+
+<p>The checker that reads the table (<code>chartspec_draft.py:253</code>) writes errors with a code.
+The repair loop in the planner can then test the code. It does not parse English:</p>
+
+<pre><code>[E_MARK_CHANNEL_UNSUPPORTED] base: mark 'histogram' does not support
+channel(s) ['y'] (histogram computes y itself — put the binned field on x)</code></pre>
+
+<h3>3.3 Aggregation is not on the channel</h3>
+
+<p>Vega-Lite is the best known grammar of this type. In Vega-Lite you write
+<code>{"field": "revenue", "aggregate": "sum"}</code>, and the encoding does the addition. The
+prototype does not permit this (<code>chartspec_draft.py:142</code>). An encoding can point only to a
+column that the transform block made. This is why the examples on this page use
+<code>revenue_sum</code> and not <code>revenue</code>.</p>
+
+<p>Two later requirements make this necessary:</p>
+
+<ul class="tight">
+  <li><strong>Warehouse pushdown.</strong> If the data is in a warehouse, the system compiles the
+  transform block to the SQL of that warehouse and runs it there. The SQL generator reads the
+  transform block. It cannot read the encodings.</li>
+  <li><strong>Refresh at no token cost.</strong> A refresh runs the transform block again, and it
+  does nothing else. If aggregation were in two places, a refresh would have to read both.</li>
+</ul>
+
+<p>Aggregation in one place only makes the ChartSpec longer. But it also keeps the boundary between
+the transform block and the encodings clean.</p>
+
+<h3>3.4 Layers, and one important defect</h3>
+
+<p>Some charts need two marks together. Two examples are a line with point markers, and bars with a
+target line across them. The prototype models this as overlays on a base mark. It does not model this
+as a list of layers that contains the base mark. Thus the usual chart, which has one mark, stays
+flat. The prototype puts three limits on overlays: a maximum of two overlays, a list of permitted
+combinations, and one shared transform block.</p>
+
+<p>The first version of the layer check had a hole. It validated a layer only if that layer supplied
+its own encodings. It did not validate a layer that supplied no encodings. But such a layer
+<em>inherits</em> all the channels of the base mark. One of those channels can be a channel that the
+mark of the layer cannot draw. The example that showed the defect is a scatter plot. It uses
+<code>size</code> for a third variable, and it has a trend line on top of it. A line mark has no
+size.</p>
+
+<div class="cols">
+  <div class="panel before">
+    <h4>Before — the hole</h4>
+<pre><code>if layer.encodings is not None:
+    merged = ...
+    _check_mark_channels(
+        layer.mark.type, merged, ...)</code></pre>
+    <p>A layer written as <code>{"mark": {"type": "line"}}</code> has
+    <code>encodings is None</code>. So no check ran. The system accepted the ChartSpec. Then the
+    renderer adapter had to discard the inherited <code>size</code> channel without a message.</p>
+  </div>
+  <div class="panel after">
+    <h4>After — <code>chartspec_draft.py:476</code></h4>
+<pre><code>overrides = (layer.encodings.model_dump(
+    exclude_none=True) if layer.encodings else {})
+merged = Encodings.model_validate(
+    {**self.encodings.model_dump(exclude_none=True),
+     **overrides})
+_check_mark_channels(
+    layer.mark.type, merged, ...)</code></pre>
+    <p>The merge now runs for every layer. An empty set of overrides has the meaning "this layer
+    inherits all channels". The system rejects the ChartSpec immediately.</p>
+  </div>
+</div>
+<p class="caption">Figure 3. The correction. A ChartSpec that says one thing while the chart shows a
+different thing is the primary failure. The two-rail design exists to prevent this failure. It costs
+less to prevent this failure in the grammar than to find it later in the review gate.</p>
+
+<h3>3.5 The defect that the correction found</h3>
+
+<p>The stronger check immediately rejected a chart that must be legal. That chart is a line chart
+against time with point markers on it, which is a very common layered chart. The rule for
+<code>scatter</code> required a quantitative <code>x</code> channel. But the inherited <code>x</code>
+channel held a date.</p>
+
+<p>The rule was wrong. The chart was correct. A scatter plot against dates is a usual chart, and this
+overlay requires it. So <code>scatter</code> now permits temporal positions
+(<code>chartspec_draft.py:220</code>). It continues to reject categorical positions, because that
+rejection is the value of the rule. A "scatter plot of region against revenue" must be a bar
+chart.</p>
+
+<div class="callout warn">
+  <span class="tag">Trade-off</span>
+  <p>Each cell in the table of data types is a small risk. If a cell is too permissive, the grammar
+  sends incorrect charts to the renderer adapter. If a cell is too strict, the grammar rejects a chart
+  that users want. A strict cell is difficult to find, because the only symptom is more traffic on the
+  expensive custom-code rail. A person must examine the table against a set of real requests before
+  the team uses the estimate of 80%.</p>
+</div>
+
+<h3>3.6 None has the meaning "inherit"</h3>
+
+<p>Each field on <code>Style</code> is optional. The value <code>None</code> has the meaning
+<em>inherit</em>. It does not have the meaning <em>off</em> (<code>chartspec_draft.py:399</code>). At
+render time, the resolver reads four sources in this sequence:</p>
+
+<ul class="tight">
+  <li>an explicit value in the ChartSpec;</li>
+  <li>then the convention pack of the organization;</li>
+  <li>then the theme;</li>
+  <li>then the default of the renderer adapter.</li>
+</ul>
+
+<p>This removes a feature that the team expected to build. The team thought that each organization
+needs a location in the ChartSpec for its brand palette and its house rules. It does not. These are
+one layer of the resolver. A ChartSpec that sets no style value gets the full house style. The
+grammar is smaller as a result.</p>
+
+<p>The same rule controls the JSON form (<code>chartspec_draft.py:489</code>). An absent field and a
+<code>null</code> field have the same meaning. So the canonical JSON form removes all nulls. If it
+did not, one ChartSpec would have two valid JSON forms. Then a comparison of two ChartSpecs, which
+computes the smallest possible edit, would report differences that are not real. The harness tests
+the sequence JSON → Pydantic → JSON on each accepted case. No case loses data.</p>
+
+<h3>3.7 Versions</h3>
+
+<p>A ChartSpec has a version with the form <code>MAJOR.MINOR</code>. There is no patch component,
+because a patch release cannot change the grammar. A version component that nothing can use is a
+risk.</p>
+
+<p>Each renderer adapter declares the most recent grammar that it can read. A ChartSpec is compatible
+with that adapter if two conditions are true (<code>chartspec_draft.py:507</code>). The major
+versions must be equal. The minor version of the ChartSpec must not be higher than the minor version
+of the adapter. A new mark or a new channel increases the minor
+version, and old adapters continue to operate. A mark or a channel that you remove or change
+increases the major version, and old adapters stop with an error. This error is the correct
+result.</p>
+
+<h3>3.8 How to run the prototype</h3>
+
+<p>The harness is <code>explore.py</code>. It is a menu of fourteen cases: valid ChartSpecs, one case
+for each class of invalid ChartSpec, and the version compatibility matrix. For each accepted case it
+prints the canonical JSON and the result of the round-trip test. For each rejected case it prints the
+error with its code. You do not have to install it:</p>
+
+<pre><code>uv run prototypes/chartspec-v1/explore.py --all</code></pre>
+
+<div class="callout good">
+  <span class="tag">Why this throwaway prototype was worth the time</span>
+  <p>The prototype found three results: the two phases of validation, the hole in the layer check, and
+  the scatter rule that was too strict. None of the three results was visible in the text of the
+  requirements document. Two of the three became visible only because the correction of the first
+  result caused a failure in a case that passed before. This is the argument to write the executable
+  draft before you write the real code.</p>
+</div>
+
+<h2 id="quiz">4. Quiz</h2>
+
+<p>Five questions about the text above. Select an option to see if it is correct.</p>
+
+<div class="quiz" id="quiz"></div>
+
+<p class="footnote" style="margin-top:2.5rem">
+<strong>What this page examined:</strong> the directory <code>prototypes/chartspec-v1/</code>
+(<code>chartspec_draft.py</code>, <code>explore.py</code>, <code>README.md</code>) on branch
+<code>research/python-arrow</code>. Also sections 2, 7 and 8 of <code>chartagents-prd.md</code>, and
+the requirements table in section 9. Also the full output of the harness, before and after the two
+corrections.
+</p>
+<p class="footnote">
+<strong>Limits:</strong> the prototype directory was new and had no commit, so there is no
+<code>git diff</code> to quote. The before-and-after panels show intermediate states from the session
+that made the code. They do not show committed revisions. The line numbers point at the file as it
+was at that time, and they move if a person edits the file. The statements about renderer adapters,
+the profiler, and the rail router describe the design in the requirements document. That code does
+not exist yet.
+</p>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var QUESTIONS = [
+    {
+      q: "A ChartSpec puts <code>color</code> on a nominal column, and that column holds 830 different values. Which phase finds the error, and why that phase?",
+      options: [
+        {
+          t: "Phase 1, because a nominal <code>color</code> channel is legal only for a column with a low cardinality.",
+          why: "The grammar cannot read the cardinality. It sees a column name and a data type, and both are legal for <code>color</code> on a bar mark."
+        },
+        {
+          t: "Phase 1, because Pydantic compares each channel with the schema of the data set.",
+          why: "Pydantic sees the ChartSpec object only. There is no data set in memory when the system reads a ChartSpec. This is the reason for the two phases."
+        },
+        {
+          t: "Phase 2, because the cardinality is in <code>profile.json</code> and not in the ChartSpec.",
+          why: "Correct. This is the primary result of the prototype. Cardinality is a property of the data. The profiler measures it, and the ChartSpec never holds it. So a check is possible only after the profiler makes a profile."
+        },
+        {
+          t: "The review gate, after the renderer adapter draws the chart and a vision model examines it.",
+          why: "The review gate can find a chart that a person cannot read. But that check occurs much later and costs much more than a comparison with a number that is already in <code>profile.json</code>."
+        }
+      ],
+      correct: 2
+    },
+    {
+      q: "Why does the prototype refuse an aggregate value on a channel, which Vega-Lite permits?",
+      options: [
+        {
+          t: "Aggregation must stay in one place, because warehouse pushdown and refresh at no token cost both need it there.",
+          why: "Correct. Two requirements make this necessary. The system compiles the transform block to warehouse SQL, and that compiler cannot read the encodings. A refresh runs the transform block only. Aggregation in two places breaks both."
+        },
+        {
+          t: "Because an aggregate value has more than one meaning when two layers share one transform block.",
+          why: "Layers do share one transform block, but that is a result of the decision and not the cause. The pushdown boundary and the refresh boundary make the decision necessary."
+        },
+        {
+          t: "Because Pydantic cannot express a field whose legal values depend on the data type of the column.",
+          why: "Pydantic can express this. The prototype does it in <code>type_constraints</code>. The reason is architectural. It is not a limit of the library."
+        },
+        {
+          t: "Because aggregation changes data, and only the sandbox can touch data.",
+          why: "The sandbox rule controls where code runs. A ChartSpec that describes an aggregation is metadata. A description on a channel breaks no isolation rule."
+        }
+      ],
+      correct: 0
+    },
+    {
+      q: "An overlay layer is <code>{\"mark\": {\"type\": \"line\"}}</code> and it has no encodings. What does the corrected validator do?",
+      options: [
+        {
+          t: "It ignores the layer, because a layer with no encodings adds no channels to check.",
+          why: "This was the defect. A layer with no overrides is not a layer with no channels. It inherits every channel of the base mark."
+        },
+        {
+          t: "It rejects the layer, because each overlay layer must state the channels that it draws.",
+          why: "Inheritance is the purpose of the overlay model. A rule that makes each layer state its channels again makes the usual case longer and gives no benefit."
+        },
+        {
+          t: "It accepts the layer, and the renderer adapter then discards each inherited channel that the line mark cannot draw.",
+          why: "This is the permissive alternative, and the prototype rejects it. If the adapter discards a channel without a message, the ChartSpec states something that the chart does not show."
+        },
+        {
+          t: "It validates the line mark against the channels of the base mark, and it uses an empty set of overrides for the merge.",
+          why: "Correct. The merge now runs for every layer, and <code>{}</code> has the meaning \"this layer inherits all channels\". So an inherited <code>size</code> channel on a line mark causes an immediate rejection."
+        }
+      ],
+      correct: 3
+    },
+    {
+      q: "The stronger layer check rejected a line chart with point markers. What was the defect?",
+      options: [
+        {
+          t: "The list of permitted layer combinations did not contain the line-and-scatter pair.",
+          why: "That pair was in the list. The rejection came later, from the data type check on the merged channels."
+        },
+        {
+          t: "The scatter rule required a quantitative <code>x</code> channel, so the inherited date failed the data type check.",
+          why: "Correct. The rule was too strict. A scatter plot against dates is a usual chart on its own, and this overlay requires it. So <code>scatter</code> now permits temporal positions and continues to reject categorical positions."
+        },
+        {
+          t: "The stronger check ran before the system applied the default values, so the merged encodings were incomplete.",
+          why: "The sequence of the validators is not the cause. The model validator runs after Pydantic parses the fields and applies the defaults."
+        },
+        {
+          t: "The inherited channels had no data type, so the check could not compare them.",
+          why: "The merge copies each channel object, and the data type is part of that object. The data type was present and correct. The rule that measured it was wrong."
+        }
+      ],
+      correct: 1
+    },
+    {
+      q: "The canonical JSON form removes each key whose value is <code>None</code>. What fails if the JSON form keeps the nulls?",
+      options: [
+        {
+          t: "A renderer adapter reads an explicit null as \"off\" and discards the theme of the organization.",
+          why: "The resolver defines <code>None</code> as \"inherit\" in every position, so an adapter cannot read it as \"off\". The problem is in the JSON form, not in the adapter."
+        },
+        {
+          t: "A ChartSpec fails the round-trip test, because Pydantic cannot parse a null back into an absent field.",
+          why: "Pydantic parses this correctly, and the harness shows that the round-trip loses no data in both forms. The problem is not fidelity."
+        },
+        {
+          t: "One ChartSpec has two JSON forms, so a comparison of two ChartSpecs reports differences that are not real.",
+          why: "Correct. An absent field and a null field have the same meaning here, so both forms are valid for one ChartSpec. Patch mode computes the smallest possible edit from a comparison, and false differences make that edit larger than necessary."
+        },
+        {
+          t: "The JSON form becomes too large for the conversation history.",
+          why: "The saving is real but very small, and the history holds references to ChartSpecs and not the ChartSpecs themselves. The purpose of the canonical form is one form, not a small form."
+        }
+      ],
+      correct: 2
+    }
+  ];
+
+  var LETTERS = ["A", "B", "C", "D"];
+
+  function build() {
+    var root = document.getElementById("quiz");
+    if (!root) { return; }
+
+    QUESTIONS.forEach(function (item, qi) {
+      var card = document.createElement("div");
+      card.className = "q";
+
+      var num = document.createElement("span");
+      num.className = "qnum";
+      num.textContent = "Question " + (qi + 1) + " of " + QUESTIONS.length;
+      card.appendChild(num);
+
+      var text = document.createElement("p");
+      text.className = "qtext";
+      text.innerHTML = item.q;
+      card.appendChild(text);
+
+      var opts = document.createElement("div");
+      opts.className = "opts";
+
+      var feedback = document.createElement("div");
+      feedback.className = "feedback";
+      feedback.hidden = true;
+      feedback.setAttribute("role", "status");
+
+      var buttons = [];
+
+      item.options.forEach(function (opt, oi) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.className = "opt";
+
+        var mark = document.createElement("span");
+        mark.className = "mark";
+        mark.textContent = LETTERS[oi];
+        b.appendChild(mark);
+
+        var label = document.createElement("span");
+        label.innerHTML = opt.t;
+        b.appendChild(label);
+
+        b.addEventListener("click", function () {
+          if (card.dataset.answered === "yes") { return; }
+          card.dataset.answered = "yes";
+
+          var right = oi === item.correct;
+
+          buttons.forEach(function (other, idx) {
+            other.disabled = true;
+            if (idx === item.correct) {
+              other.classList.add("is-correct");
+              other.querySelector(".mark").textContent = "✓";
+            } else if (idx === oi) {
+              other.classList.add("is-wrong");
+              other.querySelector(".mark").textContent = "✗";
+            }
+          });
+
+          var verdict = right ? "Correct. " : "Not correct. ";
+          var chosen = item.options[oi].why;
+          var truth = item.options[item.correct].why;
+          feedback.innerHTML = right
+            ? "<b>" + verdict + "</b>" + chosen.replace(/^Correct\.\s*/, "")
+            : "<b>" + verdict + "</b>" + chosen + " The correct answer is <b>" + LETTERS[item.correct] +
+              "</b>: " + truth.replace(/^Correct\.\s*/, "");
+          feedback.hidden = false;
+        });
+
+        buttons.push(b);
+        opts.appendChild(b);
+      });
+
+      card.appendChild(opts);
+      card.appendChild(feedback);
+      root.appendChild(card);
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", build);
+  } else {
+    build();
+  }
+})();
+</script>
+</body>
+</html>
