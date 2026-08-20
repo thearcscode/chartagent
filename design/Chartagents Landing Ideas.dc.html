@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root{--bg:#0a0a0c;--app:#121216;--panel:#17171c;--raised:#1d1d23;--rail:#0f0f13;--border:#2a2a32;--border-2:#26262e;--border-soft:#22222a;--border-strong:#3d3d47;--ink:#ecebf0;--muted:#8b8a97;--faint:#6a6975;--chip:rgba(255,255,255,.07);--teal:#57d3cb;--violet:#a78bfa;--violet-2:#c4b2fd;--amber:#e8b568;--red:#e8737d;--blue:#7aa2f7}
+body[data-theme="light"]{--bg:#e9e7e2;--app:#ffffff;--panel:#faf9f7;--raised:#f1efea;--rail:#f6f5f2;--border:#dcd8d0;--border-2:#e3dfd8;--border-soft:#e8e5de;--border-strong:#bfb9ae;--ink:#191817;--muted:#6b6862;--faint:#8f8b83;--chip:rgba(0,0,0,.06);--teal:#0d8f86;--violet:#6b4de0;--violet-2:#4f34bd;--amber:#a8730c;--red:#c33f4b;--blue:#3a6fd8}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style></helmet>
+
+<section style="padding:44px 48px 40px" id="t4">
+  <div style="display:flex;align-items:baseline;gap:12px;margin:0 0 6px">
+    <a href="#t4" style="font:600 10px 'IBM Plex Mono',monospace;padding:4px 8px;background:var(--ink);color:var(--bg);border-radius:4px">4</a>
+    <span style="font:400 26px/1 'Instrument Serif',serif;letter-spacing:-.015em;color:var(--ink)">Three candidate landing moments</span>
+    <button onClick="{{ toggleTheme }}" style="margin-left:auto;display:flex;align-items:center;gap:7px;font:500 11px 'IBM Plex Sans';padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:var(--app);color:var(--ink);cursor:pointer" style-hover="border-color:var(--border-strong)"><span style="position:relative;display:inline-block;width:12px;height:12px;border-radius:50%;background:currentColor;overflow:hidden"><span style="position:absolute;top:-4px;left:-5px;width:12px;height:12px;border-radius:50%;background:var(--app)"></span></span>{{ themeLabel }}</button>
+  </div>
+  <p style="margin:0 0 30px;max-width:800px;font:400 12.5px/1.65 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">Each one is a section that would sit in the landing page after the two-rails band. All three are interactive — click through them, then tell me which to keep.</p>
+
+  <div style="display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start">
+
+    <div id="4a" style="flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#4a" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">4a</a>Patch mode — an edit is two changed lines, not a new chart</div>
+      <div style="width:940px;background:var(--app);border:1px solid var(--border-2);border-radius:14px;padding:32px 34px;display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;align-items:flex-end;gap:24px">
+          <div style="flex:1">
+            <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">REFINEMENT</div>
+            <h3 style="margin:12px 0 0;font:400 32px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">"Now break that down quarterly."</h3>
+            <p style="margin:12px 0 0;max-width:440px;font:400 12.5px/1.7 'IBM Plex Sans';color:var(--muted)">A structural request would replan from scratch. This one is a spec diff — the planner emits two changed lines, the renderer runs again, and only the affected review checks re-run.</p>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px">
+            <div style="display:flex;gap:20px;font:400 11px 'IBM Plex Mono';color:var(--muted)">
+              <span style="text-align:right"><span style="color:var(--faint)">from scratch</span><br>9.1k tok · $0.031</span>
+              <span style="text-align:right"><span style="color:var(--faint)">patch</span><br><span style="color:var(--teal)">1.1k tok · $0.004</span></span>
+            </div>
+            <button onClick="{{ togglePatch }}" style="{{ patchBtn }}">{{ patchLabel }}</button>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 330px;gap:20px;align-items:stretch">
+          <div id="patch-chart" style="height:290px;background:var(--panel);border:1px solid var(--border-soft);border-radius:10px"></div>
+          <div style="background:var(--rail);border:1px solid var(--border-soft);border-radius:10px;display:flex;flex-direction:column;overflow:hidden">
+            <div style="padding:11px 15px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:8px">
+              <span style="font:400 11px 'IBM Plex Mono';color:var(--ink)">spec.diff</span>
+              <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">{{ diffSummary }}</span>
+            </div>
+            <div style="flex:1;padding:13px 15px;font:400 10.5px/1.85 'IBM Plex Mono';color:var(--muted)">
+              <div style="color:var(--faint)">  "transform": {</div>
+              <div style="{{ oldLine }}">- &nbsp;&nbsp;"group_by": ["month", "region"]</div>
+              <div style="{{ newLine }}">+ &nbsp;&nbsp;"group_by": ["quarter", "region"]</div>
+              <div style="color:var(--faint)">  },</div>
+              <div style="color:var(--faint)">  "encodings": { "x": {</div>
+              <div style="{{ oldLine2 }}">- &nbsp;&nbsp;&nbsp;&nbsp;"field": "month"</div>
+              <div style="{{ newLine2 }}">+ &nbsp;&nbsp;&nbsp;&nbsp;"field": "quarter"</div>
+              <div style="color:var(--faint)">  } }</div>
+            </div>
+            <div style="border-top:1px solid var(--border-soft);padding:12px 15px;display:flex;flex-direction:column;gap:6px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)">
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--faint)">re-run checks</span><span>{{ checksLabel }}</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--faint)">unchanged</span><span style="color:var(--teal)">{{ skippedLabel }}</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="4b" style="flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#4b" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">4b</a>Schema drift — the chart that refuses to draw</div>
+      <div style="width:940px;background:var(--app);border:1px solid var(--border-2);border-radius:14px;padding:32px 34px;display:flex;flex-direction:column;gap:22px">
+        <div style="display:flex;align-items:flex-end;gap:24px">
+          <div style="flex:1">
+            <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">06:00 · SCHEDULED REFRESH</div>
+            <h3 style="margin:12px 0 0;font:400 32px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">Overnight, someone renamed a column.</h3>
+            <p style="margin:12px 0 0;max-width:470px;font:400 12.5px/1.7 'IBM Plex Sans';color:var(--muted)">Refresh checks the new snapshot against the fields the spec actually references before rendering anything. The failure mode is a typed error naming the drift — not a chart that looks fine and isn't.</p>
+          </div>
+          <div style="display:flex;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px">
+            <button onClick="{{ setStrict }}" style="{{ strictBtn }}">chartagents</button>
+            <button onClick="{{ setLoose }}" style="{{ looseBtn }}">no drift check</button>
+          </div>
+        </div>
+
+        <div style="position:relative;border:1px solid var(--border-soft);border-radius:10px;background:var(--panel);overflow:hidden">
+          <div id="drift-chart" style="height:300px;filter:{{ driftBlur }}"></div>
+          <sc-if value="{{ strict }}" hint-placeholder-val="{{ true }}">
+            <div style="position:absolute;inset:0;background:color-mix(in oklab,var(--bg) 78%,transparent);display:flex;align-items:center;justify-content:center;padding:26px">
+              <div style="max-width:520px;background:var(--app);border:1px solid color-mix(in oklab,var(--red) 42%,transparent);border-radius:11px;padding:22px 24px;display:flex;flex-direction:column;gap:12px">
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="width:7px;height:7px;border-radius:50%;background:var(--red)"></span>
+                  <span style="font:500 11.5px 'IBM Plex Mono';color:var(--red)">SchemaDriftError</span>
+                  <span style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">0 tokens spent · nothing rendered</span>
+                </div>
+                <div style="font:400 12.5px/1.65 'IBM Plex Sans';color:var(--ink)">Refresh stopped before rendering. Two fields this spec references have changed.</div>
+                <div style="font:400 10.5px/1.9 'IBM Plex Mono';color:var(--muted);border-top:1px solid var(--border-soft);padding-top:11px">
+                  <div><span style="color:var(--ink)">plan_tier</span> renamed → <span style="color:var(--ink)">tier_name</span></div>
+                  <div><span style="color:var(--ink)">churn_rate</span> float64 → string</div>
+                  <div style="color:var(--faint)">+2 unreferenced columns added (ignored)</div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:2px">
+                  <button style="font:500 11.5px 'IBM Plex Sans';padding:8px 13px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer" style-hover="background:var(--panel)">Remap fields — no model call</button>
+                  <button style="font:500 11.5px 'IBM Plex Sans';padding:8px 13px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer" style-hover="background:var(--panel)">Regenerate</button>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+        <sc-if value="{{ loose }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:8px;background:color-mix(in oklab,var(--amber) 12%,transparent);border:1px solid color-mix(in oklab,var(--amber) 32%,transparent)">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--amber);animation:pulse 1.6s infinite"></span>
+            <span style="font:400 11px 'IBM Plex Mono';color:var(--amber)">refresh reported success · two tiers silently missing · nobody notices until QBR</span>
+          </div>
+        </sc-if>
+        <div style="font:400 11px/1.6 'IBM Plex Sans';color:var(--faint)">Toggle the control to see the same 06:00 refresh with the check switched off. Additive drift — new unreferenced columns — is ignored, so this never fires on a harmless migration.</div>
+      </div>
+    </div>
+
+    <div id="4c" style="flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#4c" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">4c</a>Grammar coverage — the escape hatch closing over time</div>
+      <div style="width:940px;background:var(--app);border:1px solid var(--border-2);border-radius:14px;padding:32px 34px;display:flex;flex-direction:column;gap:24px">
+        <div style="display:flex;align-items:flex-end;gap:24px">
+          <div style="flex:1">
+            <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">GRAMMAR GROWTH</div>
+            <h3 style="margin:12px 0 0;font:400 32px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">Every escape is a to-do list item.</h3>
+            <p style="margin:12px 0 0;max-width:470px;font:400 12.5px/1.7 'IBM Plex Sans';color:var(--muted)">When a request leaves the deterministic rail, the reason is recorded. Those reasons are the roadmap: today's custom-rail chart becomes next release's spec grammar, and the share of runs that need generated code falls.</p>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:12px">
+            <div style="display:flex;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px">
+              <button onClick="{{ rel0 }}" style="{{ relBtn0 }}">v1.0</button>
+              <button onClick="{{ rel1 }}" style="{{ relBtn1 }}">v1.1</button>
+              <button onClick="{{ rel2 }}" style="{{ relBtn2 }}">v1.2</button>
+              <button onClick="{{ rel3 }}" style="{{ relBtn3 }}">v1.3</button>
+            </div>
+            <div style="text-align:right">
+              <div style="font:400 30px/1 'Instrument Serif',serif;color:var(--violet)">{{ customShare }}</div>
+              <div style="margin-top:5px;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">of runs still need generated code</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:26px;align-items:flex-start">
+          <div style="flex:1;display:flex;flex-direction:column;gap:7px">
+            <div style="display:grid;grid-template-columns:118px repeat(6,1fr);gap:7px;font:400 9.5px 'IBM Plex Mono';color:var(--faint);letter-spacing:.04em">
+              <span></span><span>x</span><span>y</span><span>color</span><span>size</span><span>facet</span><span>tooltip</span>
+            </div>
+            <sc-for list="{{ rows }}" as="row" hint-placeholder-count="9">
+              <div style="display:grid;grid-template-columns:118px repeat(6,1fr);gap:7px;align-items:center">
+                <span style="{{ row.labelStyle }}">{{ row.name }}</span>
+                <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="6">
+                  <span style="{{ cell.style }}"></span>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+          <div style="width:250px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:center;gap:8px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)"><span style="width:12px;height:12px;border-radius:3px;background:var(--teal)"></span>in the grammar</div>
+              <div style="display:flex;align-items:center;gap:8px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)"><span style="width:12px;height:12px;border-radius:3px;background:color-mix(in oklab,var(--teal) 34%,transparent)"></span>added this release</div>
+              <div style="display:flex;align-items:center;gap:8px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)"><span style="width:12px;height:12px;border-radius:3px;background:var(--border-soft);border:1px dashed var(--border-strong)"></span>custom rail only</div>
+            </div>
+            <div style="border-top:1px solid var(--border-soft);padding-top:14px;display:flex;flex-direction:column;gap:8px">
+              <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.07em;color:var(--faint)">ABSORBED IN {{ relLabel }}</div>
+              <div style="font:400 11.5px/1.7 'IBM Plex Sans';color:var(--muted)">{{ relNote }}</div>
+            </div>
+            <div style="border-top:1px solid var(--border-soft);padding-top:14px;display:flex;flex-direction:column;gap:7px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)">
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--faint)">marks</span><span>{{ markCount }}</span></div>
+              <div style="display:flex;justify-content:space-between"><span style="color:var(--faint)">top escape reason</span><span style="color:var(--violet)">{{ topReason }}</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <p style="margin:26px 0 0;font:400 12px/1.5 'IBM Plex Sans';color:var(--muted)">Try next: "keep <a href="#4a">4a</a> and <a href="#4b">4b</a>, drop <a href="#4c">4c</a>" · "put <a href="#4b">4b</a> in the landing page after the rails band" · "make <a href="#4c">4c</a> animate on scroll instead of buttons"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+const THEMES = {
+  dark:  { axis: '#2a2a32', split: '#1e1e25', label: '#6a6975', tip: '#1d1d23', tipB: '#2a2a32', tipT: '#ecebf0', legend: '#8b8a97', series: ['#57d3cb', '#a78bfa', '#e8b568', '#7aa2f7', '#e8737d'] },
+  light: { axis: '#dcd8d0', split: '#eeebe5', label: '#8f8b83', tip: '#ffffff', tipB: '#dcd8d0', tipT: '#191817', legend: '#6b6862', series: ['#0d8f86', '#6b4de0', '#a8730c', '#3a6fd8', '#c33f4b'] }
+};
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const QUARTERS = ['Q3 24', 'Q4 24', 'Q1 25', 'Q2 25', 'Q3 25', 'Q4 25', 'Q1 26', 'Q2 26'];
+const REGIONS = ['NA', 'EMEA', 'APAC', 'LATAM'];
+const TIERS = ['Free', 'Pro', 'Team', 'Enterprise'];
+
+function wave(seed, n, base, amp) {
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(Math.round(base * (1 + i * 0.035) + Math.sin((i + seed) * 0.9) * amp + Math.cos(i * 1.7 + seed) * amp * 0.5));
+  return out;
+}
+
+const MARKS = [
+  { name: 'bar',        counts: [6, 6, 6, 6] },
+  { name: 'line',       counts: [6, 6, 6, 6] },
+  { name: 'area',       counts: [5, 6, 6, 6] },
+  { name: 'scatter',    counts: [6, 6, 6, 6] },
+  { name: 'pie · donut', counts: [3, 3, 4, 4] },
+  { name: 'heatmap',    counts: [4, 4, 5, 6] },
+  { name: 'histogram',  counts: [3, 4, 4, 5] },
+  { name: 'boxplot',    counts: [3, 3, 4, 5] },
+  { name: 'waterfall',  counts: [0, 4, 5, 5] },
+  { name: 'choropleth', counts: [0, 0, 4, 5] },
+  { name: 'sankey',     counts: [0, 0, 0, 4] }
+];
+const RELEASES = [
+  { label: 'v1.0', share: '24%', note: 'Launch grammar — the eight core marks and the six §8 channels.', reason: 'E_MARK_UNKNOWN' },
+  { label: 'v1.1', share: '18%', note: 'Waterfall absorbed from escape telemetry; area gains facet.', reason: 'E_LAYER_COMBO' },
+  { label: 'v1.2', share: '14%', note: 'Choropleth lands with a bounded projection set; donut gains size.', reason: 'E_LAYER_COMBO' },
+  { label: 'v1.3', share: '11%', note: 'Sankey enters as a mark; boxplot and histogram finish their channels.', reason: 'E_TRANSFORM_WINDOW' }
+];
+
+class Component extends DCLogic {
+  state = { theme: 'dark', patched: false, strict: true, release: 0 };
+
+  componentDidMount() {
+    document.body.dataset.theme = 'dark';
+    this.boot();
+  }
+
+  componentWillUnmount() { (this.charts || []).forEach(c => c.dispose()); }
+
+  boot(tries = 0) {
+    if (!window.echarts) {
+      if (tries < 80) setTimeout(() => this.boot(tries + 1), 100);
+      return;
+    }
+    (this.charts || []).forEach(c => c.dispose());
+    this.charts = [];
+    ['patch-chart', 'drift-chart'].forEach(id => {
+      const el = document.getElementById(id);
+      this.charts.push(el ? window.echarts.init(el, null, { renderer: 'canvas' }) : null);
+    });
+    this.paint();
+  }
+
+  paint() {
+    if (!this.charts) return;
+    const T = THEMES[this.state.theme] || THEMES.dark;
+    const label = { color: T.label, fontFamily: 'IBM Plex Mono', fontSize: 10 };
+    const money = Object.assign({ formatter: v => '$' + (v / 1000) + 'k' }, label);
+    const shell = {
+      color: T.series,
+      grid: { left: 58, right: 24, top: 34, bottom: 36 },
+      tooltip: { trigger: 'axis', backgroundColor: T.tip, borderColor: T.tipB, textStyle: { color: T.tipT, fontFamily: 'IBM Plex Mono', fontSize: 11 } },
+      legend: { top: 0, right: 0, icon: 'roundRect', itemWidth: 8, itemHeight: 8, textStyle: { color: T.legend, fontFamily: 'IBM Plex Sans', fontSize: 11 } },
+      yAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: T.split } }, axisLabel: money }
+    };
+
+    const patch = this.charts[0];
+    if (patch) {
+      const quarterly = this.state.patched;
+      patch.setOption(Object.assign({}, shell, {
+        xAxis: { type: 'category', data: quarterly ? QUARTERS : MONTHS, axisLine: { lineStyle: { color: T.axis } }, axisTick: { show: false }, axisLabel: label },
+        series: REGIONS.map((r, i) => ({
+          name: r, type: 'line', smooth: 0.25, symbol: 'circle', symbolSize: 5, lineStyle: { width: 2 },
+          data: quarterly ? wave(i * 3, 8, 41000 - i * 5600, 3200) : wave(i * 3, 12, 38000 - i * 5200, 4200)
+        }))
+      }), true);
+    }
+
+    const drift = this.charts[1];
+    if (drift) {
+      const broken = !this.state.strict;
+      drift.setOption(Object.assign({}, shell, {
+        grid: { left: 58, right: 24, top: 34, bottom: 36 },
+        xAxis: { type: 'category', data: TIERS, axisLine: { lineStyle: { color: T.axis } }, axisTick: { show: false }, axisLabel: label },
+        yAxis: [
+          { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: T.split } }, axisLabel: money },
+          { type: 'value', axisLine: { show: false }, splitLine: { show: false }, axisLabel: Object.assign({ formatter: '{value}%' }, label) }
+        ],
+        series: [
+          { name: 'ARR', type: 'bar', barWidth: 44, itemStyle: { color: T.series[0], borderRadius: [4, 4, 0, 0] }, data: broken ? [42000, 118000, null, null] : [42000, 118000, 164000, 221000] },
+          { name: 'Churn', type: 'line', yAxisIndex: 1, smooth: 0.3, symbol: 'circle', symbolSize: 6, lineStyle: { width: 2, color: T.series[1] }, itemStyle: { color: T.series[1] }, data: broken ? [9.2, 5.4, null, null] : [9.2, 5.4, 3.1, 1.8] }
+        ]
+      }), true);
+    }
+  }
+
+  toggleTheme = () => {
+    const t = this.state.theme === 'dark' ? 'light' : 'dark';
+    document.body.dataset.theme = t;
+    this.setState({ theme: t }, () => this.paint());
+  };
+
+  seg(active) {
+    return {
+      font: "500 11px 'IBM Plex Sans'", padding: '6px 13px', borderRadius: '6px', border: 0, cursor: 'pointer',
+      background: active ? 'var(--border)' : 'transparent',
+      color: active ? 'var(--ink)' : 'var(--muted)'
+    };
+  }
+
+  renderVals() {
+    const p = this.state.patched;
+    const r = this.state.release;
+    const rel = RELEASES[r];
+    const dim = { color: 'var(--faint)', opacity: 0.42, textDecoration: 'line-through' };
+    const live = { color: 'var(--teal)' };
+    const idle = { color: 'var(--faint)' };
+    const pend = { color: 'var(--violet-2)' };
+    const rows = MARKS.map(m => {
+      const n = m.counts[r];
+      const prev = r > 0 ? m.counts[r - 1] : n;
+      return {
+        name: m.name,
+        labelStyle: { font: "400 10.5px 'IBM Plex Mono'", color: n ? 'var(--ink)' : 'var(--faint)' },
+        cells: Array.from({ length: 6 }, (_, i) => ({
+          style: {
+            height: '15px', borderRadius: '3px',
+            background: i < prev ? 'var(--teal)' : i < n ? 'color-mix(in oklab, var(--teal) 34%, transparent)' : 'var(--border-soft)',
+            border: i < n ? 'none' : '1px dashed var(--border-strong)',
+            transition: 'background .35s ease'
+          }
+        }))
+      };
+    });
+    return {
+      toggleTheme: this.toggleTheme,
+      themeLabel: this.state.theme === 'dark' ? 'Light' : 'Dark',
+
+      togglePatch: () => this.setState({ patched: !p }, () => this.paint()),
+      patchLabel: p ? 'Reset to monthly' : 'Apply the patch',
+      patchBtn: {
+        font: "500 12px 'IBM Plex Sans'", padding: '9px 16px', borderRadius: '8px', cursor: 'pointer',
+        border: p ? '1px solid var(--border)' : 0,
+        background: p ? 'transparent' : 'var(--ink)',
+        color: p ? 'var(--ink)' : 'var(--bg)'
+      },
+      diffSummary: p ? '2 hunks applied' : '2 hunks pending',
+      oldLine: p ? dim : idle,
+      newLine: p ? live : pend,
+      oldLine2: p ? dim : idle,
+      newLine2: p ? live : pend,
+      checksLabel: p ? 'axis · aggregation' : '—',
+      skippedLabel: p ? '7 of 9 skipped' : 'light mode ready',
+
+      strict: this.state.strict,
+      loose: !this.state.strict,
+      strictBtn: this.seg(this.state.strict),
+      looseBtn: this.seg(!this.state.strict),
+      setStrict: () => this.setState({ strict: true }, () => this.paint()),
+      setLoose: () => this.setState({ strict: false }, () => this.paint()),
+      driftBlur: this.state.strict ? 'blur(2px) saturate(.5)' : 'none',
+
+      rows,
+      rel0: () => this.setState({ release: 0 }),
+      rel1: () => this.setState({ release: 1 }),
+      rel2: () => this.setState({ release: 2 }),
+      rel3: () => this.setState({ release: 3 }),
+      relBtn0: this.seg(r === 0), relBtn1: this.seg(r === 1), relBtn2: this.seg(r === 2), relBtn3: this.seg(r === 3),
+      customShare: rel.share,
+      relLabel: rel.label,
+      relNote: rel.note,
+      topReason: rel.reason,
+      markCount: MARKS.filter(m => m.counts[r] > 0).length + ' of ' + MARKS.length
+    };
+  }
+}
+</script>
+</body>
+</html>
