@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root{--bg:#0a0a0c;--app:#121216;--panel:#17171c;--raised:#1d1d23;--rail:#0f0f13;--border:#2a2a32;--border-2:#26262e;--border-soft:#22222a;--border-strong:#3d3d47;--ink:#ecebf0;--muted:#8b8a97;--faint:#6a6975;--chip:rgba(255,255,255,.07);--teal:#57d3cb;--violet:#a78bfa;--violet-2:#c4b2fd;--amber:#e8b568;--red:#e8737d;--blue:#7aa2f7}
+body[data-theme="light"]{--bg:#e9e7e2;--app:#ffffff;--panel:#faf9f7;--raised:#f1efea;--rail:#f6f5f2;--border:#dcd8d0;--border-2:#e3dfd8;--border-soft:#e8e5de;--border-strong:#bfb9ae;--ink:#191817;--muted:#6b6862;--faint:#8f8b83;--chip:rgba(0,0,0,.06);--teal:#0d8f86;--violet:#6b4de0;--violet-2:#4f34bd;--amber:#a8730c;--red:#c33f4b;--blue:#3a6fd8}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
+::-webkit-scrollbar{width:9px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+</style></helmet>
+
+<div style="min-height:100vh;background:var(--bg)">
+
+  <header style="position:sticky;top:0;z-index:10;backdrop-filter:blur(14px);background:color-mix(in oklab,var(--bg) 82%,transparent);border-bottom:1px solid var(--border-soft)">
+    <div style="max-width:1180px;margin:0 auto;padding:0 32px;height:62px;display:flex;align-items:center;gap:26px">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="width:20px;height:20px;border-radius:5px;background:linear-gradient(140deg,var(--teal),var(--violet))"></span>
+        <span style="font:400 18px 'Instrument Serif',serif;letter-spacing:-.01em;color:var(--ink)">chartagents</span>
+      </div>
+      <nav style="display:flex;gap:20px;font:400 12.5px 'IBM Plex Sans';color:var(--muted)">
+        <span style-hover="color:var(--ink)">Docs</span>
+        <span style-hover="color:var(--ink)">Benchmark</span>
+        <span style-hover="color:var(--ink)">Playground</span>
+        <span style-hover="color:var(--ink)">Adapters</span>
+      </nav>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        <span style="font:400 11.5px 'IBM Plex Mono';color:var(--faint)">Apache-2.0</span>
+        <button onClick="{{ toggleTheme }}" title="Toggle theme" style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer" style-hover="color:var(--ink);border-color:var(--border-strong)"><span style="position:relative;display:inline-block;width:12px;height:12px;border-radius:50%;background:currentColor;overflow:hidden"><span style="position:absolute;top:-4px;left:-5px;width:12px;height:12px;border-radius:50%;background:var(--bg)"></span></span></button>
+        <span style="font:500 12.5px 'IBM Plex Sans';color:var(--muted)" style-hover="color:var(--ink)">Sign in</span>
+        <button style="font:500 12.5px 'IBM Plex Sans';padding:7px 14px;border-radius:7px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Get started</button>
+      </div>
+    </div>
+  </header>
+
+  <section style="max-width:1180px;margin:0 auto;padding:86px 32px 40px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:26px">
+      <span style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.09em;padding:5px 10px;border-radius:20px;border:1px solid var(--border);color:var(--muted)">v1.0 · PYTHON</span>
+      <span style="font:400 11.5px 'IBM Plex Mono';color:var(--faint)">pip install chartagents</span>
+    </div>
+    <h1 style="margin:0;max-width:900px;font:400 78px/1.02 'Instrument Serif',serif;letter-spacing:-.028em;color:var(--ink);text-wrap:balance">Charting, as a capability your product owns.</h1>
+    <p style="margin:26px 0 0;max-width:620px;font:400 15px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">Claude gives a person a chart in a chat. chartagents gives your application a charting capability behind an API — natural language in, reviewed chart artifacts out, on data that never leaves your infrastructure.</p>
+    <div style="margin-top:32px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <button style="font:500 13px 'IBM Plex Sans';padding:11px 20px;border-radius:8px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Read the quickstart</button>
+      <button style="font:500 13px 'IBM Plex Sans';padding:11px 20px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer" style-hover="background:var(--panel)">Open the playground</button>
+      <span style="font:400 11.5px 'IBM Plex Mono';color:var(--faint);margin-left:6px">15 min to first chart</span>
+    </div>
+  </section>
+
+  <section style="max-width:1180px;margin:0 auto;padding:34px 32px 90px">
+    <div style="background:var(--app);border:1px solid var(--border-2);border-radius:14px;overflow:hidden">
+      <div style="padding:16px 22px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font:500 10px 'IBM Plex Mono';letter-spacing:.08em;color:var(--faint)">TRY AN INSTRUCTION</span>
+        <div style="display:flex;gap:7px;flex-wrap:wrap">
+          <button onClick="{{ pick0 }}" style="{{ chip0 }}">Monthly revenue by region</button>
+          <button onClick="{{ pick1 }}" style="{{ chip1 }}">ARR by plan tier, worst churn first</button>
+          <button onClick="{{ pick2 }}" style="{{ chip2 }}">Share of ARR with churn overlaid</button>
+        </div>
+        <span style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">no data leaves the browser in this demo</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 340px">
+        <div style="padding:22px 24px;display:flex;flex-direction:column;gap:14px;min-width:0">
+          <div style="display:flex;align-items:baseline;gap:12px">
+            <span style="font:400 20px/1.2 'Instrument Serif',serif;color:var(--ink)">{{ demoTitle }}</span>
+            <span style="{{ railPill }}">{{ railLabel }}</span>
+          </div>
+          <div id="hero-chart" style="height:326px;background:var(--panel);border:1px solid var(--border-soft);border-radius:10px"></div>
+          <div style="display:flex;gap:22px;font:400 11px 'IBM Plex Mono';color:var(--muted);flex-wrap:wrap">
+            <span><span style="color:var(--faint)">latency</span> {{ demoLatency }}</span>
+            <span><span style="color:var(--faint)">cost</span> {{ demoCost }}</span>
+            <span><span style="color:var(--faint)">review</span> <span style="color:var(--teal)">passed</span></span>
+            <span style="margin-left:auto;color:var(--faint)">re-render on new data: $0.00</span>
+          </div>
+        </div>
+        <div style="border-left:1px solid var(--border-soft);background:var(--rail);display:flex;flex-direction:column;min-width:0">
+          <div style="padding:13px 18px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:9px">
+            <span style="font:400 11.5px 'IBM Plex Mono';color:var(--ink)">chart_spec.json</span>
+            <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">the durable artifact</span>
+          </div>
+          <div style="flex:1;padding:16px 18px;font:400 10.5px/1.8 'IBM Plex Mono';color:var(--muted);white-space:pre;overflow:auto;min-width:0">{{ demoSpec }}</div>
+          <div style="border-top:1px solid var(--border-soft);padding:13px 18px;font:400 10.5px/1.6 'IBM Plex Sans';color:var(--faint)">Save this, not the image. Re-render it against tomorrow's data with zero model calls.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);background:var(--app)">
+    <div style="max-width:1180px;margin:0 auto;padding:0 32px;display:grid;grid-template-columns:repeat(4,1fr)">
+      <div style="padding:30px 26px 30px 0;border-right:1px solid var(--border-soft)">
+        <div style="font:400 30px 'Instrument Serif',serif;color:var(--ink)">≥95%</div>
+        <div style="margin-top:6px;font:400 11.5px/1.5 'IBM Plex Sans';color:var(--muted)">executable-output rate on the public benchmark</div>
+      </div>
+      <div style="padding:30px 26px;border-right:1px solid var(--border-soft)">
+        <div style="font:400 30px 'Instrument Serif',serif;color:var(--ink)">≥75%</div>
+        <div style="margin-top:6px;font:400 11.5px/1.5 'IBM Plex Sans';color:var(--muted)">served by the deterministic rail — zero generated code</div>
+      </div>
+      <div style="padding:30px 26px;border-right:1px solid var(--border-soft)">
+        <div style="font:400 30px 'Instrument Serif',serif;color:var(--ink)">$0.05</div>
+        <div style="margin-top:6px;font:400 11.5px/1.5 'IBM Plex Sans';color:var(--muted)">median cost per chart at <span style="font-family:'IBM Plex Mono'">balanced</span></div>
+      </div>
+      <div style="padding:30px 0 30px 26px">
+        <div style="font:400 30px 'Instrument Serif',serif;color:var(--ink)">&lt;500 MB</div>
+        <div style="margin-top:6px;font:400 11.5px/1.5 'IBM Plex Sans';color:var(--muted)">peak memory profiling a 10 GB Parquet source</div>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1180px;margin:0 auto;padding:88px 32px">
+    <div style="display:grid;grid-template-columns:340px 1fr;gap:56px;align-items:start">
+      <div>
+        <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">TWO RAILS</div>
+        <h2 style="margin:14px 0 0;font:400 38px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">Reliability first, creativity when the grammar runs out.</h2>
+        <p style="margin:18px 0 0;font:400 13px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">Common requests compile through a validated spec into a hand-written renderer — no generated code in the path. Anything the grammar can't express falls to a code rail inside a sandbox, and the reason is recorded as telemetry that grows the grammar.</p>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="border:1px solid color-mix(in oklab,var(--teal) 34%,transparent);background:color-mix(in oklab,var(--teal) 7%,transparent);border-radius:12px;padding:22px 24px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--teal)"></span>
+            <span style="font:600 13px 'IBM Plex Sans';color:var(--ink)">Deterministic rail</span>
+            <span style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';color:var(--teal)">zero generated code</span>
+          </div>
+          <p style="margin:10px 0 0;font:400 12.5px/1.7 'IBM Plex Sans';color:var(--muted)">Validated ChartSpec → renderer adapter. Bit-stable across runs; ECharts, Plotly and Matplotlib out of the box, and a public protocol for the rest.</p>
+          <div style="margin-top:14px;display:flex;gap:6px;flex-wrap:wrap">
+            <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;background:var(--chip);color:var(--muted)">bar</span>
+            <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;background:var(--chip);color:var(--muted)">line</span>
+            <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;background:var(--chip);color:var(--muted)">area</span>
+            <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;background:var(--chip);color:var(--muted)">scatter</span>
+            <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;background:var(--chip);color:var(--muted)">pie · donut</span>
+            <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;background:var(--chip);color:var(--muted)">heatmap</span>
+            <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;background:var(--chip);color:var(--muted)">histogram</span>
+            <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;background:var(--chip);color:var(--muted)">boxplot</span>
+          </div>
+        </div>
+        <div style="border:1px solid color-mix(in oklab,var(--violet) 34%,transparent);background:color-mix(in oklab,var(--violet) 7%,transparent);border-radius:12px;padding:22px 24px">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--violet)"></span>
+            <span style="font:600 13px 'IBM Plex Sans';color:var(--ink)">Custom code rail</span>
+            <span style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';color:var(--violet)">sandboxed, reason recorded</span>
+          </div>
+          <p style="margin:10px 0 0;font:400 12.5px/1.7 'IBM Plex Sans';color:var(--muted)">The agent writes <span style="font-family:'IBM Plex Mono'">make_chart(data)</span> in any library it likes and runs it under bubblewrap, Docker or a microVM. Data enters as a parameter, so refresh still costs nothing.</p>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:12px;padding:22px 24px;background:var(--app)">
+          <div style="display:flex;align-items:center;gap:9px">
+            <span style="width:6px;height:6px;border-radius:50%;background:var(--amber)"></span>
+            <span style="font:600 13px 'IBM Plex Sans';color:var(--ink)">One review gate for both</span>
+            <span style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';color:var(--amber)">lints → VLM → interactivity</span>
+          </div>
+          <p style="margin:10px 0 0;font:400 12.5px/1.7 'IBM Plex Sans';color:var(--muted)">Deterministic lints run first and cheaply — axis labels, legend, overlap, colorblind-safe palette, and a data-truthfulness re-execution. Only survivors reach the critique model.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid var(--border-soft)">
+    <div style="max-width:1180px;margin:0 auto;padding:78px 32px">
+      <div style="display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap">
+        <div style="flex:1;min-width:380px">
+          <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">GRAMMAR GROWTH</div>
+          <h2 style="margin:14px 0 0;font:400 38px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">Every escape is a to-do list item.</h2>
+          <p style="margin:16px 0 0;max-width:520px;font:400 13px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">When a request leaves the deterministic rail the reason is recorded, and those reasons are the roadmap. Today's custom-rail chart becomes next release's grammar, so the share of runs that need generated code keeps falling.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:12px">
+          <div style="display:flex;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px">
+            <button onClick="{{ rel0 }}" style="{{ relBtn0 }}">v1.0</button>
+            <button onClick="{{ rel1 }}" style="{{ relBtn1 }}">v1.1</button>
+            <button onClick="{{ rel2 }}" style="{{ relBtn2 }}">v1.2</button>
+            <button onClick="{{ rel3 }}" style="{{ relBtn3 }}">v1.3</button>
+          </div>
+          <div style="text-align:right">
+            <div style="font:400 32px/1 'Instrument Serif',serif;color:var(--violet)">{{ customShare }}</div>
+            <div style="margin-top:5px;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">of runs still need generated code</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:34px;display:flex;gap:34px;align-items:flex-start;flex-wrap:wrap">
+        <div style="flex:1;min-width:460px;display:flex;flex-direction:column;gap:7px">
+          <div style="display:grid;grid-template-columns:118px repeat(6,1fr);gap:7px;font:400 9.5px 'IBM Plex Mono';color:var(--faint);letter-spacing:.04em">
+            <span></span><span>x</span><span>y</span><span>color</span><span>size</span><span>facet</span><span>tooltip</span>
+          </div>
+          <sc-for list="{{ rows }}" as="row" hint-placeholder-count="11">
+            <div style="display:grid;grid-template-columns:118px repeat(6,1fr);gap:7px;align-items:center">
+              <span style="{{ row.labelStyle }}">{{ row.name }}</span>
+              <sc-for list="{{ row.cells }}" as="cell" hint-placeholder-count="6">
+                <span style="{{ cell.style }}"></span>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <div style="width:260px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <div style="display:flex;align-items:center;gap:8px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)"><span style="width:12px;height:12px;border-radius:3px;background:var(--teal)"></span>in the grammar</div>
+            <div style="display:flex;align-items:center;gap:8px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)"><span style="width:12px;height:12px;border-radius:3px;background:color-mix(in oklab,var(--teal) 34%,transparent)"></span>added this release</div>
+            <div style="display:flex;align-items:center;gap:8px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)"><span style="width:12px;height:12px;border-radius:3px;background:var(--border-soft);border:1px dashed var(--border-strong)"></span>custom rail only</div>
+          </div>
+          <div style="border-top:1px solid var(--border-soft);padding-top:14px;display:flex;flex-direction:column;gap:8px">
+            <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.07em;color:var(--faint)">ABSORBED IN {{ relLabel }}</div>
+            <div style="font:400 11.5px/1.7 'IBM Plex Sans';color:var(--muted)">{{ relNote }}</div>
+          </div>
+          <div style="border-top:1px solid var(--border-soft);padding-top:14px;display:flex;flex-direction:column;gap:7px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)">
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--faint)">marks</span><span>{{ markCount }}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--faint)">top escape reason</span><span style="color:var(--violet)">{{ topReason }}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid var(--border-soft);background:var(--app)">
+    <div style="max-width:1180px;margin:0 auto;padding:78px 32px;display:grid;grid-template-columns:1fr 420px;gap:56px;align-items:center">
+      <div>
+        <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">GENERATE ONCE</div>
+        <h2 style="margin:14px 0 0;font:400 38px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">Refresh forever, at zero inference cost.</h2>
+        <p style="margin:18px 0 0;max-width:520px;font:400 13px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">A chart is a saved spec, not a one-off image. Re-rendering replays the stored transform, so a dashboard of any size refreshes on a cron with no model call and sub-second latency. A drifted schema fails loud with a typed error instead of drawing something quietly wrong.</p>
+        <div style="margin-top:24px;font:400 11.5px/1.9 'IBM Plex Mono';color:var(--muted);border-left:2px solid var(--border);padding-left:16px">
+          <div>fresh = chartagents.render(spec, data=<span style="color:var(--teal)">"s3://sales/2026-08.parquet"</span>)</div>
+          <div style="color:var(--faint)"># 0 tokens · 1.1 s · same picture, new numbers</div>
+        </div>
+      </div>
+      <div style="border:1px solid var(--border-2);background:var(--rail);border-radius:12px;padding:24px">
+        <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.08em;color:var(--faint)">LIVE ON THIS PAGE</div>
+        <div style="margin-top:16px;display:flex;align-items:baseline;gap:10px">
+          <span style="font:400 44px/1 'Instrument Serif',serif;color:var(--ink)">{{ refreshCount }}</span>
+          <span style="font:400 11.5px 'IBM Plex Mono';color:var(--muted)">refreshes replayed</span>
+        </div>
+        <div style="margin-top:20px;display:flex;flex-direction:column;gap:9px">
+          <div style="display:flex;justify-content:space-between;font:400 11.5px 'IBM Plex Mono';color:var(--muted)"><span style="color:var(--faint)">inference cost</span><span style="color:var(--teal)">$0.00</span></div>
+          <div style="display:flex;justify-content:space-between;font:400 11.5px 'IBM Plex Mono';color:var(--muted)"><span style="color:var(--faint)">p50 latency</span><span>1.1 s</span></div>
+          <div style="display:flex;justify-content:space-between;font:400 11.5px 'IBM Plex Mono';color:var(--muted)"><span style="color:var(--faint)">model calls</span><span>0</span></div>
+        </div>
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-soft);display:flex;align-items:center;gap:8px">
+          <span style="width:5px;height:5px;border-radius:50%;background:var(--teal);animation:pulse 1.6s infinite"></span>
+          <span style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">replaying stored transform…</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid var(--border-soft)">
+    <div style="max-width:1180px;margin:0 auto;padding:78px 32px;display:flex;flex-direction:column;gap:26px">
+      <div style="display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap">
+        <div style="flex:1;min-width:380px">
+          <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">06:00 · SCHEDULED REFRESH</div>
+          <h2 style="margin:14px 0 0;font:400 38px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">Overnight, someone renamed a column.</h2>
+          <p style="margin:16px 0 0;max-width:520px;font:400 13px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">Refresh checks the new snapshot against the fields the spec actually references before rendering anything. The failure mode is a typed error naming the drift — not a chart that looks fine and isn't. Additive drift is ignored, so a harmless migration never trips it.</p>
+        </div>
+        <div style="display:flex;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px">
+          <button onClick="{{ setStrict }}" style="{{ strictBtn }}">chartagents</button>
+          <button onClick="{{ setLoose }}" style="{{ looseBtn }}">no drift check</button>
+        </div>
+      </div>
+      <div style="position:relative;border:1px solid var(--border-soft);border-radius:12px;background:var(--panel);overflow:hidden">
+        <div id="drift-chart" style="height:320px;filter:{{ driftBlur }}"></div>
+        <sc-if value="{{ strict }}" hint-placeholder-val="{{ true }}">
+          <div style="position:absolute;inset:0;background:color-mix(in oklab,var(--bg) 78%,transparent);display:flex;align-items:center;justify-content:center;padding:26px">
+            <div style="max-width:540px;background:var(--app);border:1px solid color-mix(in oklab,var(--red) 42%,transparent);border-radius:12px;padding:24px 26px;display:flex;flex-direction:column;gap:13px">
+              <div style="display:flex;align-items:center;gap:9px">
+                <span style="width:7px;height:7px;border-radius:50%;background:var(--red)"></span>
+                <span style="font:500 11.5px 'IBM Plex Mono';color:var(--red)">SchemaDriftError</span>
+                <span style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">0 tokens spent · nothing rendered</span>
+              </div>
+              <div style="font:400 13px/1.65 'IBM Plex Sans';color:var(--ink)">Refresh stopped before rendering. Two fields this spec references have changed.</div>
+              <div style="font:400 10.5px/1.9 'IBM Plex Mono';color:var(--muted);border-top:1px solid var(--border-soft);padding-top:12px">
+                <div><span style="color:var(--ink)">plan_tier</span> renamed → <span style="color:var(--ink)">tier_name</span></div>
+                <div><span style="color:var(--ink)">churn_rate</span> float64 → string</div>
+                <div style="color:var(--faint)">+2 unreferenced columns added (ignored)</div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button style="font:500 11.5px 'IBM Plex Sans';padding:9px 14px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer" style-hover="background:var(--panel)">Remap fields — no model call</button>
+                <button style="font:500 11.5px 'IBM Plex Sans';padding:9px 14px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer" style-hover="background:var(--panel)">Regenerate</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+      <sc-if value="{{ loose }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;align-items:center;gap:9px;padding:10px 14px;border-radius:8px;background:color-mix(in oklab,var(--amber) 12%,transparent);border:1px solid color-mix(in oklab,var(--amber) 32%,transparent)">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--amber);animation:pulse 1.6s infinite"></span>
+          <span style="font:400 11px 'IBM Plex Mono';color:var(--amber)">refresh reported success · two tiers silently missing · nobody notices until QBR</span>
+        </div>
+      </sc-if>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid var(--border-soft);background:var(--app)">
+    <div style="max-width:1180px;margin:0 auto;padding:78px 32px;display:flex;flex-direction:column;gap:24px">
+      <div style="display:flex;align-items:flex-end;gap:32px;flex-wrap:wrap">
+        <div style="flex:1;min-width:380px">
+          <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">REFINEMENT</div>
+          <h2 style="margin:14px 0 0;font:400 38px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">"Now break that down quarterly."</h2>
+          <p style="margin:16px 0 0;max-width:500px;font:400 13px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">A structural change replans from scratch. This one is a spec diff — the planner emits two changed lines, the renderer runs again, and only the affected review checks re-run.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:12px">
+          <div style="display:flex;gap:22px;font:400 11px 'IBM Plex Mono';color:var(--muted)">
+            <span style="text-align:right"><span style="color:var(--faint)">from scratch</span><br>9.1k tok · $0.031</span>
+            <span style="text-align:right"><span style="color:var(--faint)">patch</span><br><span style="color:var(--teal)">1.1k tok · $0.004</span></span>
+          </div>
+          <button onClick="{{ togglePatch }}" style="{{ patchBtn }}">{{ patchLabel }}</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:20px">
+        <div id="patch-chart" style="height:300px;background:var(--panel);border:1px solid var(--border-soft);border-radius:12px;min-width:0"></div>
+        <div style="background:var(--rail);border:1px solid var(--border-soft);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;min-width:0">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:8px">
+            <span style="font:400 11px 'IBM Plex Mono';color:var(--ink)">spec.diff</span>
+            <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">{{ diffSummary }}</span>
+          </div>
+          <div style="flex:1;padding:14px 16px;font:400 10.5px/1.85 'IBM Plex Mono';color:var(--muted)">
+            <div style="color:var(--faint)">  "transform": {</div>
+            <div style="{{ oldLine }}">- &nbsp;&nbsp;"group_by": ["month", "region"]</div>
+            <div style="{{ newLine }}">+ &nbsp;&nbsp;"group_by": ["quarter", "region"]</div>
+            <div style="color:var(--faint)">  },</div>
+            <div style="color:var(--faint)">  "encodings": { "x": {</div>
+            <div style="{{ oldLine }}">- &nbsp;&nbsp;&nbsp;&nbsp;"field": "month"</div>
+            <div style="{{ newLine }}">+ &nbsp;&nbsp;&nbsp;&nbsp;"field": "quarter"</div>
+            <div style="color:var(--faint)">  } }</div>
+          </div>
+          <div style="border-top:1px solid var(--border-soft);padding:13px 16px;display:flex;flex-direction:column;gap:6px;font:400 10.5px 'IBM Plex Mono';color:var(--muted)">
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--faint)">re-run checks</span><span>{{ checksLabel }}</span></div>
+            <div style="display:flex;justify-content:space-between"><span style="color:var(--faint)">unchanged</span><span style="color:var(--teal)">{{ skippedLabel }}</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1180px;margin:0 auto;padding:88px 32px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:start">
+      <div>
+        <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">FOUR LINES</div>
+        <h2 style="margin:14px 0 22px;font:400 34px/1.12 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">An API, not a conversation.</h2>
+        <div style="background:var(--rail);border:1px solid var(--border-2);border-radius:12px;overflow:hidden">
+          <div style="padding:11px 16px;border-bottom:1px solid var(--border-soft);display:flex;gap:7px;align-items:center">
+            <span style="width:9px;height:9px;border-radius:50%;background:var(--border-strong)"></span>
+            <span style="width:9px;height:9px;border-radius:50%;background:var(--border)"></span>
+            <span style="width:9px;height:9px;border-radius:50%;background:var(--border)"></span>
+            <span style="margin-left:6px;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">app.py</span>
+          </div>
+          <div style="padding:18px 18px;font:400 11.5px/1.95 'IBM Plex Mono';color:var(--muted);white-space:pre;overflow:auto">{{ codeSnippet }}</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px;padding-top:56px">
+        <div style="border:1px solid var(--border);border-radius:10px;padding:18px 20px;background:var(--app)">
+          <div style="font:600 12.5px 'IBM Plex Sans';color:var(--ink)">Typed artifacts, not chat output</div>
+          <div style="margin-top:7px;font:400 12px/1.65 'IBM Plex Sans';color:var(--muted)">ECharts JSON, Plotly figures, PNG, SVG, HTML and the validated spec — drop straight into a frontend, a PDF pipeline or a report job.</div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:10px;padding:18px 20px;background:var(--app)">
+          <div style="font:600 12.5px 'IBM Plex Sans';color:var(--ink)">Metadata is all the model sees</div>
+          <div style="margin-top:7px;font:400 12px/1.65 'IBM Plex Sans';color:var(--muted)">Profiling runs where the data lives, or pushes down to your warehouse. Schema, statistics and small samples go to the model; rows never do.</div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:10px;padding:18px 20px;background:var(--app)">
+          <div style="font:600 12.5px 'IBM Plex Sans';color:var(--ink)">Cost as a dial</div>
+          <div style="margin-top:7px;font:400 12px/1.65 'IBM Plex Sans';color:var(--muted)"><span style="font-family:'IBM Plex Mono'">quality="fast" | "balanced" | "best"</span> sets the review budget per request. Edits are token-cheap patches, not rewrites.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="border-top:1px solid var(--border-soft);background:var(--app)">
+    <div style="max-width:1180px;margin:0 auto;padding:70px 32px;display:flex;align-items:center;gap:32px;flex-wrap:wrap">
+      <div style="flex:1;min-width:280px">
+        <h2 style="margin:0;font:400 34px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">Give your users the chart, keep the workflow.</h2>
+        <p style="margin:12px 0 0;font:400 13px/1.7 'IBM Plex Sans';color:var(--muted)">Apache-2.0. Model-agnostic. Self-hostable sandbox.</p>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border);border-radius:9px;background:var(--rail);font:400 12.5px 'IBM Plex Mono';color:var(--ink)">pip install chartagents<span style="color:var(--faint);font-size:11px">copy</span></div>
+        <button style="font:500 13px 'IBM Plex Sans';padding:12px 20px;border-radius:9px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Create an account</button>
+      </div>
+    </div>
+  </section>
+
+  <div style="max-width:1180px;margin:0 auto;padding:70px 32px 10px">
+    <div style="font:500 10px 'IBM Plex Mono';letter-spacing:.09em;color:var(--faint)">AUTH SCREENS</div>
+    <p style="margin:10px 0 0;max-width:660px;font:400 12.5px/1.65 'IBM Plex Sans';color:var(--muted)">Accounts exist for the hosted playground, the benchmark dashboard and API keys — the library itself needs none. Same tokens, same type, quieter chrome.</p>
+  </div>
+
+  <section style="max-width:1180px;margin:0 auto;padding:26px 32px 40px">
+    <div style="border:1px solid var(--border-2);border-radius:14px;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;min-height:520px">
+      <div style="padding:44px 42px;background:var(--rail);display:flex;flex-direction:column;justify-content:space-between;border-right:1px solid var(--border-soft)">
+        <div style="display:flex;align-items:center;gap:9px">
+          <span style="width:20px;height:20px;border-radius:5px;background:linear-gradient(140deg,var(--teal),var(--violet))"></span>
+          <span style="font:400 17px 'Instrument Serif',serif;color:var(--ink)">chartagents</span>
+        </div>
+        <div>
+          <div style="font:400 30px/1.2 'Instrument Serif',serif;letter-spacing:-.015em;color:var(--ink);max-width:340px">A chart is a saved spec, not a screenshot.</div>
+          <div style="margin-top:20px;display:flex;gap:26px">
+            <div><div style="font:400 20px 'Instrument Serif',serif;color:var(--ink)">2,190</div><div style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">refreshes / mo</div></div>
+            <div><div style="font:400 20px 'Instrument Serif',serif;color:var(--teal)">$0.00</div><div style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">to replay them</div></div>
+          </div>
+        </div>
+        <div style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">SOC 2 · data stays in your infrastructure</div>
+      </div>
+      <div style="padding:44px 42px;background:var(--app);display:flex;flex-direction:column;justify-content:center;gap:18px">
+        <div>
+          <h3 style="margin:0;font:400 26px/1.2 'Instrument Serif',serif;color:var(--ink)">Sign in</h3>
+          <p style="margin:8px 0 0;font:400 12px 'IBM Plex Sans';color:var(--muted)">Playground, benchmark runs and keys.</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <button style="display:flex;align-items:center;justify-content:center;gap:9px;font:500 12.5px 'IBM Plex Sans';padding:11px 0;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer" style-hover="background:var(--panel)"><span style="width:14px;height:14px;border-radius:50%;background:var(--ink)"></span>Continue with GitHub</button>
+          <button style="display:flex;align-items:center;justify-content:center;gap:9px;font:500 12.5px 'IBM Plex Sans';padding:11px 0;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer" style-hover="background:var(--panel)"><span style="width:14px;height:14px;border-radius:50%;border:2px solid var(--ink)"></span>Continue with Google</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px"><span style="flex:1;height:1px;background:var(--border-soft)"></span><span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">OR</span><span style="flex:1;height:1px;background:var(--border-soft)"></span></div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <label style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.05em;color:var(--faint)">EMAIL</label>
+          <div style="padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:var(--rail);font:400 12.5px 'IBM Plex Mono';color:var(--muted)">you@company.com</div>
+          <label style="margin-top:6px;font:500 10.5px 'IBM Plex Mono';letter-spacing:.05em;color:var(--faint)">PASSWORD</label>
+          <div style="padding:11px 13px;border:1px solid var(--violet);border-radius:8px;background:var(--rail);font:400 12.5px 'IBM Plex Mono';color:var(--ink);display:flex;align-items:center">••••••••••<span style="margin-left:auto;width:1px;height:14px;background:var(--violet);animation:pulse 1s infinite"></span></div>
+        </div>
+        <button style="font:500 13px 'IBM Plex Sans';padding:12px 0;border-radius:8px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Sign in</button>
+        <div style="display:flex;justify-content:space-between;font:400 11.5px 'IBM Plex Sans';color:var(--muted)"><span style-hover="color:var(--ink)">Forgot password</span><span>New here? <span style="color:var(--violet)">Create an account</span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section style="max-width:1180px;margin:0 auto;padding:0 32px 80px">
+    <div style="border:1px solid var(--border-2);border-radius:14px;overflow:hidden;display:grid;grid-template-columns:1fr 1fr;min-height:520px">
+      <div style="padding:44px 42px;background:var(--app);display:flex;flex-direction:column;justify-content:center;gap:16px;border-right:1px solid var(--border-soft)">
+        <div>
+          <h3 style="margin:0;font:400 26px/1.2 'Instrument Serif',serif;color:var(--ink)">Create your account</h3>
+          <p style="margin:8px 0 0;font:400 12px 'IBM Plex Sans';color:var(--muted)">Step 1 of 2 — takes about a minute.</p>
+        </div>
+        <div style="display:flex;gap:5px"><span style="flex:1;height:3px;border-radius:2px;background:var(--teal)"></span><span style="flex:1;height:3px;border-radius:2px;background:var(--border)"></span></div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <label style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.05em;color:var(--faint)">WORK EMAIL</label>
+          <div style="padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:var(--rail);font:400 12.5px 'IBM Plex Mono';color:var(--ink)">sharim@meridian.io</div>
+          <label style="margin-top:6px;font:500 10.5px 'IBM Plex Mono';letter-spacing:.05em;color:var(--faint)">ORGANISATION</label>
+          <div style="padding:11px 13px;border:1px solid var(--border);border-radius:8px;background:var(--rail);font:400 12.5px 'IBM Plex Mono';color:var(--ink)">Meridian Analytics</div>
+          <label style="margin-top:6px;font:500 10.5px 'IBM Plex Mono';letter-spacing:.05em;color:var(--faint)">WHERE DOES YOUR DATA LIVE?</label>
+          <div style="display:flex;gap:7px;flex-wrap:wrap">
+            <span style="font:400 11px 'IBM Plex Mono';padding:7px 11px;border-radius:20px;border:1px solid var(--teal);background:color-mix(in oklab,var(--teal) 12%,transparent);color:var(--teal)">S3 · Parquet</span>
+            <span style="font:400 11px 'IBM Plex Mono';padding:7px 11px;border-radius:20px;border:1px solid var(--border);color:var(--muted)">Snowflake</span>
+            <span style="font:400 11px 'IBM Plex Mono';padding:7px 11px;border-radius:20px;border:1px solid var(--border);color:var(--muted)">Postgres</span>
+            <span style="font:400 11px 'IBM Plex Mono';padding:7px 11px;border-radius:20px;border:1px solid var(--border);color:var(--muted)">In-memory</span>
+          </div>
+        </div>
+        <button style="margin-top:6px;font:500 13px 'IBM Plex Sans';padding:12px 0;border-radius:8px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Continue</button>
+        <div style="font:400 11px/1.6 'IBM Plex Sans';color:var(--faint)">By continuing you agree to the terms. We never ask for warehouse credentials — keys stay in your environment.</div>
+      </div>
+      <div style="padding:44px 42px;background:var(--rail);display:flex;flex-direction:column;justify-content:center;gap:18px">
+        <div style="display:flex;align-items:center;gap:9px">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--teal)"></span>
+          <span style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.07em;color:var(--teal)">STEP 2 · YOUR FIRST KEY</span>
+        </div>
+        <div style="font:400 22px/1.3 'Instrument Serif',serif;color:var(--ink);max-width:330px">One key, then four lines of Python.</div>
+        <div style="padding:14px 16px;border:1px solid var(--border);border-radius:9px;background:var(--app);display:flex;align-items:center;gap:12px">
+          <span style="font:400 12px 'IBM Plex Mono';color:var(--ink)">ca_live_9f3a…c71d</span>
+          <span style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';color:var(--violet);cursor:pointer">copy</span>
+        </div>
+        <div style="padding:11px 13px;border:1px solid color-mix(in oklab,var(--amber) 30%,transparent);background:color-mix(in oklab,var(--amber) 7%,transparent);border-radius:8px;font:400 10.5px/1.6 'IBM Plex Mono';color:var(--amber)">Shown once. Store it in your secret manager.</div>
+        <div style="font:400 11.5px/1.95 'IBM Plex Mono';color:var(--muted);white-space:pre;border-left:2px solid var(--border);padding-left:14px">{{ startSnippet }}</div>
+        <div style="display:flex;gap:9px">
+          <button style="flex:1;font:500 12.5px 'IBM Plex Sans';padding:11px 0;border-radius:8px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Open the playground</button>
+          <button style="flex:1;font:500 12.5px 'IBM Plex Sans';padding:11px 0;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer" style-hover="background:var(--panel)">Read the docs</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer style="border-top:1px solid var(--border-soft);background:var(--app)">
+    <div style="max-width:1180px;margin:0 auto;padding:34px 32px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <span style="font:400 15px 'Instrument Serif',serif;color:var(--ink)">chartagents</span>
+      <span style="font:400 11.5px 'IBM Plex Mono';color:var(--faint)">Apache-2.0 · PyPI · GitHub</span>
+      <span style="margin-left:auto;font:400 11.5px 'IBM Plex Mono';color:var(--faint)">Instrument Serif + IBM Plex — SIL OFL 1.1</span>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultTheme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;dark&quot;,&quot;light&quot;],&quot;default&quot;:&quot;dark&quot;,&quot;tsType&quot;:&quot;'dark' | 'light'&quot;,&quot;section&quot;:&quot;Theme&quot;},&quot;demoAutoplay&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Hero demo&quot;}}">
+const THEMES = {
+  dark:  { axis: '#2a2a32', split: '#1e1e25', label: '#6a6975', tip: '#1d1d23', tipB: '#2a2a32', tipT: '#ecebf0', legend: '#8b8a97', series: ['#57d3cb', '#a78bfa', '#e8b568', '#7aa2f7', '#e8737d'] },
+  light: { axis: '#dcd8d0', split: '#eeebe5', label: '#8f8b83', tip: '#ffffff', tipB: '#dcd8d0', tipT: '#191817', legend: '#6b6862', series: ['#0d8f86', '#6b4de0', '#a8730c', '#3a6fd8', '#c33f4b'] }
+};
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const REGIONS = ['NA', 'EMEA', 'APAC', 'LATAM', 'ANZ'];
+const QUARTERS = ['Q3 24', 'Q4 24', 'Q1 25', 'Q2 25', 'Q3 25', 'Q4 25', 'Q1 26', 'Q2 26'];
+const TIERS = ['Free', 'Pro', 'Team', 'Enterprise'];
+const MARKS = [
+  { name: 'bar', counts: [6, 6, 6, 6] },
+  { name: 'line', counts: [6, 6, 6, 6] },
+  { name: 'area', counts: [5, 6, 6, 6] },
+  { name: 'scatter', counts: [6, 6, 6, 6] },
+  { name: 'pie · donut', counts: [3, 3, 4, 4] },
+  { name: 'heatmap', counts: [4, 4, 5, 6] },
+  { name: 'histogram', counts: [3, 4, 4, 5] },
+  { name: 'boxplot', counts: [3, 3, 4, 5] },
+  { name: 'waterfall', counts: [0, 4, 5, 5] },
+  { name: 'choropleth', counts: [0, 0, 4, 5] },
+  { name: 'sankey', counts: [0, 0, 0, 4] }
+];
+const RELEASES = [
+  { label: 'v1.0', share: '24%', note: 'Launch grammar — the eight core marks and the six channel names.', reason: 'E_MARK_UNKNOWN' },
+  { label: 'v1.1', share: '18%', note: 'Waterfall absorbed from escape telemetry; area gains facet.', reason: 'E_LAYER_COMBO' },
+  { label: 'v1.2', share: '14%', note: 'Choropleth lands with a bounded projection set; donut gains size.', reason: 'E_LAYER_COMBO' },
+  { label: 'v1.3', share: '11%', note: 'Sankey enters as a mark; boxplot and histogram finish their channels.', reason: 'E_TRANSFORM_WINDOW' }
+];
+
+function wave(seed, n, base, amp) {
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(Math.round(base * (1 + i * 0.035) + Math.sin((i + seed) * 0.9) * amp + Math.cos(i * 1.7 + seed) * amp * 0.5));
+  return out;
+}
+
+const DEMOS = [
+  {
+    title: 'Monthly revenue by region', rail: 'deterministic', latency: '6.4 s', cost: '$0.031',
+    spec: `{
+  "mark": { "type": "line",
+            "smooth": true },
+  "encodings": {
+    "x": { "field": "month",
+           "type": "temporal" },
+    "y": { "field": "revenue_sum",
+           "type": "quantitative" },
+    "color": { "field": "region",
+               "type": "nominal" }
+  },
+  "transform": {
+    "group_by": ["month", "region"],
+    "aggregate": [{ "op": "sum",
+      "field": "revenue",
+      "as": "revenue_sum" }]
+  },
+  "annotations": [
+    { "kind": "point_label",
+      "statistic": "max" }
+  ]
+}`
+  },
+  {
+    title: 'ARR by plan tier, worst churn first', rail: 'deterministic', latency: '5.1 s', cost: '$0.028',
+    spec: `{
+  "mark": { "type": "bar" },
+  "encodings": {
+    "x": { "field": "plan_tier",
+           "type": "nominal",
+           "sort": "churn_desc" },
+    "y": { "field": "arr_sum",
+           "type": "quantitative" }
+  },
+  "transform": {
+    "group_by": ["plan_tier"],
+    "aggregate": [{ "op": "sum",
+      "field": "arr",
+      "as": "arr_sum" }],
+    "sort": "churn_rate"
+  },
+  "layers": [
+    { "mark": { "type": "line" },
+      "y": "churn_rate" }
+  ]
+}`
+  },
+  {
+    title: 'Share of ARR with churn overlaid', rail: 'custom', latency: '18.7 s', cost: '$0.062',
+    spec: `{
+  "escape": {
+    "mode": "custom_code",
+    "reason": "E_LAYER_COMBO",
+    "detail": "pie + line is outside
+      the overlay allowlist",
+    "library": "matplotlib",
+    "runtime_profile": "python"
+  },
+  "transform": {
+    "group_by": ["plan_tier"],
+    "aggregate": [
+      { "op": "sum", "field": "arr",
+        "as": "arr_sum" },
+      { "op": "mean",
+        "field": "churn",
+        "as": "churn_rate" }
+    ]
+  }
+}`
+  }
+];
+
+class Component extends DCLogic {
+  state = { theme: 'dark', demo: 0, refreshes: 2190, patched: false, strict: true, release: 0 };
+
+  componentDidMount() {
+    document.body.dataset.theme = this.props.defaultTheme || 'dark';
+    this.setState({ theme: this.props.defaultTheme || 'dark' }, () => this.boot());
+    this.timer = setInterval(() => this.setState(s => ({ refreshes: s.refreshes + 1 })), 2600);
+    if (this.props.demoAutoplay) {
+      this.cycle = setInterval(() => this.setState(s => ({ demo: (s.demo + 1) % 3 }), () => this.paint()), 5200);
+    }
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.timer);
+    clearInterval(this.cycle);
+    [this.chart, this.patchChart, this.driftChart].forEach(c => c && c.dispose());
+  }
+
+  boot(tries = 0) {
+    if (!window.echarts) {
+      if (tries < 80) setTimeout(() => this.boot(tries + 1), 100);
+      return;
+    }
+    const el = document.getElementById('hero-chart');
+    if (!el) return;
+    if (this.chart) this.chart.dispose();
+    this.chart = window.echarts.init(el, null, { renderer: 'canvas' });
+    const pe = document.getElementById('patch-chart');
+    const de = document.getElementById('drift-chart');
+    if (this.patchChart) this.patchChart.dispose();
+    if (this.driftChart) this.driftChart.dispose();
+    this.patchChart = pe ? window.echarts.init(pe, null, { renderer: 'canvas' }) : null;
+    this.driftChart = de ? window.echarts.init(de, null, { renderer: 'canvas' }) : null;
+    this.paint();
+  }
+
+  paintExtras() {
+    const T = THEMES[this.state.theme] || THEMES.dark;
+    const label = { color: T.label, fontFamily: 'IBM Plex Mono', fontSize: 10 };
+    const money = Object.assign({ formatter: v => '$' + (v / 1000) + 'k' }, label);
+    const shell = {
+      color: T.series,
+      grid: { left: 58, right: 24, top: 34, bottom: 36 },
+      tooltip: { trigger: 'axis', backgroundColor: T.tip, borderColor: T.tipB, textStyle: { color: T.tipT, fontFamily: 'IBM Plex Mono', fontSize: 11 } },
+      legend: { top: 0, right: 0, icon: 'roundRect', itemWidth: 8, itemHeight: 8, textStyle: { color: T.legend, fontFamily: 'IBM Plex Sans', fontSize: 11 } }
+    };
+    if (this.patchChart) {
+      const q = this.state.patched;
+      this.patchChart.setOption(Object.assign({}, shell, {
+        xAxis: { type: 'category', data: q ? QUARTERS : MONTHS, axisLine: { lineStyle: { color: T.axis } }, axisTick: { show: false }, axisLabel: label },
+        yAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: T.split } }, axisLabel: money },
+        series: REGIONS.slice(0, 4).map((r, i) => ({
+          name: r, type: 'line', smooth: 0.25, symbol: 'circle', symbolSize: 5, lineStyle: { width: 2 },
+          data: q ? wave(i * 3, 8, 41000 - i * 5600, 3200) : wave(i * 3, 12, 38000 - i * 5200, 4200)
+        }))
+      }), true);
+    }
+    if (this.driftChart) {
+      const broken = !this.state.strict;
+      this.driftChart.setOption(Object.assign({}, shell, {
+        xAxis: { type: 'category', data: TIERS, axisLine: { lineStyle: { color: T.axis } }, axisTick: { show: false }, axisLabel: label },
+        yAxis: [
+          { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: T.split } }, axisLabel: money },
+          { type: 'value', axisLine: { show: false }, splitLine: { show: false }, axisLabel: Object.assign({ formatter: '{value}%' }, label) }
+        ],
+        series: [
+          { name: 'ARR', type: 'bar', barWidth: 44, itemStyle: { color: T.series[0], borderRadius: [4, 4, 0, 0] }, data: broken ? [42000, 118000, null, null] : [42000, 118000, 164000, 221000] },
+          { name: 'Churn', type: 'line', yAxisIndex: 1, smooth: 0.3, symbol: 'circle', symbolSize: 6, lineStyle: { width: 2, color: T.series[1] }, itemStyle: { color: T.series[1] }, data: broken ? [9.2, 5.4, null, null] : [9.2, 5.4, 3.1, 1.8] }
+        ]
+      }), true);
+    }
+  }
+
+  seg(active) {
+    return {
+      font: "500 11px 'IBM Plex Sans'", padding: '6px 13px', borderRadius: '6px', border: 0, cursor: 'pointer',
+      background: active ? 'var(--border)' : 'transparent',
+      color: active ? 'var(--ink)' : 'var(--muted)'
+    };
+  }
+
+  paint() {
+    if (!this.chart) return;
+    const T = THEMES[this.state.theme] || THEMES.dark;
+    const label = { color: T.label, fontFamily: 'IBM Plex Mono', fontSize: 10 };
+    const base = {
+      color: T.series,
+      grid: { left: 60, right: 26, top: 34, bottom: 38 },
+      tooltip: { trigger: 'axis', backgroundColor: T.tip, borderColor: T.tipB, textStyle: { color: T.tipT, fontFamily: 'IBM Plex Mono', fontSize: 11 } },
+      legend: { top: 0, right: 0, icon: 'roundRect', itemWidth: 8, itemHeight: 8, textStyle: { color: T.legend, fontFamily: 'IBM Plex Sans', fontSize: 11 } }
+    };
+    const money = Object.assign({ formatter: v => '$' + (v / 1000) + 'k' }, label);
+    let opt;
+    if (this.state.demo === 0) {
+      opt = Object.assign({}, base, {
+        xAxis: { type: 'category', data: MONTHS, axisLine: { lineStyle: { color: T.axis } }, axisTick: { show: false }, axisLabel: label },
+        yAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: T.split } }, axisLabel: money },
+        series: REGIONS.map((r, i) => ({ name: r, type: 'line', smooth: 0.25, symbol: 'circle', symbolSize: 5, lineStyle: { width: 2 }, data: wave(i * 3, 12, 38000 - i * 5200, 4200) }))
+      });
+    } else if (this.state.demo === 1) {
+      opt = Object.assign({}, base, {
+        xAxis: { type: 'category', data: ['Free', 'Pro', 'Team', 'Enterprise'], axisLine: { lineStyle: { color: T.axis } }, axisTick: { show: false }, axisLabel: label },
+        yAxis: [
+          { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: T.split } }, axisLabel: money },
+          { type: 'value', axisLine: { show: false }, splitLine: { show: false }, axisLabel: Object.assign({ formatter: '{value}%' }, label) }
+        ],
+        series: [
+          { name: 'ARR', type: 'bar', barWidth: 44, itemStyle: { color: T.series[0], borderRadius: [4, 4, 0, 0] }, data: [42000, 118000, 164000, 221000] },
+          { name: 'Churn', type: 'line', yAxisIndex: 1, smooth: 0.3, symbol: 'circle', symbolSize: 6, lineStyle: { width: 2, color: T.series[1] }, itemStyle: { color: T.series[1] }, data: [9.2, 5.4, 3.1, 1.8] }
+        ]
+      });
+    } else {
+      const tiers = ['Free', 'Pro', 'Team', 'Enterprise'];
+      opt = Object.assign({}, base, {
+        grid: { left: '58%', right: 30, top: 34, bottom: 38 },
+        tooltip: { backgroundColor: T.tip, borderColor: T.tipB, textStyle: { color: T.tipT, fontFamily: 'IBM Plex Mono', fontSize: 11 } },
+        legend: { top: 0, left: 0, icon: 'roundRect', itemWidth: 8, itemHeight: 8, textStyle: { color: T.legend, fontFamily: 'IBM Plex Sans', fontSize: 11 }, data: tiers },
+        xAxis: { type: 'category', data: tiers, axisLine: { lineStyle: { color: T.axis } }, axisTick: { show: false }, axisLabel: label },
+        yAxis: { type: 'value', name: 'churn %', nameTextStyle: { color: T.label, fontFamily: 'IBM Plex Mono', fontSize: 10, align: 'left' }, axisLine: { show: false }, splitLine: { lineStyle: { color: T.split } }, axisLabel: Object.assign({ formatter: '{value}%' }, label) },
+        series: [
+          {
+            name: 'ARR share', type: 'pie', radius: ['44%', '68%'], center: ['26%', '56%'],
+            itemStyle: { borderColor: T.tip, borderWidth: 2 },
+            label: { position: 'inside', color: T.tip, fontFamily: 'IBM Plex Mono', fontSize: 10, formatter: '{d}%' },
+            labelLine: { show: false },
+            data: tiers.map((t, i) => ({ name: t, value: [42, 118, 164, 221][i] }))
+          },
+          {
+            name: 'churn', type: 'line', smooth: 0.3, symbol: 'circle', symbolSize: 6,
+            lineStyle: { width: 2, color: T.series[4] }, itemStyle: { color: T.series[4] },
+            areaStyle: { color: T.series[4] + '22' },
+            data: [9.2, 5.4, 3.1, 1.8]
+          }
+        ]
+      });
+    }
+    this.chart.setOption(opt, true);
+    this.paintExtras();
+  }
+
+  toggleTheme = () => {
+    const t = this.state.theme === 'dark' ? 'light' : 'dark';
+    document.body.dataset.theme = t;
+    this.setState({ theme: t }, () => this.paint());
+  };
+
+  pick(i) { this.setState({ demo: i }, () => this.paint()); }
+
+  chipStyle(active) {
+    return {
+      font: "400 11.5px 'IBM Plex Sans'", padding: '6px 12px', borderRadius: '20px', cursor: 'pointer',
+      border: '1px solid ' + (active ? 'var(--ink)' : 'var(--border)'),
+      background: active ? 'var(--ink)' : 'transparent',
+      color: active ? 'var(--bg)' : 'var(--muted)'
+    };
+  }
+
+  renderVals() {
+    const d = DEMOS[this.state.demo];
+    const custom = d.rail === 'custom';
+    return {
+      toggleTheme: this.toggleTheme,
+      pick0: () => this.pick(0), pick1: () => this.pick(1), pick2: () => this.pick(2),
+      chip0: this.chipStyle(this.state.demo === 0),
+      chip1: this.chipStyle(this.state.demo === 1),
+      chip2: this.chipStyle(this.state.demo === 2),
+      demoTitle: d.title,
+      demoSpec: d.spec,
+      demoLatency: d.latency,
+      demoCost: d.cost,
+      railLabel: custom ? 'CUSTOM RAIL' : 'DETERMINISTIC RAIL',
+      railPill: {
+        font: "500 10px 'IBM Plex Mono'", letterSpacing: '.06em', padding: '4px 9px', borderRadius: '20px',
+        color: custom ? 'var(--violet)' : 'var(--teal)',
+        background: custom ? 'color-mix(in oklab, var(--violet) 12%, transparent)' : 'color-mix(in oklab, var(--teal) 12%, transparent)',
+        border: '1px solid ' + (custom ? 'color-mix(in oklab, var(--violet) 30%, transparent)' : 'color-mix(in oklab, var(--teal) 30%, transparent)')
+      },
+      refreshCount: this.state.refreshes.toLocaleString(),
+      codeSnippet: `agent = create_chart_agent(
+    model="anthropic:claude-sonnet-4-6",
+    outputs=["png", "echarts"],
+    quality="balanced",
+)
+
+result = agent.create_chart(
+    data="s3://bucket/sales.parquet",
+    instruction="Monthly revenue by region, last 2 years",
+)
+
+result.artifacts["echarts"]   # -> dict, straight to your frontend
+result.spec                   # -> the durable contract
+result.review                 # -> what passed, what was fixed`,
+      togglePatch: () => this.setState({ patched: !this.state.patched }, () => this.paintExtras()),
+      patchLabel: this.state.patched ? 'Reset to monthly' : 'Apply the patch',
+      patchBtn: {
+        font: "500 12px 'IBM Plex Sans'", padding: '9px 16px', borderRadius: '8px', cursor: 'pointer',
+        border: this.state.patched ? '1px solid var(--border)' : 0,
+        background: this.state.patched ? 'transparent' : 'var(--ink)',
+        color: this.state.patched ? 'var(--ink)' : 'var(--bg)'
+      },
+      diffSummary: this.state.patched ? '2 hunks applied' : '2 hunks pending',
+      oldLine: this.state.patched ? { color: 'var(--faint)', opacity: 0.42, textDecoration: 'line-through' } : { color: 'var(--faint)' },
+      newLine: this.state.patched ? { color: 'var(--teal)' } : { color: 'var(--violet-2)' },
+      checksLabel: this.state.patched ? 'axis · aggregation' : '—',
+      skippedLabel: this.state.patched ? '7 of 9 skipped' : 'light mode ready',
+
+      strict: this.state.strict,
+      loose: !this.state.strict,
+      strictBtn: this.seg(this.state.strict),
+      looseBtn: this.seg(!this.state.strict),
+      setStrict: () => this.setState({ strict: true }, () => this.paintExtras()),
+      setLoose: () => this.setState({ strict: false }, () => this.paintExtras()),
+      driftBlur: this.state.strict ? 'blur(2px) saturate(.5)' : 'none',
+
+      rows: MARKS.map(m => {
+        const n = m.counts[this.state.release];
+        const prev = this.state.release > 0 ? m.counts[this.state.release - 1] : n;
+        return {
+          name: m.name,
+          labelStyle: { font: "400 10.5px 'IBM Plex Mono'", color: n ? 'var(--ink)' : 'var(--faint)' },
+          cells: Array.from({ length: 6 }, (_, i) => ({
+            style: {
+              height: '15px', borderRadius: '3px',
+              background: i < prev ? 'var(--teal)' : i < n ? 'color-mix(in oklab, var(--teal) 34%, transparent)' : 'var(--border-soft)',
+              border: i < n ? 'none' : '1px dashed var(--border-strong)',
+              transition: 'background .35s ease'
+            }
+          }))
+        };
+      }),
+      rel0: () => this.setState({ release: 0 }),
+      rel1: () => this.setState({ release: 1 }),
+      rel2: () => this.setState({ release: 2 }),
+      rel3: () => this.setState({ release: 3 }),
+      relBtn0: this.seg(this.state.release === 0),
+      relBtn1: this.seg(this.state.release === 1),
+      relBtn2: this.seg(this.state.release === 2),
+      relBtn3: this.seg(this.state.release === 3),
+      customShare: RELEASES[this.state.release].share,
+      relLabel: RELEASES[this.state.release].label,
+      relNote: RELEASES[this.state.release].note,
+      topReason: RELEASES[this.state.release].reason,
+      markCount: MARKS.filter(m => m.counts[this.state.release] > 0).length + ' of ' + MARKS.length,
+
+      startSnippet: `import chartagents
+chartagents.api_key = "ca_live_…"`
+    };
+  }
+}
+</script>
+</body>
+</html>

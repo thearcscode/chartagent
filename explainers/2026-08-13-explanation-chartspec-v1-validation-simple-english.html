@@ -84,6 +84,8 @@
     text-transform: uppercase; letter-spacing: .1em; color: var(--ink-soft);
     font-family: var(--mono); }
   .toc ol { margin: 0; padding-left: 1.2rem; }
+  .toc ol ol { margin: .25rem 0 .4rem; }
+  .toc ol ol li { margin: .2rem 0; font-size: .92em; }
   .toc li { margin: .3rem 0; }
   .callout {
     border-left: 4px solid var(--accent); background: var(--accent-soft);
@@ -179,7 +181,7 @@ computer can run. The prototype then shows that one rule in that paragraph is no
   <div>project &nbsp;&nbsp;chartagents</div>
   <div>subject &nbsp;&nbsp;the prototype in <code>prototypes/chartspec-v1/</code></div>
   <div>branch &nbsp;&nbsp;&nbsp;research/python-arrow</div>
-  <div>written &nbsp;&nbsp;18 July 2026 · this Simple English version 13 August 2026</div>
+  <div>written &nbsp;&nbsp;18 July 2026 · this Simple English version 13 August 2026 · sections 3.1–3.8 expanded 20 August 2026</div>
 </div>
 
 <div class="callout">
@@ -213,6 +215,8 @@ computer can run. The prototype then shows that one rule in that paragraph is no
     <tr><td><strong>planner</strong></td><td>The component that calls the language model.</td></tr>
     <tr><td><strong>ChartSpec</strong></td><td>The structured description of one chart. It is the contract between the planner and the renderer adapters.</td></tr>
     <tr><td><strong>mark</strong></td><td>The shape on the page: a bar, a line, or a point.</td></tr>
+    <tr><td><strong>overlay</strong></td><td>An extra mark on the same axes, on top of the base mark. The ChartSpec stores overlays in <code>layers</code>.</td></tr>
+    <tr><td><strong>inherit</strong></td><td>Use the value from the next source. For an overlay, the encodings of the base mark. For style, the convention pack, then the theme, then the adapter default. Empty does not mean off.</td></tr>
     <tr><td><strong>channel</strong></td><td>A visual property that can hold data: <code>x</code>, <code>y</code>, <code>color</code>, <code>size</code>, <code>facet</code>, or <code>tooltip</code>.</td></tr>
     <tr><td><strong>encoding</strong></td><td>The map from one data column to one channel.</td></tr>
     <tr><td><strong>data type</strong></td><td>One of four classes for a column: quantitative, temporal, ordinal, or nominal.</td></tr>
@@ -232,7 +236,18 @@ computer can run. The prototype then shows that one rule in that paragraph is no
   <ol>
     <li><a href="#background">Background: why a chart needs a contract</a></li>
     <li><a href="#idea">The idea: one grammar, two types of error</a></li>
-    <li><a href="#code">The code: how the rules are written</a></li>
+    <li><a href="#code">The code: how the rules are written</a>
+      <ol>
+        <li><a href="#marks-objects">Marks are objects, not names</a></li>
+        <li><a href="#mark-table">The contract for each mark is a table</a></li>
+        <li><a href="#aggregation">Aggregation is not on the channel</a></li>
+        <li><a href="#layers">Layers, and one important defect</a></li>
+        <li><a href="#scatter-rule">The defect that the correction found</a></li>
+        <li><a href="#style-inherit">None has the meaning "inherit"</a></li>
+        <li><a href="#versions">Versions</a></li>
+        <li><a href="#run">How to run the prototype</a></li>
+      </ol>
+    </li>
     <li><a href="#quiz">Quiz</a></li>
   </ol>
 </div>
@@ -379,11 +394,20 @@ Pydantic. Pydantic is a Python library that changes a class definition into a va
 run time. If you declare a field as <code>int</code>, Pydantic rejects a string. This gives the easy
 half of phase 1 at no cost. The other half is the set of rules that Pydantic cannot express alone.</p>
 
-<h3>3.1 Marks are objects, not names</h3>
+<h3 id="marks-objects">3.1 Marks are objects, not names</h3>
 
-<p>The usual method is one list of eight strings, one string for each chart type. The prototype uses
-a different method. Each mark is a small object with a <code>type</code> field that identifies it
-(<code>chartspec_draft.py:116</code>):</p>
+<p>The ChartSpec describes <em>what the chart is</em>. It does not describe how one chart library
+draws the chart. That is the meaning of a library-agnostic contract. This section shows one design
+choice that protects that contract: a mark is a small object, not a name.</p>
+
+<p>The usual method is one list of eight strings, one string for each chart type:</p>
+
+<pre><code>{ "mark": "bar" }
+{ "mark": "histogram" }
+{ "mark": "boxplot" }</code></pre>
+
+<p>That list has no fields. The prototype uses a different method. Each mark is a small object with a
+<code>type</code> field that identifies it (<code>chartspec_draft.py:116</code>):</p>
 
 <p class="filename">chartspec_draft.py — the mark union</p>
 <pre><code>class BarMark(_MarkBase):
@@ -401,10 +425,49 @@ Mark = Annotated[
     Field(discriminator="type"),
 ]</code></pre>
 
-<p>Each mark has settings that no other mark uses. Bars stack or do not stack. A histogram has a
-number of bins. A box plot has a whisker convention. A list of strings has no location for these
-settings. Then you must put them in a general <code>style</code> object, and that object collects
-settings that apply to one chart library only. A library-agnostic contract must prevent this.</p>
+<p>Each mark has settings that no other mark uses:</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Mark</th><th>Setting that only this mark needs</th></tr></thead>
+  <tbody>
+    <tr><td>bar</td><td>Do the bars stack? <code>none</code>, <code>stacked</code>, or <code>normalized</code></td></tr>
+    <tr><td>histogram</td><td>How many bins?</td></tr>
+    <tr><td>boxplot</td><td>Which whisker rule? <code>tukey</code> or <code>minmax</code></td></tr>
+    <tr><td>pie</td><td>How large is the hole? <code>inner_radius_ratio</code></td></tr>
+  </tbody>
+</table>
+</div>
+<p class="caption">A histogram does not stack. A bar chart does not have bins. A pie has no
+whiskers.</p>
+
+<p>A list of strings has no location for these settings. Then you must put them in a general
+<code>style</code> object:</p>
+
+<pre><code>{
+  "mark": "bar",
+  "style": {
+    "stack": "stacked",
+    "bins": 20,
+    "whisker": "tukey",
+    "barmode": "relative"
+  }
+}</code></pre>
+
+<p>Two errors follow. The grammar cannot reject <code>bins</code> on a bar chart, because
+<code>style</code> is a shared object. And settings that apply to one chart library only start to
+collect there, for example Plotly <code>barmode</code> or Matplotlib <code>bar_width</code>. Then the
+ChartSpec describes how one library draws the chart. You cannot give that ChartSpec to a different
+renderer adapter. A library-agnostic contract must prevent this.</p>
+
+<p>The object model puts each setting on the mark that owns it:</p>
+
+<pre><code>{ "mark": { "type": "bar", "stack": "stacked" } }
+{ "mark": { "type": "histogram", "bins": 20 } }
+{ "mark": { "type": "boxplot", "whisker": "tukey" } }</code></pre>
+
+<p>The <code>style</code> object then holds only shared look: theme, palette, title, width, and
+height. None of those belong to one mark. None of those name a chart library.</p>
 
 <p>There is also a good secondary result. A donut is not a ninth mark. A donut is a pie mark with a
 hole, which is <code>inner_radius_ratio &gt; 0</code>.</p>
@@ -416,10 +479,52 @@ hole, which is <code>inner_radius_ratio &gt; 0</code>.</p>
   an <code>inner_radius_ratio</code> field on a bar mark. It does not ignore that field.</p>
 </div>
 
-<h3>3.2 The contract for each mark is a table</h3>
+<h3 id="mark-table">3.2 The contract for each mark is a table</h3>
 
-<p>Which channels does each mark require, permit, and constrain? The prototype gives the answer as
-data (<code>chartspec_draft.py:201</code>). It does not use <code>if</code> statements:</p>
+<p>Section 3.1 decided what a mark is. This section decides what each mark is permitted to draw:
+which channels it must have, which channels it may have, and which data types those channels may
+hold.</p>
+
+<p>A ChartSpec maps columns onto channels: <code>x</code>, <code>y</code>, <code>color</code>,
+<code>size</code>, <code>facet</code>, <code>tooltip</code>. Not every mark can use every channel. A
+bar needs <code>x</code> and <code>y</code>. A histogram needs only <code>x</code>, because the height
+of each bar is a count that the renderer computes. A pie needs a category and a value.</p>
+
+<p>The prototype gives that contract as data (<code>chartspec_draft.py:201</code>). It does not use
+<code>if</code> statements. Each row has three columns:</p>
+
+<ul class="tight">
+  <li><strong>required</strong> — channels that must be present.</li>
+  <li><strong>allowed</strong> — channels that may be present. The required set is a subset of this
+  set.</li>
+  <li><strong>type constraints</strong> — for some channels, which data types are legal. An empty
+  cell means that all four data types are legal.</li>
+</ul>
+
+<p>This is the full table. "May also have" is <code>allowed</code> minus <code>required</code>.
+<code>tooltip</code> is allowed on every mark. <code>size</code> is allowed only on scatter.
+<strong>Categorical</strong> means ordinal or nominal.</p>
+
+<div class="scroller">
+<table>
+  <thead>
+    <tr><th>Mark</th><th>Must have</th><th>May also have</th><th>Type constraints</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>bar</td><td><code>x</code>, <code>y</code></td><td><code>color</code>, <code>facet</code>, <code>tooltip</code></td><td>none</td></tr>
+    <tr><td>line</td><td><code>x</code>, <code>y</code></td><td><code>color</code>, <code>facet</code>, <code>tooltip</code></td><td><code>y</code> quantitative</td></tr>
+    <tr><td>area</td><td><code>x</code>, <code>y</code></td><td><code>color</code>, <code>facet</code>, <code>tooltip</code></td><td><code>y</code> quantitative</td></tr>
+    <tr><td>scatter</td><td><code>x</code>, <code>y</code></td><td><code>color</code>, <code>size</code>, <code>facet</code>, <code>tooltip</code></td><td><code>x</code> and <code>y</code> quantitative or temporal; <code>size</code> quantitative</td></tr>
+    <tr><td>pie</td><td><code>color</code>, <code>y</code></td><td><code>tooltip</code></td><td><code>color</code> categorical; <code>y</code> quantitative</td></tr>
+    <tr><td>heatmap</td><td><code>x</code>, <code>y</code>, <code>color</code></td><td><code>facet</code>, <code>tooltip</code></td><td><code>color</code> quantitative</td></tr>
+    <tr><td>histogram</td><td><code>x</code></td><td><code>color</code>, <code>facet</code>, <code>tooltip</code></td><td><code>x</code> quantitative</td></tr>
+    <tr><td>boxplot</td><td><code>y</code></td><td><code>x</code>, <code>color</code>, <code>facet</code>, <code>tooltip</code></td><td><code>y</code> quantitative; <code>x</code> categorical</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="caption">The checker does three set operations against the row that matches
+<code>mark.type</code>: missing = required minus present, extra = present minus allowed, then a type
+check on the constrained channels.</p>
 
 <p class="filename">chartspec_draft.py — MARK_RULES (short form)</p>
 <pre><code>MARK_RULES: dict[str, MarkRule] = {
@@ -448,10 +553,27 @@ data (<code>chartspec_draft.py:201</code>). It does not use <code>if</code> stat
   <li>The prompt builder reads it to tell the planner what it can emit.</li>
 </ul>
 
-<p>Note the rule for <code>pie</code>. The category goes on <code>color</code> and the value goes on
-<code>y</code>. There is no special <code>theta</code> channel. This keeps the number of channel names
-at six, which is the number in the requirements document. The cost is that each reader must learn
-this map one time.</p>
+<p>If the rules lived in <code>if</code> statements, you would keep three copies: the code, the
+documentation, and the prompt. A table is one source.</p>
+
+<p>Some rows are easier to see in the table than in the code:</p>
+
+<ul class="tight">
+  <li><strong>Histogram has no <code>y</code>.</strong> Height is a count that the renderer computes.
+  A <code>y</code> channel on a histogram is Error type A from section 2. You can find it with no
+  data.</li>
+  <li><strong>Pie has no <code>x</code>.</strong> The category goes on <code>color</code> and the value
+  goes on <code>y</code>. There is no special <code>theta</code> channel. This keeps the number of
+  channel names at six, which is the number in the requirements document. The cost is that each
+  reader must learn this map one time.</li>
+  <li><strong>Scatter is the only mark with <code>size</code>.</strong> Section 3.4 uses this fact. A
+  trend line on a scatter plot inherits <code>size</code>, and a line mark cannot draw
+  <code>size</code>.</li>
+  <li><strong>Box plot requires <code>y</code></strong> (the numbers) and treats <code>x</code> as
+  optional (the group). If <code>x</code> is present, it must be categorical.</li>
+  <li><strong>Line and area constrain <code>y</code> to a number</strong>, but they do not constrain
+  <code>x</code>. A time series with a date on <code>x</code> is legal.</li>
+</ul>
 
 <p>The checker that reads the table (<code>chartspec_draft.py:253</code>) writes errors with a code.
 The repair loop in the planner can then test the code. It does not parse English:</p>
@@ -459,41 +581,140 @@ The repair loop in the planner can then test the code. It does not parse English
 <pre><code>[E_MARK_CHANNEL_UNSUPPORTED] base: mark 'histogram' does not support
 channel(s) ['y'] (histogram computes y itself — put the binned field on x)</code></pre>
 
-<h3>3.3 Aggregation is not on the channel</h3>
+<p>Settings from section 3.1, for example <code>stack</code> and <code>bins</code>, are not in this
+table. They are not channels. They live on the mark object. The table holds only the relationship
+between a mark and the encodings.</p>
 
-<p>Vega-Lite is the best known grammar of this type. In Vega-Lite you write
-<code>{"field": "revenue", "aggregate": "sum"}</code>, and the encoding does the addition. The
-prototype does not permit this (<code>chartspec_draft.py:142</code>). An encoding can point only to a
-column that the transform block made. This is why the examples on this page use
-<code>revenue_sum</code> and not <code>revenue</code>.</p>
+<h3 id="aggregation">3.3 Aggregation is not on the channel</h3>
+
+<p>Vega-Lite is the best known grammar of this type. In Vega-Lite you write the sum on the encoding.
+The channel itself says "add the values in <code>revenue</code>":</p>
+
+<pre><code>{ "x": { "field": "month" },
+  "y": { "field": "revenue", "aggregate": "sum" } }</code></pre>
+
+<p>The prototype does not permit this (<code>chartspec_draft.py:142</code>). A channel can name a
+column and a data type. It has no <code>aggregate</code> field. An encoding can point only to a
+column that the transform block made:</p>
+
+<pre><code>{
+  "data": {
+    "transform": {
+      "group_by": ["month"],
+      "aggregate": { "revenue_sum": "sum(revenue)" }
+    }
+  },
+  "encodings": {
+    "x": { "field": "month", "type": "temporal" },
+    "y": { "field": "revenue_sum", "type": "quantitative" }
+  }
+}</code></pre>
+
+<p>This is why the examples on this page use <code>revenue_sum</code> and not <code>revenue</code>.
+The transform block changes the data. The encodings only map columns that already exist. Extra
+fields on a channel are forbidden, so <code>"aggregate": "sum"</code> is a parse error. The system
+does not ignore that field.</p>
 
 <p>Two later requirements make this necessary:</p>
 
 <ul class="tight">
-  <li><strong>Warehouse pushdown.</strong> If the data is in a warehouse, the system compiles the
+  <li><strong>Warehouse pushdown.</strong> If the data is in a warehouse, trusted code compiles the
   transform block to the SQL of that warehouse and runs it there. The SQL generator reads the
-  transform block. It cannot read the encodings.</li>
+  transform block. It cannot read the encodings. If a sum lived on <code>y</code>, the generator
+  would miss it and pull raw rows, or it would have to understand encodings too. Then the boundary
+  would split.</li>
   <li><strong>Refresh at no token cost.</strong> A refresh runs the transform block again, and it
-  does nothing else. If aggregation were in two places, a refresh would have to read both.</li>
+  does nothing else. It does not call the language model. If some sums were in the transform block
+  and some sums were on channels, a refresh would have to read both. Then a saved ChartSpec would
+  not be a complete recipe.</li>
 </ul>
 
-<p>Aggregation in one place only makes the ChartSpec longer. But it also keeps the boundary between
-the transform block and the encodings clean.</p>
+<p>Aggregation in one place only makes the ChartSpec longer. The planner must name
+<code>revenue_sum</code>. But it also keeps the boundary between the transform block and the
+encodings clean.</p>
 
-<h3>3.4 Layers, and one important defect</h3>
+<h3 id="layers">3.4 Layers, and one important defect</h3>
 
-<p>Some charts need two marks together. Two examples are a line with point markers, and bars with a
-target line across them. The prototype models this as overlays on a base mark. It does not model this
-as a list of layers that contains the base mark. Thus the usual chart, which has one mark, stays
-flat. The prototype puts three limits on overlays: a maximum of two overlays, a list of permitted
-combinations, and one shared transform block.</p>
+<p>Some charts need two marks together. Two examples are a line with a point on each month, and bars
+with a target line across them. This section uses four extra words:</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Word</th><th>Meaning in this section</th></tr></thead>
+  <tbody>
+    <tr><td><strong>base mark</strong></td><td>The main drawing.</td></tr>
+    <tr><td><strong>overlay</strong> / <strong>layer</strong></td><td>An extra drawing on the same axes, on top of the base mark.</td></tr>
+    <tr><td><strong>inherit</strong></td><td>The overlay did not supply encodings, so it uses the encodings of the base mark.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<p>The prototype models this as overlays on a base mark. It does not model this as a list of layers
+that contains the base mark. Thus the usual chart, which has one mark, stays flat:</p>
+
+<pre><code>{
+  "mark": { "type": "bar" },
+  "encodings": { "x": ..., "y": ... },
+  "layers": []
+}</code></pre>
+
+<p>A second mark is optional. This overlay has no encodings of its own. Unset channels inherit from
+the base mark. The scatter uses the same <code>x</code> and <code>y</code> as the line. You do not
+write them again:</p>
+
+<pre><code>{
+  "mark": { "type": "line" },
+  "encodings": { "x": ..., "y": ... },
+  "layers": [
+    { "mark": { "type": "scatter" } }
+  ]
+}</code></pre>
+
+<p>The prototype puts three limits on overlays, so composition stays small:</p>
+
+<ul class="tight">
+  <li>A maximum of two overlays.</li>
+  <li>A list of permitted combinations, for example line + scatter, and bar + line. A pie on a
+  heatmap is not a chart for the deterministic rail.</li>
+  <li>One shared transform block. Every overlay draws the same prepared table.</li>
+</ul>
+
+<p>Unusual mixes go to the custom-code rail.</p>
+
+<h4>The hole</h4>
+
+<p>Inherit is the cause of the defect. "No encodings on the overlay" does not mean "this overlay uses
+no channels". It means "this overlay uses all of the channels of the base mark".</p>
 
 <p>The first version of the layer check had a hole. It validated a layer only if that layer supplied
-its own encodings. It did not validate a layer that supplied no encodings. But such a layer
-<em>inherits</em> all the channels of the base mark. One of those channels can be a channel that the
-mark of the layer cannot draw. The example that showed the defect is a scatter plot. It uses
-<code>size</code> for a third variable, and it has a trend line on top of it. A line mark has no
-size.</p>
+its own encodings. It did not validate a layer that supplied no encodings.</p>
+
+<p>The example that showed the defect is a scatter plot of daily sales. <code>x</code> is the date.
+<code>y</code> is sales. <code>size</code> is the number of customers that day. A trend line sits on
+top of the points:</p>
+
+<pre><code>{
+  "mark": { "type": "scatter" },
+  "encodings": {
+    "x": { "field": "date", ... },
+    "y": { "field": "sales", ... },
+    "size": { "field": "customers", "type": "quantitative" }
+  },
+  "layers": [
+    { "mark": { "type": "line" } }
+  ]
+}</code></pre>
+
+<p>The line supplies no encodings, so it inherits <code>x</code>, <code>y</code>, and
+<code>size</code>. The table in section 3.2 permits <code>size</code> only on scatter. A line mark
+cannot draw <code>size</code>.</p>
+
+<p>The old checker saw <code>encodings is None</code> and skipped the layer. The system accepted the
+ChartSpec. Then the renderer adapter had to discard the inherited <code>size</code> channel without a
+message. The ChartSpec says that customer count controls size. The line does not show that. A
+ChartSpec that says one thing while the chart shows a different thing is the primary failure. The
+two-rail design exists to prevent this failure. It costs less to prevent this failure in the grammar
+than to find it later in the review gate.</p>
 
 <div class="cols">
   <div class="panel before">
@@ -519,22 +740,51 @@ _check_mark_channels(
     inherits all channels". The system rejects the ChartSpec immediately.</p>
   </div>
 </div>
-<p class="caption">Figure 3. The correction. A ChartSpec that says one thing while the chart shows a
-different thing is the primary failure. The two-rail design exists to prevent this failure. It costs
-less to prevent this failure in the grammar than to find it later in the review gate.</p>
+<p class="caption">Figure 3. The correction. The checker uses the same table from section 3.2 on the
+<em>effective</em> channels of the overlay, not only on the channels that the overlay restated. For
+the sales example, the merge is <code>{x, y, size}</code>. The mark is line. <code>size</code> is not
+in the line row. The error is <code>E_MARK_CHANNEL_UNSUPPORTED</code>.</p>
 
-<h3>3.5 The defect that the correction found</h3>
+<h3 id="scatter-rule">3.5 The defect that the correction found</h3>
 
-<p>The stronger check immediately rejected a chart that must be legal. That chart is a line chart
-against time with point markers on it, which is a very common layered chart. The rule for
-<code>scatter</code> required a quantitative <code>x</code> channel. But the inherited <code>x</code>
-channel held a date.</p>
+<p>The stronger check immediately rejected a chart that must be legal. That chart is a line against
+time with a point on each month. It is a very common layered chart:</p>
 
-<p>The rule was wrong. The chart was correct. A scatter plot against dates is a usual chart, and this
-overlay requires it. So <code>scatter</code> now permits temporal positions
-(<code>chartspec_draft.py:220</code>). It continues to reject categorical positions, because that
-rejection is the value of the rule. A "scatter plot of region against revenue" must be a bar
-chart.</p>
+<pre><code>{
+  "mark": { "type": "line" },
+  "encodings": {
+    "x": { "field": "month", "type": "temporal" },
+    "y": { "field": "sales", "type": "quantitative" }
+  },
+  "layers": [
+    { "mark": { "type": "scatter" } }
+  ]
+}</code></pre>
+
+<p>The overlay supplies no encodings, so it inherits <code>x</code> = month (a date) and
+<code>y</code> = sales (a number). The rule for <code>scatter</code> required a quantitative
+<code>x</code> channel. A date is not a number. The checker rejected the ChartSpec.</p>
+
+<p>The rule was wrong. The chart was correct. A scatter plot against dates is a usual chart on its
+own. This overlay requires it. The prototype did not add a special exception for overlays. It changed
+the scatter row in the table. So <code>scatter</code> now permits temporal positions
+(<code>chartspec_draft.py:220</code>). The same rule applies to a scatter plot alone and to points on
+a line.</p>
+
+<p>The rule continues to reject categorical positions, because that rejection is the value of the
+rule. A "scatter plot of region against revenue" must be a bar chart.</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Step</th><th>What occurred</th></tr></thead>
+  <tbody>
+    <tr><td>Old overlay check</td><td>Skipped overlays with no encodings. A sized scatter plus a trend line was accepted.</td></tr>
+    <tr><td>Correction in 3.4</td><td>Always check the overlay against inherited channels. That incorrect combination is now rejected.</td></tr>
+    <tr><td>Side effect</td><td>A line with points against dates was also rejected. That rejection was wrong.</td></tr>
+    <tr><td>This section</td><td>Scatter permits a number or a date. Scatter continues to reject a category.</td></tr>
+  </tbody>
+</table>
+</div>
 
 <div class="callout warn">
   <span class="tag">Trade-off</span>
@@ -545,11 +795,15 @@ chart.</p>
   the team uses the estimate of 80%.</p>
 </div>
 
-<h3>3.6 None has the meaning "inherit"</h3>
+<h3 id="style-inherit">3.6 None has the meaning "inherit"</h3>
 
-<p>Each field on <code>Style</code> is optional. The value <code>None</code> has the meaning
-<em>inherit</em>. It does not have the meaning <em>off</em> (<code>chartspec_draft.py:399</code>). At
-render time, the resolver reads four sources in this sequence:</p>
+<p>Each field on <code>Style</code> is optional. Style is the shared look: title, palette, width, and
+theme. The value <code>None</code> has the meaning <em>inherit</em>. It does not have the meaning
+<em>off</em> (<code>chartspec_draft.py:399</code>). This is the same idea as an overlay with no
+encodings in section 3.4: empty means "use the next source", not "use nothing".</p>
+
+<p>At render time, the resolver reads four sources in this sequence. The first source that has a
+value wins:</p>
 
 <ul class="tight">
   <li>an explicit value in the ChartSpec;</li>
@@ -558,32 +812,75 @@ render time, the resolver reads four sources in this sequence:</p>
   <li>then the default of the renderer adapter.</li>
 </ul>
 
+<pre><code>{ "style": { "title": "Q3 sales" } }</code></pre>
+
+<p>The title comes from the ChartSpec. The colors still come from the convention pack of the
+organization.</p>
+
+<pre><code>{ "style": {} }</code></pre>
+
+<p>The ChartSpec set no style value. The chart still gets the house style, because the convention
+pack is the second source.</p>
+
 <p>This removes a feature that the team expected to build. The team thought that each organization
 needs a location in the ChartSpec for its brand palette and its house rules. It does not. These are
 one layer of the resolver. A ChartSpec that sets no style value gets the full house style. The
 grammar is smaller as a result.</p>
 
+<p>If <code>None</code> meant "off", an empty ChartSpec would remove the brand palette. That is the
+incorrect default.</p>
+
 <p>The same rule controls the JSON form (<code>chartspec_draft.py:489</code>). An absent field and a
-<code>null</code> field have the same meaning. So the canonical JSON form removes all nulls. If it
-did not, one ChartSpec would have two valid JSON forms. Then a comparison of two ChartSpecs, which
-computes the smallest possible edit, would report differences that are not real. The harness tests
-the sequence JSON → Pydantic → JSON on each accepted case. No case loses data.</p>
+<code>null</code> field have the same meaning:</p>
 
-<h3>3.7 Versions</h3>
+<pre><code>{ "style": {} }
+{ "style": { "title": null } }</code></pre>
 
-<p>A ChartSpec has a version with the form <code>MAJOR.MINOR</code>. There is no patch component,
-because a patch release cannot change the grammar. A version component that nothing can use is a
-risk.</p>
+<p>Both forms say "this ChartSpec did not set a title". So the canonical JSON form removes all nulls.
+One ChartSpec has one JSON form. If it did not, a comparison of two ChartSpecs, which computes the
+smallest possible edit, would report differences that are not real. The harness tests the sequence
+JSON → Pydantic → JSON on each accepted case. No case loses data.</p>
+
+<h3 id="versions">3.7 Versions</h3>
+
+<p>A ChartSpec has a version with the form <code>MAJOR.MINOR</code>, for example <code>1.0</code>.
+There is no patch component. Software often uses three numbers, for example <code>1.2.3</code>. A
+patch release cannot change the grammar. A version component that nothing can use is a risk.</p>
 
 <p>Each renderer adapter declares the most recent grammar that it can read. A ChartSpec is compatible
-with that adapter if two conditions are true (<code>chartspec_draft.py:507</code>). The major
-versions must be equal. The minor version of the ChartSpec must not be higher than the minor version
-of the adapter. A new mark or a new channel increases the minor
-version, and old adapters continue to operate. A mark or a channel that you remove or change
-increases the major version, and old adapters stop with an error. This error is the correct
-result.</p>
+with that adapter if two conditions are true (<code>chartspec_draft.py:507</code>):</p>
 
-<h3>3.8 How to run the prototype</h3>
+<ul class="tight">
+  <li>The major versions must be equal.</li>
+  <li>The minor version of the ChartSpec must not be higher than the minor version of the
+  adapter.</li>
+</ul>
+
+<p>An adapter that declares <code>1.2</code> can read <code>1.0</code> and <code>1.1</code>. It cannot
+read <code>1.3</code>. It cannot read <code>2.0</code>.</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Change</th><th>Version</th><th>Old adapters</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Add a mark or a channel. Old ChartSpecs stay valid.</td>
+      <td>Increase the minor version: <code>1.0</code> → <code>1.1</code></td>
+      <td>They continue to operate on old ChartSpecs. A new ChartSpec that uses the new mark needs a newer adapter.</td>
+    </tr>
+    <tr>
+      <td>Remove or change a mark or a channel. Old ChartSpecs would have a different meaning.</td>
+      <td>Increase the major version: <code>1.2</code> → <code>2.0</code></td>
+      <td>They stop with an error. This error is the correct result. A silent incorrect chart is worse.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+<p class="caption">Example: the grammar adds a waterfall mark and becomes <code>1.1</code>. An adapter
+that knows only <code>1.0</code> can still refresh last month's bar chart. If you give it a waterfall
+ChartSpec, it must refuse. It must not guess.</p>
+
+<h3 id="run">3.8 How to run the prototype</h3>
 
 <p>The harness is <code>explore.py</code>. It is a menu of fourteen cases: valid ChartSpecs, one case
 for each class of invalid ChartSpec, and the version compatibility matrix. For each accepted case it
@@ -592,13 +889,17 @@ error with its code. You do not have to install it:</p>
 
 <pre><code>uv run prototypes/chartspec-v1/explore.py --all</code></pre>
 
+<p><code>uv</code> gets Pydantic and runs the file. This is not product code. It is a small program
+that tries the rules so that the team can see them fail.</p>
+
 <div class="callout good">
   <span class="tag">Why this throwaway prototype was worth the time</span>
   <p>The prototype found three results: the two phases of validation, the hole in the layer check, and
   the scatter rule that was too strict. None of the three results was visible in the text of the
   requirements document. Two of the three became visible only because the correction of the first
-  result caused a failure in a case that passed before. This is the argument to write the executable
-  draft before you write the real code.</p>
+  result caused a failure in a case that passed before. Tighten the overlay check, and the line with
+  points against dates fails. Then loosen the scatter row. This is the argument to write the
+  executable draft before you write the real code.</p>
 </div>
 
 <h2 id="quiz">4. Quiz</h2>
