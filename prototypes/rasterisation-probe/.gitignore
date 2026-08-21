@@ -1,0 +1,4 @@
+build/*
+!build/cmp_vegalite.png
+!build/cmp_echarts.png
+.venv/
