@@ -2,12 +2,12 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-21
-- **Builds on:** ADR-0001 (embed the pinned Flint compiler in-process)
+- **Builds on:** ADR-0001 (pin Flint; compile in the client)
 - **Retires:** `prototypes/chartspec-v1/` — the grammar this replaces
 
 ## Context
 
-ADR-0001 settled that we embed Flint's compiler unmodified at a pinned version. It left the
+ADR-0001 settled that we pin Flint unmodified and compile in the client. It left the
 next question open: what does the planner emit, what do we store, and what does patch mode
 diff?
 
@@ -245,8 +245,9 @@ storing output means re-planning to change target.
 
 ## Related
 
-- ADR-0001 — the embedding decision this builds on; source of the `baseSize` hazard, the
-  `theme_spec` gap on ECharts, and the 705-fixture CI job this ADR extends.
+- ADR-0001 — pin Flint and compile in the client; source of the `baseSize` hazard, the
+  `theme_spec` gap on ECharts, the envelope around this frame, and the 705-fixture CI job
+  this ADR extends.
 - `prototypes/flint-frame/` — the probe behind every number above.
 - `prototypes/chartspec-v1/` — retired by this decision. Keep it: its README is the primary
   source for D1–D9 and for the two-phase validation finding, which survives.
