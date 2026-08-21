@@ -6,8 +6,9 @@ MEASUREMENT ONLY — not the integration. See README.md.
 
     python harness.py smoke | parity | bench | dates
 
-QuickJS and PythonMonkey cannot coexist in one interpreter (segfault), so the
-engine-comparing checks re-exec this file once per engine.
+Engine-comparing checks re-exec this file once per engine so a SIGSEGV in one
+binding is observed rather than suffered. MiniRacer launches a background
+event loop — Engine.close() must run or the process hangs at exit.
 """
 
 from __future__ import annotations
@@ -52,7 +53,14 @@ globalThis.recommend = function (rowsJson, typesJson) {
 };
 """
 
-ENGINES = ("quickjs", "pythonmonkey")
+# miniracer is the V8 candidate under test for issue #29. stpyv8 is measured
+# when FLINT_ENGINES includes it; its wheel matrix is incomplete (no Linux
+# aarch64), so it is not in the default set.
+ENGINES = tuple(
+    os.environ["FLINT_ENGINES"].split(",")
+    if os.environ.get("FLINT_ENGINES")
+    else ("quickjs", "pythonmonkey", "miniracer")
+)
 
 
 def require_build() -> None:
@@ -86,14 +94,48 @@ class Engine:
                 pm.eval(chunk)
             self._compile = pm.eval("globalThis.compile")
             self._get = lambda n: pm.eval("globalThis." + n)
+        elif name == "miniracer":
+            from py_mini_racer import MiniRacer
+
+            self._ctx = MiniRacer()
+            for chunk in (POLYFILL, src, GLUE):
+                self._ctx.eval(chunk)
+            self._compile = lambda spec_json, backend: self._ctx.call(
+                "compile", spec_json, backend
+            )
+            self._get = lambda n: self._ctx.eval(n)
+        elif name == "stpyv8":
+            import STPyV8
+
+            self._isolate = STPyV8.JSIsolate()
+            self._isolate.enter()
+            self._ctx = STPyV8.JSContext()
+            self._ctx.enter()
+            for chunk in (POLYFILL, src, GLUE):
+                self._ctx.eval(chunk)
+            fn = self._ctx.eval("compile")
+            self._compile = lambda spec_json, backend, fn=fn: fn(spec_json, backend)
+            self._get = lambda n: self._ctx.eval(n)
         else:
             raise ValueError(name)
 
     def compile(self, spec: dict, backend: str) -> dict:
-        return json.loads(self._compile(json.dumps(spec), backend))
+        raw = self._compile(json.dumps(spec), backend)
+        if not isinstance(raw, str):
+            raw = str(raw)
+        return json.loads(raw)
 
     def call(self, name: str, *args: str) -> str:
-        return self._get(name)(*args)
+        raw = self._get(name)(*args)
+        return raw if isinstance(raw, str) else str(raw)
+
+    def close(self) -> None:
+        ctx = getattr(self, "_ctx", None)
+        if ctx is not None and hasattr(ctx, "close"):
+            ctx.close()
+        if getattr(self, "name", None) == "stpyv8":
+            self._ctx.leave()
+            self._isolate.leave()
 
 
 # ---------------------------------------------------------------------------
@@ -199,6 +241,7 @@ def cmd_smoke() -> None:
         themed = eng.compile({**SAMPLE, "theme_spec": "economist"}, backend)
         applied = canon(plain) != canon(themed)
         print(f"    {backend:9s} {'yes' if applied else 'NO — silently ignored'}")
+    eng.close()
 
 
 # ---------------------------------------------------------------------------
@@ -240,11 +283,14 @@ def node_specs() -> dict[str, object]:
 def engine_specs(engine: str) -> dict[str, object]:
     eng = Engine(engine)
     out = {}
-    for case in fixture_cases():
-        try:
-            out[case.name] = eng.compile(fixture_input(case), "vegalite")
-        except Exception as exc:  # noqa: BLE001 - recording failures is the point
-            out[case.name] = {"__error__": f"{type(exc).__name__}: {exc}"[:80]}
+    try:
+        for case in fixture_cases():
+            try:
+                out[case.name] = eng.compile(fixture_input(case), "vegalite")
+            except Exception as exc:  # noqa: BLE001 - recording failures is the point
+                out[case.name] = {"__error__": f"{type(exc).__name__}: {exc}"[:80]}
+    finally:
+        eng.close()
     return out
 
 
@@ -280,21 +326,25 @@ def cmd_parity() -> None:
             kinds = sorted({k.split("__")[0] for k in disagree})
             print(f"    disagrees on {len(disagree)}, all in: {', '.join(kinds)}")
 
-    if len(per_engine) == 2:
-        a, b = (per_engine[e] for e in ENGINES)
-        both = [k for k in a if k in b]
-        same = sum(1 for k in both if digest(a[k]) == digest(b[k]))
-        print(f"\n  {ENGINES[0]} vs {ENGINES[1]}: {same}/{len(both)} identical")
-        for k in [k for k in both if digest(a[k]) != digest(b[k])][:5]:
-            print(f"    {k}")
-            for d in diff_paths(strip_meta(a[k]), strip_meta(b[k]))[:4]:
-                print(f"      {d}")
+    if len(per_engine) >= 2:
+        names = [e for e in ENGINES if e in per_engine]
+        for i, a_name in enumerate(names):
+            for b_name in names[i + 1:]:
+                a, b = per_engine[a_name], per_engine[b_name]
+                both = [k for k in a if k in b]
+                same = sum(1 for k in both if digest(a[k]) == digest(b[k]))
+                print(f"\n  {a_name} vs {b_name}: {same}/{len(both)} identical")
+                for k in [k for k in both if digest(a[k]) != digest(b[k])][:5]:
+                    print(f"    {k}")
+                    for d in diff_paths(strip_meta(a[k]), strip_meta(b[k]))[:4]:
+                        print(f"      {d}")
 
 
 def cmd__dump(engine: str) -> None:
     """Internal: compile every fixture in an isolated process, write to a temp file."""
     out = HERE / "build" / f"specs_{engine}.json"
-    out.write_text(json.dumps(engine_specs(engine)))
+    specs = engine_specs(engine)
+    out.write_text(json.dumps(specs))
     print(out)
 
 
@@ -319,6 +369,16 @@ def cmd_bench() -> None:
         print("  A shared context is a hard crash, not an exception. Enforce one per thread.")
     else:
         print("  !! survived — re-verify the pool design assumption for this binding version")
+
+    print("\n=== shared-isolate safety (MiniRacer) ===")
+    r = subprocess.run([sys.executable, __file__, "_crash_miniracer"],
+                       capture_output=True, text=True)
+    print(r.stdout.rstrip())
+    if r.returncode != 0:
+        print(f"  process died with exit {r.returncode}"
+              f"{' (SIGSEGV)' if r.returncode in (-11, 139) else ''}")
+    else:
+        print("  survived sharing one MiniRacer isolate across 4 threads")
 
 
 def cmd__bench1(engine: str) -> None:
@@ -364,8 +424,32 @@ def cmd__bench1(engine: str) -> None:
         threaded = 4 * per / (time.perf_counter() - t0)
         print(f"  4 threads, one context each: {threaded:.0f} compiles/s "
               f"({threaded / serial:.1f}x serial — the binding releases the GIL)")
+        for e in pool:
+            e.close()
+        eng.close()
+    elif engine == "miniracer":
+        m1 = rss_mb()
+        pool = [Engine(engine) for _ in range(4)]
+        print(f"  4 extra isolates +{rss_mb() - m1:.1f} MB "
+              f"= {(rss_mb() - m1) / 4:.1f} MB each")
+        per = 300
+        t0 = time.perf_counter()
+        threads = [threading.Thread(target=lambda e=e: [e.compile(SAMPLE, "echarts")
+                                                        for _ in range(per)])
+                   for e in pool]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        threaded = 4 * per / (time.perf_counter() - t0)
+        print(f"  4 threads, one isolate each: {threaded:.0f} compiles/s "
+              f"({threaded / serial:.1f}x serial)")
+        for e in pool:
+            e.close()
+        eng.close()
     else:
         print("  one global realm per process; isolate tenants by process, not context")
+        eng.close()
 
 
 def cmd__crash() -> None:
@@ -381,6 +465,22 @@ def cmd__crash() -> None:
     for t in threads:
         t.join()
     print("  survived")
+
+
+def cmd__crash_miniracer() -> None:
+    """Share one MiniRacer isolate across threads. Docs claim it is thread-safe."""
+    eng = Engine("miniracer")
+    eng.compile(SAMPLE, "echarts")
+    print("  sharing ONE MiniRacer isolate across 4 threads...", flush=True)
+    threads = [threading.Thread(target=lambda: [eng.compile(SAMPLE, "echarts")
+                                                for _ in range(200)])
+               for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    print("  survived")
+    eng.close()
 
 
 # ---------------------------------------------------------------------------
@@ -466,6 +566,7 @@ def _node_one(spec: dict):
 COMMANDS = {
     "smoke": cmd_smoke, "parity": cmd_parity, "bench": cmd_bench, "dates": cmd_dates,
     "_dump": cmd__dump, "_bench1": cmd__bench1, "_crash": cmd__crash,
+    "_crash_miniracer": cmd__crash_miniracer,
 }
 
 if __name__ == "__main__":

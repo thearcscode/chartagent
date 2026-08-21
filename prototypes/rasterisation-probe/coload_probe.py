@@ -31,8 +31,14 @@ SPEC = json.dumps(
     }
 )
 
-PAIRINGS = ["v8-only", "quickjs-then-v8", "v8-then-quickjs",
-            "pythonmonkey-then-v8", "v8-then-pythonmonkey"]
+PAIRINGS = [
+    "v8-only",
+    "quickjs-then-v8", "v8-then-quickjs",
+    "pythonmonkey-then-v8", "v8-then-pythonmonkey",
+    # Control pairings that ADR-0001 claims crash. Added by #29; the original
+    # probe never ran these, so a "survived" result against V8 was uncalibrated.
+    "quickjs-then-pythonmonkey", "pythonmonkey-then-quickjs",
+]
 
 
 def use_v8() -> None:
@@ -63,6 +69,8 @@ def run_one(pairing: str) -> None:
         "v8-then-quickjs": [use_v8, use_quickjs],
         "pythonmonkey-then-v8": [use_pythonmonkey, use_v8],
         "v8-then-pythonmonkey": [use_v8, use_pythonmonkey],
+        "quickjs-then-pythonmonkey": [use_quickjs, use_pythonmonkey],
+        "pythonmonkey-then-quickjs": [use_pythonmonkey, use_quickjs],
     }[pairing]
     for step in steps:
         step()

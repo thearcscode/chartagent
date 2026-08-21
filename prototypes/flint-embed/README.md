@@ -33,9 +33,11 @@ Both are gitignored. The pinned version lives in `FLINT_VERSION`.
 .venv/bin/python harness.py dates      # the date-parsing divergence and its fix
 ```
 
-`parity` and `bench` must run the engines in **separate processes** — QuickJS and
-PythonMonkey segfault if imported into the same interpreter. `harness.py` re-execs itself
-per engine to keep them apart.
+`parity` and `bench` re-exec this file once per engine so a crash in one binding is
+observed rather than suffered. Issue #29 measured that QuickJS and PythonMonkey
+**do** import and compile in one interpreter on macOS; the SIGSEGV is threads
+(PythonMonkey, or a shared QuickJS context), not import. MiniRacer still needs
+`Engine.close()` or the process hangs on its background event loop.
 
 ## What each check establishes
 
@@ -50,7 +52,9 @@ per engine to keep them apart.
 
 - **A shared QuickJS context across threads is a SIGSEGV**, not an exception. `bench`
   demonstrates it in a subprocess on purpose. One context per thread, enforced structurally.
-- **Don't import both engines** into one interpreter.
+- **Don't share a QuickJS context across threads** (SIGSEGV). Importing QuickJS and
+  PythonMonkey in one process survived on macOS; driving PythonMonkey from two
+  threads did not. See `docs/research/v8-embed.md`. MiniRacer must be `close()`d.
 - **Fixture inputs are wrapped:** the assembler argument is `input.json → .input`, not the
   file root. The root also carries `title`, `description` and `chartType`.
 - **Ignore `_`-prefixed keys** when comparing specs (`_width`, `_warnings`, `_transform`,
