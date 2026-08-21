@@ -1,6 +1,9 @@
 # Session working files — regenerated per session, deliberately not tracked
 HANDOFF.md
 
+# macOS
+.DS_Store
+
 # Python
 __pycache__/
 *.py[cod]
