@@ -32,10 +32,17 @@ product screen. `design/README.md` indexes the screens and documents the tokens.
 
 ## Design decisions worth reviewing
 
-**Rail color is load-bearing.** Teal means the deterministic rail ran with zero
-generated code; violet means the sandbox did. The two hues are used nowhere else,
-including in chart series. If a reviewer disagrees with this, most of the visual
-system follows from it.
+**Rail color is load-bearing, and confined to chrome.** Teal means the
+deterministic rail ran with zero generated code; violet means the sandbox did.
+The two hues appear on chips, logs, rail diagrams and overview panels — never
+inside or around a chart frame. Charts draw from a separate data palette
+(`--series-1` … `--series-5` — published Okabe-Ito, less its bluish-green and its
+yellow, with its neutral in the fifth slot) that contains no cyan-teal and no
+violet, so a series can't be misread as a routing claim. `design/palette-check.py`
+enforces that, and the thresholds it enforces are calibrated against published
+palettes rather than invented. The single exception is a chart whose
+measured quantity *is* the rail, such as custom-rail share by release. If a
+reviewer disagrees with this split, most of the visual system follows from it.
 
 **Escape reasons get their own surface.** `5c` treats escape-reason telemetry as a
 first-class screen — reason histogram, drill-down, proposed grammar change with

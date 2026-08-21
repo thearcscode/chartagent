@@ -13,8 +13,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
 <style>
-:root{--bg:#0a0a0c;--app:#121216;--panel:#17171c;--raised:#1d1d23;--rail:#0f0f13;--border:#2a2a32;--border-2:#26262e;--border-soft:#22222a;--border-faint:#1b1b22;--border-strong:#3d3d47;--ink:#ecebf0;--muted:#8b8a97;--faint:#6a6975;--btn-hover:#ffffff;--chip:rgba(255,255,255,.07);--teal:#57d3cb;--violet:#a78bfa;--violet-2:#c4b2fd;--amber:#e8b568;--red:#e8737d;--red-ink:#e0aeb3;--blue:#7aa2f7}
+:root{--bg:#0a0a0c;--app:#121216;--panel:#17171c;--raised:#1d1d23;--rail:#0f0f13;--border:#2a2a32;--border-2:#26262e;--border-soft:#22222a;--border-faint:#1b1b22;--border-strong:#3d3d47;--ink:#ecebf0;--muted:#8b8a97;--faint:#6a6975;--btn-hover:#ffffff;--chip:rgba(255,255,255,.07);--teal:#57d3cb;--violet:#a78bfa;--violet-2:#c4b2fd;--amber:#e8b568;--red:#e8737d;--red-ink:#e0aeb3;--blue:#7aa2f7;--series-1:#0072b2;--series-2:#e69f00;--series-3:#56b4e9;--series-4:#d55e00;--series-5:#7f7f7f}
 body[data-theme="light"]{--bg:#e9e7e2;--app:#ffffff;--panel:#faf9f7;--raised:#f1efea;--rail:#f6f5f2;--border:#dcd8d0;--border-2:#e3dfd8;--border-soft:#e8e5de;--border-faint:#eeebe5;--border-strong:#bfb9ae;--ink:#191817;--muted:#6b6862;--faint:#8f8b83;--btn-hover:#000000;--chip:rgba(0,0,0,.06);--teal:#0d8f86;--violet:#6b4de0;--violet-2:#4f34bd;--amber:#a8730c;--red:#c33f4b;--red-ink:#8a3a42;--blue:#3a6fd8}
+/* support.js paints html+body with the host canvas colour and caps both at height:100%,
+   so body's background stops one viewport down and the canvas shows through below it.
+   html can't read --bg: the light override lives on body[data-theme]. */
+html{background:#0a0a0c}
+html:has(body[data-theme="light"]){background:#e9e7e2}
 body{margin:0;background:var(--bg);font-family:"IBM Plex Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
 ::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
@@ -50,8 +55,8 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
             <div id="patch-before" style="flex:1;min-height:0;background:var(--panel);border:1px solid var(--border-soft);border-radius:9px"></div>
           </div>
           <div style="padding:20px 22px;display:flex;flex-direction:column;gap:11px;min-width:0;border-left:1px solid var(--border-faint)">
-            <div style="display:flex;align-items:baseline;gap:9px"><span style="font:500 11.5px 'IBM Plex Sans';color:var(--ink)">After</span><span style="font:400 10px 'IBM Plex Mono';color:var(--teal)">quarterly · 8 points</span></div>
-            <div id="patch-after" style="flex:1;min-height:0;background:var(--panel);border:1px solid color-mix(in oklab,var(--teal) 30%,transparent);border-radius:9px"></div>
+            <div style="display:flex;align-items:baseline;gap:9px"><span style="font:500 11.5px 'IBM Plex Sans';color:var(--ink)">After</span><span style="font:400 10px 'IBM Plex Mono';color:var(--muted)">quarterly · 8 points</span></div>
+            <div id="patch-after" style="flex:1;min-height:0;background:var(--panel);border:1px solid var(--border);border-radius:9px"></div>
           </div>
           <div style="border-left:1px solid var(--border-soft);background:var(--rail);display:flex;flex-direction:column;min-width:0">
             <div style="padding:13px 18px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center">
@@ -578,13 +583,13 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
   <div style="display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start">
 
     <div id="1a" style="flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px">
-      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#1a" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">1a</a>Foundations — tokens, type, rail semantics</div>
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#1a" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">1a</a>Foundations — tokens, type, and the state / data palette split</div>
       <div style="width:1120px;background:var(--app);border:1px solid var(--border-2);border-radius:10px;padding:34px 36px;display:flex;flex-direction:column;gap:32px">
 
         <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1px solid var(--border-soft);padding-bottom:20px">
           <div>
             <div style="font:400 34px/1 'Instrument Serif',serif;color:var(--ink)">Nocturne<span style="color:var(--violet)">.</span>chart</div>
-            <div style="margin-top:7px;font:400 11px/1 'IBM Plex Mono',monospace;color:var(--faint);letter-spacing:.04em">DARK-FIRST · NEUTRAL INK · TWO ACCENT HUES</div>
+            <div style="margin-top:7px;font:400 11px/1 'IBM Plex Mono',monospace;color:var(--faint);letter-spacing:.04em">DARK-FIRST · NEUTRAL INK · STATE AND DATA KEPT APART</div>
           </div>
           <div style="font:400 11.5px/1.6 'IBM Plex Sans';color:var(--muted);text-align:right;max-width:330px;text-wrap:pretty">Serif display for moments of authorship, mono for anything the machine produced, sans for chrome. Never mix the three in one line.</div>
         </div>
@@ -609,7 +614,7 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:9px">
-            <div style="font:500 10px 'IBM Plex Mono',monospace;color:var(--faint);letter-spacing:.08em">RAIL SEMANTICS</div>
+            <div style="font:500 10px 'IBM Plex Mono',monospace;color:var(--faint);letter-spacing:.08em">STATE — CHROME ONLY</div>
             <div style="display:flex;flex-direction:column;gap:4px">
               <div style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:26px;border-radius:5px;background:var(--teal)"></span><span style="font:400 11px 'IBM Plex Mono';color:var(--muted)">deterministic</span></div>
               <div style="display:flex;align-items:center;gap:9px"><span style="width:26px;height:26px;border-radius:5px;background:var(--violet)"></span><span style="font:400 11px 'IBM Plex Mono';color:var(--muted)">custom code</span></div>
@@ -618,15 +623,15 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:9px">
-            <div style="font:500 10px 'IBM Plex Mono',monospace;color:var(--faint);letter-spacing:.08em">CHART SERIES (COLORBLIND-SAFE)</div>
+            <div style="font:500 10px 'IBM Plex Mono',monospace;color:var(--faint);letter-spacing:.08em">DATA — CHART FRAME ONLY</div>
             <div style="display:flex;gap:5px">
-              <span style="flex:1;height:40px;border-radius:5px;background:var(--teal)"></span>
-              <span style="flex:1;height:40px;border-radius:5px;background:var(--violet)"></span>
-              <span style="flex:1;height:40px;border-radius:5px;background:var(--amber)"></span>
-              <span style="flex:1;height:40px;border-radius:5px;background:var(--blue)"></span>
-              <span style="flex:1;height:40px;border-radius:5px;background:var(--red)"></span>
+              <span style="flex:1;height:40px;border-radius:5px;background:var(--series-1)"></span>
+              <span style="flex:1;height:40px;border-radius:5px;background:var(--series-2)"></span>
+              <span style="flex:1;height:40px;border-radius:5px;background:var(--series-3)"></span>
+              <span style="flex:1;height:40px;border-radius:5px;background:var(--series-4)"></span>
+              <span style="flex:1;height:40px;border-radius:5px;background:var(--series-5)"></span>
             </div>
-            <div style="font:400 10.5px/1.5 'IBM Plex Sans';color:var(--faint)">Tier-1 lint enforces this palette; org skills may override it wholesale, never per-series.</div>
+            <div style="font:400 10.5px/1.5 'IBM Plex Sans';color:var(--faint)">Disjoint from the state hues — no cyan-teal, no violet — so a chart never reads as a rail statement. Tier-1 lint enforces this palette; a theme may override it wholesale, never per-series.</div>
           </div>
         </div>
 
@@ -1081,9 +1086,14 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
 </section>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{}">
+// Published Okabe-Ito, minus its bluish-green (the only entry inside the teal band the
+// rail reserves) and minus its yellow (no yellow survives a near-white panel), with the
+// neutral promoted into the fifth slot. One set serves both themes, which only works
+// because the fifth is neutral — see design/README.md.
+const DATA_PALETTE = ['#0072b2', '#e69f00', '#56b4e9', '#d55e00', '#7f7f7f'];
 const THEMES = {
-  dark:  { axis: '#2a2a32', split: '#1e1e25', label: '#6a6975', tip: '#1d1d23', tipB: '#2a2a32', tipT: '#ecebf0', legend: '#8b8a97', mark: 'rgba(87,211,203,.25)', series: ['#57d3cb', '#a78bfa', '#e8b568', '#7aa2f7', '#e8737d'] },
-  light: { axis: '#dcd8d0', split: '#eeebe5', label: '#8f8b83', tip: '#ffffff', tipB: '#dcd8d0', tipT: '#191817', legend: '#6b6862', mark: 'rgba(13,143,134,.18)', series: ['#0d8f86', '#6b4de0', '#a8730c', '#3a6fd8', '#c33f4b'] }
+  dark:  { axis: '#2a2a32', split: '#1e1e25', label: '#6a6975', tip: '#1d1d23', tipB: '#2a2a32', tipT: '#ecebf0', legend: '#8b8a97', mark: 'rgba(236,235,240,.07)', series: DATA_PALETTE, rail: { det: '#57d3cb', custom: '#a78bfa' } },
+  light: { axis: '#dcd8d0', split: '#eeebe5', label: '#8f8b83', tip: '#ffffff', tipB: '#dcd8d0', tipT: '#191817', legend: '#6b6862', mark: 'rgba(25,24,23,.06)', series: DATA_PALETTE, rail: { det: '#0d8f86', custom: '#6b4de0' } }
 };
 let TH = THEMES.dark, SERIES = TH.series, AX = {};
 function applyTheme(t) {
@@ -1211,9 +1221,9 @@ class Component extends DCLogic {
       series: [{ type: 'line', smooth: 0.35, symbol: 'none', lineStyle: { width: 1.5, color }, areaStyle: { color: color + '26' }, data: vals }]
     });
     mk('spark-1', spark(wave(2, 16, 30, 4), SERIES[0]));
-    mk('spark-2', spark(wave(7, 16, 22, 5), SERIES[4]));
+    mk('spark-2', spark(wave(7, 16, 22, 5), SERIES[0]));
     mk('spark-3', spark(wave(4, 16, 26, 3), SERIES[0]));
-    mk('spark-4', spark(wave(9, 16, 18, 4), SERIES[1]));
+    mk('spark-4', spark(wave(9, 16, 18, 4), SERIES[0]));
 
     const q = ['Q3 24', 'Q4 24', 'Q1 25', 'Q2 25', 'Q3 25', 'Q4 25', 'Q1 26', 'Q2 26'];
     const patchOpt = (quarterly) => ({
@@ -1236,7 +1246,7 @@ class Component extends DCLogic {
       tooltip: { trigger: 'axis', backgroundColor: TH.tip, borderColor: TH.tipB, textStyle: { color: TH.tipT, fontFamily: 'IBM Plex Mono', fontSize: 11 } },
       xAxis: { type: 'category', data: ['v1.0', 'v1.1', 'v1.2', 'v1.3'], axisLine: AX.axisLine, axisTick: { show: false }, axisLabel: AX.label },
       yAxis: { type: 'value', axisLine: { show: false }, splitLine: AX.splitLine, axisLabel: Object.assign({ formatter: '{value}%' }, AX.label) },
-      series: [{ type: 'line', smooth: 0.3, symbol: 'circle', symbolSize: 6, lineStyle: { width: 2, color: SERIES[1] }, itemStyle: { color: SERIES[1] }, areaStyle: { color: SERIES[1] + '22' }, data: [24, 18, 14, 11] }]
+      series: [{ type: 'line', smooth: 0.3, symbol: 'circle', symbolSize: 6, lineStyle: { width: 2, color: TH.rail.custom }, itemStyle: { color: TH.rail.custom }, areaStyle: { color: TH.rail.custom + '22' }, data: [24, 18, 14, 11] }]
     });
 
     const L = THEMES.light;

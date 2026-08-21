@@ -15,6 +15,11 @@
 <style>
 :root{--bg:#0a0a0c;--app:#121216;--panel:#17171c;--raised:#1d1d23;--rail:#0f0f13;--border:#2a2a32;--border-2:#26262e;--border-soft:#22222a;--border-strong:#3d3d47;--ink:#ecebf0;--muted:#8b8a97;--faint:#6a6975;--chip:rgba(255,255,255,.07);--teal:#57d3cb;--violet:#a78bfa;--violet-2:#c4b2fd;--amber:#e8b568;--red:#e8737d;--blue:#7aa2f7}
 body[data-theme="light"]{--bg:#e9e7e2;--app:#ffffff;--panel:#faf9f7;--raised:#f1efea;--rail:#f6f5f2;--border:#dcd8d0;--border-2:#e3dfd8;--border-soft:#e8e5de;--border-strong:#bfb9ae;--ink:#191817;--muted:#6b6862;--faint:#8f8b83;--chip:rgba(0,0,0,.06);--teal:#0d8f86;--violet:#6b4de0;--violet-2:#4f34bd;--amber:#a8730c;--red:#c33f4b;--blue:#3a6fd8}
+/* support.js paints html+body with the host canvas colour and caps both at height:100%,
+   so body's background stops one viewport down and the canvas shows through below it.
+   html can't read --bg: the light override lives on body[data-theme]. */
+html{background:#0a0a0c}
+html:has(body[data-theme="light"]){background:#e9e7e2}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
 a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
@@ -184,9 +189,10 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
 </section>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{}">
+const DATA_PALETTE = ['#0072b2', '#e69f00', '#56b4e9', '#d55e00', '#7f7f7f'];
 const THEMES = {
-  dark:  { axis: '#2a2a32', split: '#1e1e25', label: '#6a6975', tip: '#1d1d23', tipB: '#2a2a32', tipT: '#ecebf0', legend: '#8b8a97', series: ['#57d3cb', '#a78bfa', '#e8b568', '#7aa2f7', '#e8737d'] },
-  light: { axis: '#dcd8d0', split: '#eeebe5', label: '#8f8b83', tip: '#ffffff', tipB: '#dcd8d0', tipT: '#191817', legend: '#6b6862', series: ['#0d8f86', '#6b4de0', '#a8730c', '#3a6fd8', '#c33f4b'] }
+  dark:  { axis: '#2a2a32', split: '#1e1e25', label: '#6a6975', tip: '#1d1d23', tipB: '#2a2a32', tipT: '#ecebf0', legend: '#8b8a97', series: DATA_PALETTE },
+  light: { axis: '#dcd8d0', split: '#eeebe5', label: '#8f8b83', tip: '#ffffff', tipB: '#dcd8d0', tipT: '#191817', legend: '#6b6862', series: DATA_PALETTE }
 };
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const QUARTERS = ['Q3 24', 'Q4 24', 'Q1 25', 'Q2 25', 'Q3 25', 'Q4 25', 'Q1 26', 'Q2 26'];
