@@ -53,7 +53,7 @@ review comments.
 
 **Turn 1 — foundations and the five surfaces**
 
-- `1a` Foundations. Surfaces, ink, rail color semantics, chart series palette,
+- `1a` Foundations. Surfaces, ink, the state accents, the separate data palette,
   type scale, atoms.
 - `1b` Embedding app — the "describe the chart you want" feature a SaaS product
   ships, with a "How this was made" panel.
@@ -66,7 +66,8 @@ review comments.
 
 ## Design system
 
-Dark-first, neutral ink, two accent hues. All values are CSS custom properties on
+Dark-first, neutral ink, and two colour systems held strictly apart: state hues
+for chrome, a data palette for chart series. All values are CSS custom properties on
 `:root`, with a `body[data-theme="light"]` override; nothing else needs to change
 to reskin.
 
@@ -90,8 +91,9 @@ to reskin.
 | `--border` | `#2a2a32` | `#dcd8d0` |
 | `--border-strong` | `#3d3d47` | `#bfb9ae` |
 
-**Semantic accents.** These carry the core product idea and are used
-consistently, chart series included.
+**State accents — chrome only.** These carry the core product idea: which rail
+ran, and whether the result needs attention. They appear on chips, status text,
+log lines, rail diagrams, tier rows, and error banners.
 
 | Token | Meaning | Dark | Light |
 | --- | --- | --- | --- |
@@ -99,10 +101,55 @@ consistently, chart series included.
 | `--violet` | custom code rail | `#a78bfa` | `#6b4de0` |
 | `--amber` | needs review | `#e8b568` | `#a8730c` |
 | `--red` | drift / error | `#e8737d` | `#c33f4b` |
-| `--blue` | fifth series | `#7aa2f7` | `#3a6fd8` |
 
-Chart series use teal → violet → amber → blue → red in that order, which the
-Tier-1 colorblind-safe palette lint enforces.
+`--blue` (`#7aa2f7` / `#3a6fd8`) survives as a brand gradient stop in the app
+mark. It carries no state meaning and is not a series color.
+
+**Data palette — chart frame only.** A separate five-hue set, used for series
+color and for nothing else. It is deliberately disjoint from the state accents:
+no cyan-teal, no violet, so a series can never be read as a claim about the
+rail.
+
+This is published Okabe-Ito with two of its eight entries declined and its
+neutral promoted. The bluish-green (`#009e73`) is out because it lands inside the
+band the rail reserves for teal. The yellow (`#f0e442`) is out because no yellow
+can be both yellow and legible on a near-white panel — it measures 1.26:1 against
+`--panel` in light mode, and darkening it far enough to read stops it being
+yellow. Okabe-Ito's own eighth entry, a neutral, takes the fifth slot instead: a
+neutral has no hue for a dichromacy to collapse, and one mid grey reads on both a
+near-black and a near-white panel.
+
+| Token | Both themes | Okabe-Ito name |
+| --- | --- | --- |
+| `--series-1` | `#0072b2` | blue |
+| `--series-2` | `#e69f00` | orange |
+| `--series-3` | `#56b4e9` | sky blue |
+| `--series-4` | `#d55e00` | vermillion |
+| `--series-5` | `#7f7f7f` | (neutral) |
+
+One palette serves both themes, which is only possible because the fifth slot is
+neutral; `body[data-theme="light"]` deliberately does not override these. Series
+are assigned `--series-1` through `--series-5` in order, which the Tier-1
+colorblind-safe palette lint enforces. A theme may override the whole palette;
+nothing may override a single series.
+
+`design/palette-check.py` is the check. It simulates protanopia, deuteranopia and
+tritanopia with the Viénot–Brettel–Mollon matrices and scores the closest pair in
+CIEDE2000. Run `calibrate` to see the thresholds justified against published
+palettes rather than chosen: the floors are what Okabe-Ito and Tol actually
+achieve, since nothing in print meets a naive ΔE00 ≥ 10 under tritanopia.
+
+Two honest limits, recorded rather than hidden. Orange and sky blue sit near
+2.2:1 against `--panel` in light mode — softer than the rest, and the same trade
+every published palette makes, because contrast against the paper is not what
+distinguishes one series from another. And a five-series chart is the ceiling;
+past that, the design asks for small multiples instead of a sixth hue.
+
+**The one sanctioned crossover.** A chart whose *measured quantity is the rail
+itself* — custom-rail share by release (`5c`), grammar coverage on the landing
+page — uses the state hue as its series color, because there the hue is what the
+data means. Such a chart always carries a title that names the rail, so the
+reading is never ambiguous. Every chart of user data stays on the data palette.
 
 ## Type
 
@@ -120,7 +167,12 @@ with no attribution required in the product.
 ## Notes for implementation
 
 - Rail color is load-bearing, not decoration. Teal means no generated code ran;
-  violet means the sandbox did. Don't reuse either hue for anything else.
+  violet means the sandbox did. Don't reuse either hue for anything else — and in
+  particular, keep both out of the chart frame. The chart block is styled from the
+  data palette and the neutral surfaces only: no rail-tinted borders, fills, or
+  captions on or around it. A reader should be able to judge the chart without
+  reading a routing decision into it, and should have to look at the chrome to
+  learn which rail produced it.
 - Every screen states cost and latency. The `$0.00` refresh claim appears
   wherever a saved spec is re-rendered.
 - Errors name the drift and refuse to draw. There is no partial-render state in
