@@ -206,7 +206,7 @@ small.</p>
   <div>branch &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;claude/flint-chart-exploration-advtsc → main</div>
   <div>commits &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;e5af358 · 2a0b4b9</div>
   <div>diff &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;2 new files, +610 / −0 — both Markdown</div>
-  <div>written &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;26 July 2026 · this Simple English version 13 August 2026</div>
+  <div>written &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;26 July 2026 · this Simple English version 13 August 2026 · sections 1–3 expanded 21 August 2026</div>
 </div>
 
 <div class="callout">
@@ -242,9 +242,17 @@ small.</p>
     <tr><td><strong>planner</strong></td><td>The component that calls the language model.</td></tr>
     <tr><td><strong>ChartSpec</strong></td><td>The structured description of one chart. It is the contract between the planner and the renderer adapters.</td></tr>
     <tr><td><strong>channel</strong></td><td>A visual property that can hold data: <code>x</code>, <code>y</code>, <code>color</code>, <code>size</code>, <code>facet</code>, or <code>tooltip</code>.</td></tr>
-    <tr><td><strong>data type</strong></td><td>One of four classes for a column: quantitative, temporal, ordinal, or nominal.</td></tr>
+    <tr><td><strong>data type</strong></td><td>One of four classes for a column: quantitative, temporal, ordinal, or nominal. It says how the computer stores the values. It does not say what the values mean to a person.</td></tr>
     <tr><td><strong>semantic type</strong></td><td>A proposed new field. It says what a column <em>means</em>, for example <code>Revenue</code>. It does not replace the data type.</td></tr>
-    <tr><td><strong>resolver</strong></td><td>A proposed new component. It computes presentation values from a semantic type.</td></tr>
+    <tr><td><strong>resolver</strong></td><td>A proposed new component. It computes presentation values from a semantic type, a channel, and a mark. It is not a lookup table.</td></tr>
+    <tr><td><strong>annotation</strong></td><td>Extra facts that a type name cannot hold, for example a domain of 1 to 5, a unit of °C, or a sort order of small / medium / large.</td></tr>
+    <tr><td><strong>additive</strong></td><td>An aggregation role. You can add the values. Revenue is additive. The hint is SUM.</td></tr>
+    <tr><td><strong>intensive</strong></td><td>An aggregation role. You must not add the values as if they were a total. Price is intensive. The hint is AVG.</td></tr>
+    <tr><td><strong>inherit</strong></td><td>Use the value from the next source. Empty does not mean off. Decision D8: explicit spec value, then organization skill, then theme, then adapter default.</td></tr>
+    <tr><td><strong>adapter default</strong></td><td>The floor of the D8 sequence. Option A puts the values from the resolver here.</td></tr>
+    <tr><td><strong>Option A</strong></td><td>Adopt the Flint semantic types into the ChartSpec. Highest confidence. Independent of Flint code.</td></tr>
+    <tr><td><strong>Option B</strong></td><td>Use the Flint compiler as one renderer adapter. Medium confidence. A spike, not a commitment.</td></tr>
+    <tr><td><strong>Option C</strong></td><td>Name Flint as a complement in the product document, beside Cortex Analyst. Highest confidence for positioning.</td></tr>
     <tr><td><strong>transform block</strong></td><td>The part of the ChartSpec that changes the data before the renderer draws it.</td></tr>
     <tr><td><strong>deterministic rail</strong></td><td>The path with no generated code. Trusted code draws the chart.</td></tr>
     <tr><td><strong>custom-code rail</strong></td><td>The path where the language model writes code and a sandbox runs it.</td></tr>
@@ -259,41 +267,84 @@ small.</p>
 <div class="toc">
   <h2>Contents</h2>
   <ol>
-    <li><a href="#background">Background — the rail, the ChartSpec, and the prompt</a></li>
-    <li><a href="#idea">The idea — a column with the name <code>revenue</code></a></li>
-    <li><a href="#code">The proposals, in pipeline sequence</a></li>
+    <li><a href="#background">Background — the rail, the ChartSpec, and the prompt</a>
+      <ol>
+        <li><a href="#what-chartagents">What chartagents must become</a></li>
+        <li><a href="#what-chartspec">What the ChartSpec is</a></li>
+        <li><a href="#design-knowledge">Where the design knowledge comes from today</a></li>
+        <li><a href="#flint-arrived">What arrived from outside</a></li>
+      </ol>
+    </li>
+    <li><a href="#idea">The idea — a column with the name <code>revenue</code></a>
+      <ol>
+        <li><a href="#today-model">Today: the language model supplies the details</a></li>
+        <li><a href="#three-tiers">The mechanism: three tiers of vocabulary</a></li>
+        <li><a href="#resolver-not-lookup">Why one column can need two different answers</a></li>
+        <li><a href="#where-flint">The second claim: where Flint belongs</a></li>
+      </ol>
+    </li>
+    <li><a href="#code">The proposals, in pipeline sequence</a>
+      <ol>
+        <li><a href="#channel-field">At the planner boundary — a new field on <code>Channel</code></a></li>
+        <li><a href="#resolver-layer">Between the profile and the render — the resolver</a></li>
+        <li><a href="#against-d2">Against D2 — a hint, not an authority</a></li>
+        <li><a href="#against-pillar6">Against pillar 6 — freeze the inference at plan time</a></li>
+        <li><a href="#validation-home">Where the validation puts the resolver</a></li>
+        <li><a href="#measure-better">The real advantage — measurement is better than a guess</a></li>
+        <li><a href="#option-b">Option B — use the Flint compiler, and the reasons to be careful</a></li>
+        <li><a href="#landscape">The second file — what else is out there</a></li>
+        <li><a href="#after-merge">What changed when the team merged this</a></li>
+      </ol>
+    </li>
     <li><a href="#quiz">Quiz</a></li>
   </ol>
 </div>
 
 <h2 id="background">1. Background — the rail, the ChartSpec, and the prompt</h2>
 
-<p>If this repository is new to you, three facts make the change easier to read.</p>
+<p>This section is the map. Section 2 is the idea. Section 3 is how the idea would sit in the
+pipeline. If this repository is new to you, four facts make the rest of the page easier to read.</p>
 
-<h3>1.1 What chartagents must become</h3>
+<div class="callout">
+  <span class="tag">The question of this page</span>
+  <p>A ChartSpec can be <em>valid</em> and still look poor. Validity is a grammar question. Look is a
+  design question. Pull request&nbsp;#13 asks: where must the design knowledge live, so that a valid
+  chart is also a good chart, and so that the answer does not depend on a prompt?</p>
+</div>
+
+<h3 id="what-chartagents">1.1 What chartagents must become</h3>
 
 <p>chartagents is a Python library. It gets a data source and an instruction, for example "monthly
 revenue by region, last two years". It then makes a finished chart. It operates behind an API. It
-does not operate in a chat window.</p>
+does not operate in a chat window. A person embeds it in their own product. They do not chat with
+it.</p>
 
 <p>The product document, <code>chartagents-prd.md</code>, has six pillars. Three of them apply
-here:</p>
+here. Read each one as a constraint on Flint, not only as a product sentence:</p>
 
 <ul class="tight">
   <li><strong>Pillar 2 — the data stays in your infrastructure.</strong> Before the first call to the
   language model, the profiler reads the data with DuckDB. It writes a small
   <code>profile.json</code> file. That file holds the schema, the data types, the cardinality, the
   null rates, the minimum and maximum values, the percentiles, and some sample rows.
-  <em>The language model gets this metadata only.</em></li>
+  <em>The language model gets this metadata only.</em> Section 3.6 uses this. Flint in a chat must
+  guess many of those facts. chartagents can measure them.</li>
   <li><strong>Pillar 3 — reliability by design.</strong> The deterministic rail does most requests.
   The language model emits a ChartSpec, the system validates it, and trusted code draws the chart.
   There is no generated code on this path. A request that the grammar cannot express goes to the
-  custom-code rail, where the language model writes Python or JavaScript in a sandbox.</li>
+  custom-code rail, where the language model writes Python or JavaScript in a sandbox. Design
+  knowledge that lives in a prompt is not on this rail. It is a guess that can change.</li>
   <li><strong>Pillar 6 — make the chart one time, refresh it many times.</strong> A chart is a saved
   ChartSpec. To draw it again with new data, the system runs the stored transform block again and
   then calls the renderer adapter. There is no call to the language model, and the token cost is
-  zero.</li>
+  zero. Section 3.4 uses this. A method that reads the data again on each refresh can change the
+  chart with no message.</li>
 </ul>
+
+<p>The other three pillars still exist. This page does not need them. Pillar 1 is the output
+contract (ECharts JSON, Plotly, PNG, SVG, HTML). Pillar 4 is the review gate. Pillar 5 is the
+custom-code rail. Option B in section 3.7 touches pillar 1. The rest of this page is about pillars
+2, 3, and 6.</p>
 
 <div class="flow" role="img" aria-label="The chartagents pipeline: data source, profiler, planner, rail router, renderer, review gate, artifacts.">
   <div class="stage"><span class="label">data source</span>CSV · Parquet · warehouse connection · result set in memory</div>
@@ -310,9 +361,10 @@ here:</p>
 </div>
 <p class="caption">Figure 1. The pipeline from <code>chartagents-prd.md</code> §7.2. Pull
 request&nbsp;#13 is about the fourth box. That box changes a valid ChartSpec into a good chart, and
-nobody has built it yet.</p>
+nobody has built it yet. Flint is a candidate for that box. It is not a candidate for the boxes
+above it.</p>
 
-<h3>1.2 What the ChartSpec is</h3>
+<h3 id="what-chartspec">1.2 What the ChartSpec is</h3>
 
 <p>The ChartSpec is the contract between the language model and the renderer adapter. It is a small
 grammar of graphics, and it is independent of any chart library. A runnable draft is at
@@ -320,8 +372,17 @@ grammar of graphics, and it is independent of any chart library. A runnable draf
 <code>PROTOTYPE — THROWAWAY</code>. It holds nine numbered decisions, D1 to D9, and each decision
 exists for the team to examine.</p>
 
-<p>This change is about the <code>Channel</code> class. A channel is one visual property of the
-chart, for example the x axis or the color:</p>
+<p>This page needs two of those decisions later:</p>
+
+<ul class="tight">
+  <li><strong>D2</strong> — there is no <code>aggregate</code> field on a channel. Aggregation lives
+  in the transform block. Section 3.3 returns to this.</li>
+  <li><strong>D8</strong> — <code>None</code> means inherit, never "off". Precedence is explicit spec
+  value, then organization skill, then theme, then adapter default. Section 3.2 returns to this.</li>
+</ul>
+
+<p>The change in this research is about the <code>Channel</code> class. A channel is one visual
+property of the chart, for example the x axis or the color:</p>
 
 <p class="filename">prototypes/chartspec-v1/chartspec_draft.py:142–161</p>
 <pre><code>class Channel(BaseModel):
@@ -343,6 +404,21 @@ chart, for example the x axis or the color:</p>
     ORDINAL = "ordinal"
     NOMINAL = "nominal"</code></pre>
 
+<p>The four values classify how a column stores its values. They do not classify what those values
+mean to a person:</p>
+
+<ul class="tight">
+  <li><strong>quantitative</strong> — a number. You can calculate a mean value from it. Revenue,
+  temperature, and a rating of 1 to 5 are all quantitative.</li>
+  <li><strong>temporal</strong> — a date or a time. A month column is temporal.</li>
+  <li><strong>ordinal</strong> — categories in a known sequence. Small, medium, large is ordinal.</li>
+  <li><strong>nominal</strong> — categories with no sequence. Region names are nominal.</li>
+</ul>
+
+<p>That first bullet is the hole. Revenue, temperature, and a 1-to-5 rating share one data type.
+They do not share a format, an aggregation, a palette, or a zero baseline. Section 2 is about that
+hole.</p>
+
 <div class="callout">
   <span class="tag">Definition · grammar of graphics</span>
   <p>A method to describe a chart as <em>data columns that map onto visual channels</em>, for example
@@ -351,7 +427,7 @@ chart, for example the x axis or the color:</p>
   team write a renderer adapter that supports <em>all</em> of it.</p>
 </div>
 
-<h3>1.3 Where the design knowledge comes from today</h3>
+<h3 id="design-knowledge">1.3 Where the design knowledge comes from today</h3>
 
 <p>This is the problem that the research examines. Look at two fields that the prototype already
 has:</p>
@@ -372,6 +448,33 @@ prototype declares both fields, and other code reads both fields. But
 <strong>no code in the library computes either field.</strong> They have one source only. The prompt
 tells the language model to supply them, and the model supplies them or does not.</p>
 
+<p>A short example makes the cost visible. The user asks for a bar chart of monthly revenue. The
+grammar is happy with this ChartSpec:</p>
+
+<pre><code>{
+  "mark": {"type": "bar"},
+  "encodings": {
+    "x": {"field": "month", "type": "temporal"},
+    "y": {"field": "revenue_sum", "type": "quantitative"}
+  }
+}</code></pre>
+
+<p>That ChartSpec is valid. The chart that follows from it can still be wrong in three silent
+ways:</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Missing fact</th><th>What a good chart does</th><th>What can go wrong</th></tr></thead>
+  <tbody>
+    <tr><td><code>scale.zero</code></td><td>The bars start at $0.</td><td>The axis starts at $80,000. A $90,000 month looks twice as large as an $85,000 month. The grammar did not forbid this.</td></tr>
+    <tr><td><code>axis.format</code></td><td>The ticks say <code>$1.2M</code>.</td><td>The ticks say <code>1200000</code>, or they say a date format. The field is a free string. The grammar cannot check it.</td></tr>
+    <tr><td>sum versus mean</td><td>Group by region with SUM.</td><td>The planner averages revenue across regions. The number is legal. The story is false.</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="caption">Three decisions that depend on meaning. The value <code>quantitative</code> is
+true for all three rows. It cannot select among them.</p>
+
 <div class="callout warn">
   <span class="tag">The conflict</span>
   <p>Pillar 3 says that the design knowledge belongs in the library, because that makes the
@@ -382,7 +485,7 @@ tells the language model to supply them, and the model supplies them or does not
   library declares the fields and then asks the model to be correct.</p>
 </div>
 
-<h3>1.4 What arrived from outside</h3>
+<h3 id="flint-arrived">1.4 What arrived from outside</h3>
 
 <p>In July 2026, Microsoft Research and Renmin University released
 <code>microsoft/flint-chart</code> under the MIT license. It is an intermediate language for charts,
@@ -390,22 +493,72 @@ and a compiler for that language. The research document reports its premise: low
 are long, weak, and easy to get wrong, and language models are bad at these specs. So the model must
 state the <em>meaning</em>, and a compiler must compute the low-level settings.</p>
 
+<p>That premise is the same bet as pillar 3. The model fills a small form. Trusted code does the
+rest. Flint is the form-plus-compiler for "draw this spec well". chartagents is the system around
+that step.</p>
+
 <p>A person found Flint at the same time as the team started to freeze the ChartSpec grammar. That is
 the reason for pull request&nbsp;#13. The pull request has two commits. The first commit
 (<code>e5af358</code>) is a deep read of Flint. The team nearly missed Flint, so the second commit
 (<code>2a0b4b9</code>) is a deliberate search for other libraries of the same class.</p>
 
+<p>The pull request adds no product code. It adds two Markdown files. Nothing in the repository
+reads a Markdown file. The product of the work is a set of decisions that the team has not yet
+taken. Section 3 lists those decisions as Option A, Option B, and Option C.</p>
+
+<div class="callout">
+  <span class="tag">Agree to this before you continue</span>
+  <p>Flint is not a competitor to chartagents. It occupies the layer under the deterministic rail,
+  the layer that Figure 1 shows as unbuilt. The unique selling point of chartagents was never the
+  renderer.</p>
+</div>
+
 <h2 id="idea">2. The idea — a column with the name <code>revenue</code></h2>
+
+<p>The idea of this page is one sentence. <strong>The model names what a column means. Trusted code
+then decides how it looks.</strong></p>
 
 <p>Use the smallest possible example. A table has a column with the name <code>revenue</code>. The
 values are US dollars, and there is one row for each month. The user asks for a bar chart of the
-revenue by month.</p>
+revenue by month. That example is small on purpose. It is enough to show the split.</p>
 
-<h3>2.1 Today: the language model supplies the details</h3>
+<div class="callout">
+  <span class="tag">Two different fields</span>
+  <p><strong>Data type</strong> says how the computer stores the values. For revenue that value is
+  <code>quantitative</code>. <strong>Semantic type</strong> says what the values mean to a person. For
+  that column the value is <code>Revenue</code>. They are not the same field. Semantic type does not
+  replace data type.</p>
+</div>
 
-<p>A valid chart is not sufficient. To get a <em>good</em> chart, the planner must emit two things. It
-must emit the map from columns to channels. It must also emit each presentation value that follows
-from the meaning of a dollar amount:</p>
+<h3 id="today-model">2.1 Today: the language model supplies the details</h3>
+
+<p>A <em>valid</em> chart only needs the map from columns to channels:</p>
+
+<ul class="tight">
+  <li>mark: bar</li>
+  <li>x: <code>month</code>, type <code>temporal</code></li>
+  <li>y: <code>revenue</code>, type <code>quantitative</code></li>
+</ul>
+
+<p>That ChartSpec is legal. You already saw why in section 1.2. The four-value <code>DataType</code>
+class accepts it. A <em>good</em> chart also needs answers that <code>quantitative</code> cannot
+give:</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>Question</th><th>Good answer for revenue</th><th>Why <code>quantitative</code> is not enough</th></tr></thead>
+  <tbody>
+    <tr><td>Do the bars start at zero?</td><td>Yes.</td><td>Temperature is also quantitative, and zero is not always meaningful there.</td></tr>
+    <tr><td>How do we write the numbers?</td><td><code>$1.2M</code>, not <code>1200000</code>.</td><td>A count and a dollar amount look the same as numbers.</td></tr>
+    <tr><td>If we group rows, do we sum or average?</td><td>Sum.</td><td>You can add this month's revenue to last month's. You must not add two prices and call the result a price.</td></tr>
+  </tbody>
+</table>
+</div>
+<p class="caption">Today those answers live in the prompt. The planner must emit them as
+<code>scale.zero</code> and <code>axis.format</code>. Section 1.3 showed that the prototype declares
+those fields, and that no library code fills them.</p>
+
+<p>Look at Figure 2 as a split of work, not as shorter JSON:</p>
 
 <div class="cols">
   <div class="panel before">
@@ -443,17 +596,22 @@ responsible for four presentation values, and each one can be wrong. On the righ
 responsible for one word, <code>Revenue</code>. A resolver then computes the currency format, the
 default aggregation, and the zero baseline.</p>
 
+<p>The string <code>$,.2s</code> is a d3-format string. It means "currency, with SI suffixes, two
+significant digits". Language models are weak at that kind of string. They are also free to forget
+<code>zero: true</code>. The chart is still valid. It is just worse.</p>
+
 <p>The claim is not that the ChartSpec on the right is shorter. The claim is that it is
 <em>easier to get correct</em>. A model that has never read a d3-format string can still know that a
 column with the name <code>revenue</code> holds revenue. And when the library owns the computation,
 that computation is testable, a person can review it, and it gives the same result on each run. This
 is the meaning of the term "deterministic rail".</p>
 
-<h3>2.2 The mechanism: three tiers of vocabulary</h3>
+<h3 id="three-tiers">2.2 The mechanism: three tiers of vocabulary</h3>
 
 <p>There is an obvious objection. A vocabulary of seventy type names is a new method for the model to
 be wrong. The document reports the answer from Flint. The registry has three tiers, and each tier is
-a legal answer:</p>
+a <em>legal</em> answer. The model does not need the most specific name. A less specific name is
+still useful:</p>
 
 <div class="tiers" role="img" aria-label="Three tiers of semantic type: families, categories, and specific types.">
   <div class="tier"><b>Tier 0 · 6</b><span><strong>Families</strong> — <code>Temporal</code>, <code>Measure</code>, <code>Categorical</code>, and three more. They set the basic encoding strategy. A model can select one at a low cost.</span></div>
@@ -461,61 +619,119 @@ a legal answer:</p>
   <div class="tier"><b>Tier 2 · 46</b><span><strong>Specific types</strong> — <code>Revenue</code> is not <code>Price</code>, because you can add revenue but you must not add a price. <code>Temperature</code> is not <code>Quantity</code>, because temperature can have a diverging midpoint.</span></div>
 </div>
 
-<p>The resolver reads tier 2, then tier 1, then tier 0. It stops at the tier that the model supplied.
-The result is a sequence of smaller answers:</p>
+<p>Walk the same column down the ladder. The resolver reads tier 2, then tier 1, then tier 0. It
+stops at the tier that the model supplied:</p>
 
-<ul class="tight">
-  <li>Say <code>Revenue</code>, and you get the currency format, a sum as the default aggregation, and
-  a hint for a log scale.</li>
-  <li>Say <code>Amount</code>, and you get the currency format and the sum.</li>
-  <li>Say <code>Measure</code>, and you get a quantitative encoding with a meaningful zero.</li>
-  <li>Say a word that the registry does not know, and you get the generic quantitative result.</li>
-</ul>
+<ol>
+  <li>Say <code>Revenue</code> (tier 2). You get the currency format, a sum as the default
+  aggregation, and a hint for a log scale.</li>
+  <li>Say only <code>Amount</code> (tier 1). You still get the currency format and the sum. You lose
+  the extra hints that only Revenue carries.</li>
+  <li>Say only <code>Measure</code> (tier 0). You still get a quantitative encoding with a meaningful
+  zero.</li>
+  <li>Say a word that the registry does not know. You get the generic quantitative result. That is
+  <strong>exactly today's ChartSpec</strong>.</li>
+</ol>
 
-<p>That last result is the same result that the four-value <code>DataType</code> class gives today.
-<strong>The lowest result of the new system is the highest result of the old system.</strong></p>
+<p><strong>The lowest result of the new system is the highest result of the old system.</strong> An
+unknown semantic type does not make the chart worse than a chart with no semantic type. The four
+values of <code>DataType</code> remain the floor.</p>
 
-<p>Each semantic type carries five independent dimensions. This list is important, because it is the
-list of prompt responsibilities that the proposal removes:</p>
+<p>The pair <code>Revenue</code> versus <code>Price</code> is the example to keep. Both are numbers.
+Both can use a currency format. They do not share an aggregation:</p>
+
+<div class="cols">
+  <div class="panel after">
+    <h4>Revenue is additive</h4>
+    <p style="margin:0">January revenue $10. February revenue $12. The total is $22. SUM is the
+    correct hint.</p>
+  </div>
+  <div class="panel before">
+    <h4>Price is intensive</h4>
+    <p style="margin:0">Widget A costs $10. Widget B costs $12. The "total price" is not $22. AVG is
+    the correct hint. Or you weight by quantity. You do not add the prices.</p>
+  </div>
+</div>
+<p class="caption">One data type. Two semantic types. Two aggregation hints. Section 3.3 will say
+that a hint is not an authority. The transform block still holds the real aggregation.</p>
+
+<p>Each semantic type carries five independent dimensions. This list is the list of prompt jobs that
+the proposal removes:</p>
 
 <div class="scroller">
 <table>
   <thead>
-    <tr><th>Dimension</th><th>Values</th><th>What it decides</th></tr>
+    <tr><th>Dimension</th><th>Values</th><th>What it decides</th><th>Example</th></tr>
   </thead>
   <tbody>
-    <tr><td>Encoding candidates</td><td>a preference sequence over quantitative, ordinal, nominal, and temporal</td><td>which <code>DataType</code> value to prefer</td></tr>
-    <tr><td>Aggregation role</td><td>additive · intensive · signed-additive · dimension · identifier</td><td>SUM or AVG as the proposed default</td></tr>
-    <tr><td>Domain shape</td><td>open · bounded · fixed · cyclic</td><td>clamp limits, extrapolation, polar axes</td></tr>
-    <tr><td>Diverging nature</td><td>none · conditional · inherent</td><td>a sequential palette or a diverging palette</td></tr>
-    <tr><td>Format class</td><td>currency · percent · unit-suffix · date, and more</td><td>the prefix, the suffix, and the precision in <code>axis.format</code></td></tr>
+    <tr><td>Encoding candidates</td><td>a preference sequence over quantitative, ordinal, nominal, and temporal</td><td>which <code>DataType</code> value to prefer</td><td>A date prefers temporal, not nominal.</td></tr>
+    <tr><td>Aggregation role</td><td>additive · intensive · signed-additive · dimension · identifier</td><td>SUM or AVG as the proposed default</td><td>Revenue → SUM. Price → AVG.</td></tr>
+    <tr><td>Domain shape</td><td>open · bounded · fixed · cyclic</td><td>clamp limits, extrapolation, polar axes</td><td>A clock is cyclic. A rating of 1 to 5 is bounded.</td></tr>
+    <tr><td>Diverging nature</td><td>none · conditional · inherent</td><td>a sequential palette or a diverging palette</td><td>Temperature can need a midpoint. Quantity usually does not.</td></tr>
+    <tr><td>Format class</td><td>currency · percent · unit-suffix · date, and more</td><td>the prefix, the suffix, and the precision in <code>axis.format</code></td><td>Revenue → <code>$,.2s</code>. Share → percent.</td></tr>
   </tbody>
 </table>
 </div>
 <p class="caption">Table 1. The five dimensions, as
 <code>docs/research/flint-chart-leverage.md</code> §1 reports them. Compare them with the fields in
-<code>ScaleSpec</code> and <code>AxisSpec</code> that no library code fills today.</p>
+<code>ScaleSpec</code> and <code>AxisSpec</code> that no library code fills today. One data type was
+doing five jobs. It could not.</p>
 
-<h3>2.3 Why one column can need two different answers</h3>
+<h3 id="resolver-not-lookup">2.3 Why one column can need two different answers</h3>
 
-<p>One detail explains why this is a resolver and not a lookup table. Take a <code>rating</code>
-column with a domain of 1 to 5. Put it on the x axis, and the correct answer is integer ticks at 1, 2,
-3, 4, and 5. Put it on the color channel, and the correct answer is a diverging palette with its
-midpoint at 3. The column is the same and the semantic type is the same, but the decision is
-different, because the channel is different.</p>
+<p>A lookup table would say: <code>Revenue</code> always maps to these exact settings. That fails as
+soon as the <em>channel</em> changes. One detail explains why this is a resolver and not a lookup
+table.</p>
+
+<p>Take a <code>rating</code> column with a domain of 1 to 5. The semantic type is the same in both
+charts below. The good answer is not the same:</p>
+
+<div class="cols">
+  <div class="panel">
+    <h4>On the x axis</h4>
+    <p style="margin:0">Integer ticks at 1, 2, 3, 4, and 5. The position channel needs a scale with
+    those ticks. A continuous axis that shows 1.7 is a worse answer.</p>
+  </div>
+  <div class="panel">
+    <h4>On the color channel</h4>
+    <p style="margin:0">A diverging palette with its midpoint at 3. Low ratings one color. High
+    ratings the other color. Ticks of 1, 2, 3, 4, 5 are not the decision that color needs.</p>
+  </div>
+</div>
+<p class="caption">Same column. Same semantic type. Different visual job. Position and color are not
+the same channel, so they do not share one row in a lookup table.</p>
 
 <p>So the compiler has two stages. Stage one computes the properties of the column: the format, the
 default aggregation, and the domain limits. It does not know which channel gets the column. Stage two
 changes those properties into decisions for one channel. First for each column, then for each
-channel.</p>
+channel. The inputs are semantic type <em>and</em> channel <em>and</em> mark.</p>
 
-<h3>2.4 The second claim: where Flint belongs</h3>
+<h3 id="where-flint">2.4 The second claim: where Flint belongs</h3>
 
-<p>The second claim of the document is about layers, and it is the reason for the positive tone.
-Flint compiles a spec into a good native chart. That is the box in Figure 1 that the team has
+<p>Section 2 is two claims together.</p>
+
+<ul class="tight">
+  <li><strong>Claim 1</strong> (sections 2.1 to 2.3). Meaning belongs in the spec. Polish is computed
+  by code.</li>
+  <li><strong>Claim 2</strong> (this section). Flint is that computation layer. It is not a
+  chartagents replacement.</li>
+</ul>
+
+<p>Flint compiles a spec into a good native chart. That is the box in Figure 1 that the team has
 <em>not built</em>. Flint has no profiler, no planning loop, no review gate, no refresh guarantee, and
 no data source abstraction. Its MCP server also serves the single person in a chat window, and the
 product document lists that person as an explicit non-goal.</p>
+
+<div class="scroller">
+<table>
+  <thead><tr><th>System</th><th>Question it answers</th></tr></thead>
+  <tbody>
+    <tr><td>Cortex Analyst</td><td>Which data?</td></tr>
+    <tr><td>Flint</td><td>I have a spec. Draw it well.</td></tr>
+    <tr><td>chartagents</td><td>I have data and an instruction. Select the spec, guarantee its quality, and refresh it for ever.</td></tr>
+  </tbody>
+</table>
+</div>
 
 <div class="callout good">
   <span class="tag">The model in one line</span>
@@ -524,6 +740,12 @@ product document lists that person as an explicit non-goal.</p>
   "<em>I have a spec, draw it well</em>". chartagents answers "<em>I have data and an instruction,
   select the spec, guarantee its quality, and refresh it for ever</em>".</p>
 </div>
+
+<p>Four sentences hold the whole of section 2. A column named <code>revenue</code> is
+<code>quantitative</code> in storage and <code>Revenue</code> in meaning. Today the model must also
+invent <code>zero</code> and <code>$,.2s</code>. Tomorrow it only has to say <code>Revenue</code>,
+and a resolver fills the rest, walking from specific types down to today's four-way fallback. Flint
+is that resolver-shaped layer. chartagents is everything around it.</p>
 
 <h2 id="code">3. The proposals, in pipeline sequence</h2>
 
@@ -540,11 +762,14 @@ product document lists that person as an explicit non-goal.</p>
 </div>
 
 <p>A file-by-file report tells you very little. So this section follows the pipeline in Figure 1. At
-each stage it states what the research proposes to change there.</p>
+each stage it states what the research proposes to change there. Option A is the semantic type field
+and the resolver. Option B is the Flint compiler as an adapter. Option C is a sentence in the product
+document. The team has taken none of these yet. The merge only made them available for review.</p>
 
-<h3>3.1 At the planner boundary — a new field on <code>Channel</code></h3>
+<h3 id="channel-field">3.1 At the planner boundary — a new field on <code>Channel</code></h3>
 
-<p>Option A is the recommendation with the highest confidence. It is one new field:</p>
+<p>Option A is the recommendation with the highest confidence. It does not need Flint code. It needs
+one new field on the class you saw in section 1.2:</p>
 
 <p class="filename">proposed — docs/research/flint-chart-leverage.md §3</p>
 <pre><code>class Channel(BaseModel):
@@ -558,16 +783,35 @@ each stage it states what the research proposes to change there.</p>
 
 <p>Note what the proposal does <em>not</em> do. The <code>DataType</code> class stays. The semantic
 type is beside it, and the semantic type is optional. So each ChartSpec that is valid today stays
-valid. The annotation object holds the facts that a type name alone cannot give. Three examples
-follow:</p>
+valid. A missing <code>semantic</code> field is the generic quantitative result from section 2.2.
+That is the floor.</p>
 
-<ul class="tight">
-  <li>the domain of a rating is 1 to 5;</li>
-  <li>the unit is °C and not USD;</li>
-  <li>the category sorts in the sequence small, medium, large, and not in alphabetical sequence.</li>
-</ul>
+<p>The annotation object holds the facts that a type name alone cannot give. Three examples
+follow. Each one is a fact about <em>this column in this data set</em>, not a fact about the type
+<code>Rating</code> or <code>Temperature</code> in general:</p>
 
-<h3>3.2 Between the profile and the render — the resolver</h3>
+<div class="scroller">
+<table>
+  <thead><tr><th>Fact</th><th>Why the type name is not enough</th><th>What the annotation holds</th></tr></thead>
+  <tbody>
+    <tr><td>The domain of a rating is 1 to 5.</td><td>Some ratings are 1 to 10. Some are 0 to 100.</td><td><code>intrinsicDomain: [1, 5]</code></td></tr>
+    <tr><td>The unit is °C, not USD.</td><td><code>Physical</code> and <code>Amount</code> both format numbers. They do not share a unit.</td><td><code>unit: "°C"</code></td></tr>
+    <tr><td>The category sorts small, medium, large.</td><td>Alphabetical order gives large, medium, small. That order is wrong.</td><td><code>sortOrder: ["small", "medium", "large"]</code></td></tr>
+  </tbody>
+</table>
+</div>
+<p class="caption">The type name selects the family of rules. The annotation fills the holes that
+only this data set can fill. Section 2.3 needed the domain [1, 5] to put the color midpoint at 3.
+That number is not inside the word <code>Rating</code>.</p>
+
+<div class="callout">
+  <span class="tag">You can ship a small vocabulary first</span>
+  <p>The team does not need all 46 specific types on day one. The tiered fallback means the team can
+  ship tier 0 and tier 1, and grow tier 2 later. An unknown name still lands on today's
+  <code>DataType</code>.</p>
+</div>
+
+<h3 id="resolver-layer">3.2 Between the profile and the render — the resolver</h3>
 
 <p>The second half of Option A puts the computed values into the chart. The proposal puts a resolver
 between <code>profile.json</code> and the renderer adapter. Then, and this is the important detail,
@@ -580,6 +824,10 @@ rule in decision D8:</p>
     D8: every field is Optional and None means INHERIT, never "off".
     Precedence at render time: explicit spec value &gt; org skill &gt; theme &gt; adapter default.
     """</code></pre>
+
+<p>Read D8 as four layers, from the top. The first layer that has a value wins. Empty means "look at
+the next layer". Empty does not mean "turn this off". The ChartSpec lesson already uses this rule
+for style. Option A uses the same rule for format, zero, and palette.</p>
 
 <p>The values from the semantic type become the <em>adapter default</em> layer. That layer is the
 floor, not the ceiling:</p>
@@ -594,18 +842,36 @@ floor, not the ceiling:</p>
 ChartSpec that sets no value gets good defaults. A value that an organization or a planner states
 explicitly still wins, which is what D8 already promises.</p>
 
+<p>Walk the revenue bar chart through those four layers:</p>
+
+<ol>
+  <li>The resolver sees <code>semantic: "Revenue"</code> on y. It proposes
+  <code>axis.format: "$,.2s"</code> and <code>scale.zero: true</code>. That is the floor.</li>
+  <li>If the house theme says "use a comma as the thousands separator", the theme can replace the
+  format string. The zero baseline stays.</li>
+  <li>If the organization skill says "always show revenue in thousands", that skill replaces the
+  format again. The ticks now say <code>$1,200k</code>.</li>
+  <li>If this one ChartSpec writes <code>"format": "$,.0f"</code>, that explicit value wins. The
+  planner asked for whole dollars with no suffix. The resolver does not fight it.</li>
+</ol>
+
+<p>If the computed values sat <em>above</em> the explicit values, nobody could state an exception.
+That is why they sit on the floor. Quiz question 2 tests this.</p>
+
 <div class="callout">
   <span class="tag">The invariant stays true</span>
   <p>In this grammar, <code>None</code> has the meaning <em>inherit</em> in each position. Decision D9
   removes each <code>None</code> from the canonical JSON form. So a resolver that fills the empty
   fields at render time cannot change what a stored ChartSpec <em>says</em>. Patch mode continues to
-  compare the ChartSpec that the planner wrote. It does not compare the resolved ChartSpec.</p>
+  compare the ChartSpec that the planner wrote. It does not compare the resolved ChartSpec. Two
+  people can still diff two saved specs and see only what the planner stated.</p>
 </div>
 
-<h3>3.3 Against D2 — a hint, not an authority</h3>
+<h3 id="against-d2">3.3 Against D2 — a hint, not an authority</h3>
 
 <p>Aggregation is the most probable failure of this proposal. The Flint types carry an aggregation
-role. But the ChartSpec has an explicit decision that forbids aggregation on a channel:</p>
+role. A reader can think: "then the channel now holds SUM or AVG, and that breaks D2." D2 is an
+explicit ChartSpec decision. It forbids <code>aggregate</code> on a channel:</p>
 
 <p class="filename">prototypes/chartspec-v1/chartspec_draft.py:143–151</p>
 <pre><code>    D2: NO `aggregate` on the channel — unlike Vega-Lite.
@@ -615,19 +881,49 @@ role. But the ChartSpec has an explicit decision that forbids aggregation on a c
     source's SQL and cannot reach into encodings, and (b) zero-cost refresh (§7.7)
     re-runs the transform alone. Encoding-level aggregate would fork that boundary.</code></pre>
 
+<p>Vega-Lite writes the sum on the encoding. The ChartSpec does not:</p>
+
+<div class="cols">
+  <div class="panel before">
+    <h4>Vega-Lite — aggregate on the channel</h4>
+<pre><code>{ "y": { "field": "revenue",
+         "aggregate": "sum" } }</code></pre>
+  </div>
+  <div class="panel after">
+    <h4>ChartSpec — aggregate in the transform</h4>
+<pre><code>{ "data": { "transform": {
+    "group_by": ["month"],
+    "aggregate": {
+      "revenue_sum": "sum(revenue)"
+    } } },
+  "encodings": {
+    "y": { "field": "revenue_sum",
+           "type": "quantitative",
+           "semantic": "Revenue" } }
+}</code></pre>
+  </div>
+</div>
+<p class="caption">The encoding still points at a column that already exists. The new
+<code>semantic</code> field does not add <code>aggregate: "sum"</code> to that encoding.</p>
+
 <p>The document gives a distinction with a real result. The aggregation role is a <em>default that
 seeds the transform planner</em>. <code>Revenue</code> proposes SUM, and <code>Price</code> proposes
-AVG. The <code>data.transform</code> block stays the only source of truth about the computation. No
-code in the render path or the pushdown path reads an aggregation from a channel. So the boundary
-that D2 protects stays intact. That boundary makes the transform block a self-contained thing that
-compiles to SQL and that the system can run alone.</p>
+AVG. The planner can accept the hint and write <code>sum(revenue)</code> into the transform block.
+The planner can also reject the hint, if the instruction is "average revenue per store". The
+<code>data.transform</code> block stays the only source of truth about the computation.</p>
 
-<h3>3.4 Against pillar 6 — freeze the inference at plan time</h3>
+<p>No code in the render path or the pushdown path reads an aggregation from a channel. So the
+boundary that D2 protects stays intact. That boundary makes the transform block a self-contained
+thing that compiles to SQL and that the system can run alone on a refresh. Quiz question 1 tests
+this. The correct answer is authority, not location and not time.</p>
+
+<h3 id="against-pillar6">3.4 Against pillar 6 — freeze the inference at plan time</h3>
 
 <p>There is a less obvious hazard, and the document finds it. Flint computes a missing semantic type
 from the distribution of the data. For example, if 80% of the absolute values in a column are 1 or
-less, Flint reads a percentage as a fraction and not as a whole number. That method is acceptable in
-a chat. It is dangerous with a refresh guarantee.</p>
+less, Flint reads a percentage as a fraction (0.34 means 34%) and not as a whole number (0.34 means
+0.34%). That method is acceptable in a chat. The person sees the chart and can say "wrong". It is
+dangerous with a refresh guarantee. Nobody is watching.</p>
 
 <div class="cols">
   <div class="panel before">
@@ -641,24 +937,32 @@ a chat. It is dangerous with a refresh guarantee.</p>
   <div class="panel after">
     <h4>Pinned at plan time</h4>
     <p style="margin:0;font-size:.86rem">The inference runs one time, during the planning step. The
-    system writes the result into the ChartSpec as an annotation.</p>
+    system writes the result into the ChartSpec as an annotation, for example
+    <code>unit: "fraction"</code>.</p>
     <p style="margin:.5rem 0 0;font-size:.86rem">Each refresh replays the stored decision. New data
-    cannot change the reading, because no code reads it again.</p>
+    cannot change the reading, because no code reads it again. If the schema itself changes, that is
+    a different error, and <code>SchemaDriftError</code> exists to make it loud.</p>
   </div>
 </div>
 <p class="caption">Figure 4. Why the document says that the system must freeze a distribution-based
 inference into the ChartSpec. Pillar 6 promises that a refresh is a replay. A method that runs again
-on new data breaks that promise, and it gives no warning.</p>
+on new data breaks that promise, and it gives no warning. Quiz question 4 tests this.</p>
+
+<p>The cost of the inference is not the problem. The method is a data method. It does not call the
+language model. A refresh could run it at zero token cost. The problem is stability. The same saved
+ChartSpec must draw the same kind of chart when the rows change.</p>
 
 <p>Note the direction of this result. Semantic types make the refresh guarantee stronger. They do not
 make it more complex, because the resolver is deterministic and its inputs are in the ChartSpec. Two
 runs of the resolver over one ChartSpec give one chart. This is the meaning of "bit-stable across
 runs" in pillar 3.</p>
 
-<h3>3.5 Where the validation puts the resolver</h3>
+<h3 id="validation-home">3.5 Where the validation puts the resolver</h3>
 
-<p>The primary result of the prototype was that validation cannot be one phase. The grammar checks
-run when the system reads a ChartSpec. Each check that needs the data runs later:</p>
+<p>The primary result of the ChartSpec prototype was that validation cannot be one phase. The grammar
+checks run when the system reads a ChartSpec. Each check that needs the data runs later. You can
+find a histogram with a <code>y</code> channel with no data. You cannot find 830 colors on
+<code>sku</code> without <code>profile.json</code>.</p>
 
 <p class="filename">prototypes/chartspec-v1/chartspec_draft.py:452 and :529</p>
 <pre><code>    @model_validator(mode="after")
@@ -670,14 +974,24 @@ def validate_against_profile(spec: ChartSpec, profile: dict) -&gt; list[str]:
     """Phase 2. Returns error strings; empty list == passes."""   # needs profile.json</code></pre>
 
 <p>Semantic resolution needs the profile, because it needs the units, the domains, and the
-distributions. So it belongs in phase 2, beside the cardinality caps that are already there. There is
-no new phase and no new plumbing.</p>
+distributions. A type name of <code>Rating</code> is not enough. The resolver also needs to know
+that this rating runs from 1 to 5. That fact is in the data. So resolution belongs in phase 2,
+beside the cardinality caps that are already there.</p>
 
-<h3>3.6 The real advantage — measurement is better than a guess</h3>
+<div class="flow" role="img" aria-label="Phase 1 grammar, then phase 2 profile checks including semantic resolution.">
+  <div class="stage det"><span class="label">Phase 1 — grammar</span>Is this ChartSpec legal? Does the mark support these channels? The spec alone is enough.</div>
+  <div class="arrow">↓ a valid ChartSpec, maybe with semantic: "Revenue"</div>
+  <div class="stage new"><span class="label">Phase 2 — profile, now also resolution</span>Do the columns exist? Is cardinality below the cap? What format and zero does this semantic type plus this profile imply?</div>
+</div>
+<p class="caption">There is no new phase and no new plumbing. The resolver sits in the phase that
+already reads <code>profile.json</code>.</p>
+
+<h3 id="measure-better">3.6 The real advantage — measurement is better than a guess</h3>
 
 <p>This part of the document is an argument, not a summary, so it needs a precise statement. Flint
 operates in a chat. It asks the model to select a semantic type, and it uses distribution methods for
-the gaps. chartagents runs DuckDB over the data before it calls the model.</p>
+the gaps. chartagents runs DuckDB over the data <em>before</em> it calls the model. Pillar 2 already
+paid for that profile. Option A can spend it a second time.</p>
 
 <div class="flow" role="img" aria-label="Comparison: Flint infers semantic types, chartagents can compute many of the same signals from its DuckDB profile.">
   <div class="stage"><span class="label">Flint in a chat</span>the model guesses the type → distribution methods fill the gaps → compile</div>
@@ -687,30 +1001,42 @@ the gaps. chartagents runs DuckDB over the data before it calls the model.</p>
 addition. chartagents can measure the signals that Flint must guess. It can also use them to find a
 column that the model typed incorrectly.</p>
 
+<p>A concrete check. The model says <code>semantic: "Date"</code> on a column. The profile says the
+values are not monotonic, and the cardinality is 4. The library can reject that guess before the
+resolver runs. Flint in a chat has a weaker version of this check, because it often sees only the
+rows that the user pasted.</p>
+
 <div class="callout warn">
   <span class="tag">Open question, stated in the document</span>
   <p>How many of the 46 specific types can the profile identify alone, and how many still need a guess
   from the model? Nobody has measured this. The answer limits how much planning work the vocabulary
-  really removes. It is one of four questions that the document sends to tickets.</p>
+  really removes. It is one of four questions that the document sends to tickets. Do not treat
+  "the profile can do all of it" as a fact. It is a hope.</p>
 </div>
 
-<h3>3.7 Option B — use the Flint compiler, and the reasons to be careful</h3>
+<h3 id="option-b">3.7 Option B — use the Flint compiler, and the reasons to be careful</h3>
 
-<p>The second option is larger. It compiles a ChartSpec into the Flint input, and Flint then compiles
-that into a native chart. This gives Vega-Lite, ECharts, and Chart.js from one map. The team does not
-write three renderer adapters. The document gives this option <em>medium</em> confidence, and it uses
-most of its length on the costs.</p>
+<p>Option A is a field and a resolver. The team can take it without running Flint. Option B is
+larger. It compiles a ChartSpec into the Flint input, and Flint then compiles that into a native
+chart. This gives Vega-Lite, ECharts, and Chart.js from one map. The team does not write three
+renderer adapters.</p>
+
+<p>The document gives this option <em>medium</em> confidence. The upside is real. The costs are also
+real. Most of the section is the costs, because a reader who only sees the upside will treat Flint as
+"the renderer" and lock the architecture too early.</p>
 
 <div class="scroller">
 <table>
-  <thead><tr><th>Cost</th><th>What it means here</th></tr></thead>
+  <thead><tr><th>Cost</th><th>What it means here</th><th>What a spike must answer</th></tr></thead>
   <tbody>
-    <tr><td>The language boundary</td><td>The compiler with three backends is TypeScript. <code>flint-py</code> is a Python port, but it compiles <strong>Vega-Lite only</strong>. It is a source-only preview with no PyPI release. ECharts is the <em>primary</em> web output in the product document. To reach it, the team must add a Node sidecar to the sandbox, write a port, or wait for the roadmap of another team.</td></tr>
-    <tr><td>Grammar impedance</td><td>The ChartSpec holds parts that the Flint input models differently: overlay <code>layers</code> with a list of permitted combinations (D5), typed <code>annotations</code>, <code>interactions</code> flags, and the <code>escape</code> marker for the custom-code rail. The map loses data in both directions. The team needs a capability matrix before it starts.</td></tr>
-    <tr><td>Governance</td><td>Flint is a young research artifact with no published roadmap. The MIT license lets the team copy the parts into the repository. But that copy is a maintenance commitment. It is not a free solution.</td></tr>
+    <tr><td>The language boundary</td><td>The compiler with three backends is TypeScript. <code>flint-py</code> is a Python port, but it compiles <strong>Vega-Lite only</strong>. It is a source-only preview with no PyPI release. ECharts is the <em>primary</em> web output in the product document. To reach it, the team must add a Node sidecar to the sandbox, write a port, or wait for the roadmap of another team.</td><td>Is Vega-Lite quality from <code>flint-py</code> good enough to justify the next step?</td></tr>
+    <tr><td>Grammar impedance</td><td>The ChartSpec holds parts that the Flint input models differently: overlay <code>layers</code> with a list of permitted combinations (D5), typed <code>annotations</code>, <code>interactions</code> flags, and the <code>escape</code> marker for the custom-code rail. The map loses data in both directions.</td><td>Write a capability matrix. Which ChartSpecs survive the round trip?</td></tr>
+    <tr><td>Governance</td><td>Flint is a young research artifact with no published roadmap. The MIT license lets the team copy the parts into the repository. But that copy is a maintenance commitment. It is not a free solution.</td><td>Pin-and-vendor the ontology tables, or depend on the package?</td></tr>
   </tbody>
 </table>
 </div>
+<p class="caption">Quiz question 3 tests the language boundary. The obstacle is not Playwright. The
+obstacle is that ECharts from Flint lives in TypeScript today.</p>
 
 <p>The proposed shape of the experiment keeps it reversible. Flint becomes <em>one adapter</em> behind
 the <code>CapabilityProfile</code> boundary that the architecture already has. It declares a
@@ -727,13 +1053,26 @@ helper for that check:</p>
 
 <p>An adapter is a pluggable part. The team can add it or remove it without a change to the planner,
 the rail router, or the review loop. If Flint is an adapter, the team can still answer the question
-"was this a good decision?" at a later time.</p>
+"was this a good decision?" at a later time. The spike is single-mark only: bar, line, scatter,
+heatmap. Overlays and the custom-code <code>escape</code> marker wait.</p>
 
-<h3>3.8 The second file — what else is out there</h3>
+<div class="callout warn">
+  <span class="tag">Option B is not Option A</span>
+  <p>The team can adopt semantic types and never run the Flint compiler. The team can also spike the
+  compiler and later remove it. Do not bundle the two decisions. The document ranks them separately
+  for that reason.</p>
+</div>
+
+<h3 id="landscape">3.8 The second file — what else is out there</h3>
 
 <p>The second document exists because of an uncomfortable fact in its own header. Flint became
-visible late, and the team nearly missed it. So the search covers six categories. Five entries have
-actions:</p>
+visible late, and the team nearly missed it. So the search covers six categories. None of these
+systems occupy the full chartagents position (embeddable Python API, data in infrastructure,
+deterministic rail first, review gate, zero-token refresh). Several own a piece well enough to steal
+from, or to be measured against.</p>
+
+<p>Five entries have actions. Read each card as "what to do before development", not as "what to
+depend on":</p>
 
 <div class="cards">
   <div class="card"><b>Draco / Draco 2 (UW)</b><em>design knowledge as constraints</em>
@@ -750,9 +1089,12 @@ actions:</p>
     <p style="margin:.35rem 0 0">Named metrics for the benchmark in §11. Spec Score needs no judge and is deterministic. It is a structural answer to the self-preference risk of an LLM judge, which the product document already lists.</p></div>
 </div>
 
+<h4>Draco is the closest cousin of Option A</h4>
+
 <p>The Draco entry repeats the Flint argument most exactly, and it points at code that already
 exists. The channel contract for each mark in the prototype is a hand-written table of hard
-constraints:</p>
+constraints. A histogram must not have <code>y</code>. A pie has no <code>x</code>. Scatter is the
+only mark with <code>size</code>:</p>
 
 <p class="filename">prototypes/chartspec-v1/chartspec_draft.py:220–233</p>
 <pre><code>    "scatter": MarkRule(
@@ -772,26 +1114,57 @@ constraints:</p>
 
 <p>The hard constraints of Draco are the same idea. They are formal, and they are much more complete.
 Its soft constraints are the tier 1 lint gate in a different notation. Three examples are
-colorblind safety, cardinality caps, and the bar-baseline rule. The recommendation is small on
-purpose. Copy the model and the hard-and-soft taxonomy. Do <em>not</em> add an Answer Set Programming
-solver as a run-time dependency of a library that other teams embed.</p>
+colorblind safety, cardinality caps, and the bar-baseline rule. Quiz question 5 tests this pair:
+grammar validators ≈ hard constraints, lint gate ≈ soft constraints.</p>
 
-<h3>3.9 What changed when the team merged this</h3>
+<p>The recommendation is small on purpose. Copy the model and the hard-and-soft taxonomy. Do
+<em>not</em> add an Answer Set Programming solver as a run-time dependency of a library that other
+teams embed. Clingo is heavy. The catalog is the useful part.</p>
+
+<h4>chat2plot and LIDA are two answers to "is this already built?"</h4>
+
+<p><strong>chat2plot</strong> already ships the ChartSpec bet in miniature: the model emits JSON, a
+renderer draws it, Pydantic checks the shape. Read its failure list. Those failures are valid specs
+that still draw the wrong chart. That is the input the phase-1 and phase-2 validators must catch.</p>
+
+<p><strong>LIDA</strong> is the whole agent pipeline, with a repair loop. It generates library code.
+That is the design that pillar 3 rejects. The difference to state in the product document:
+chartagents runs a deterministic rail first, and only escapes to generated code for the minority.
+A reviewer will ask "how is this not just LIDA?". The product document does not name LIDA today.
+That is a gap in positioning, not a gap in the architecture.</p>
+
+<h4>Vizro and BI-as-code are signals, not dependencies</h4>
+
+<p>Vizro stopped AI dashboard generation. A funded team narrowed to charts plus MCP. That supports
+the chartagents scope (charts, not dashboards). It also shows that the field went MCP-first.
+chartagents went API-first on purpose. The product document should now argue that choice, because
+the rest of the field went the other way.</p>
+
+<p>Evidence, Rill, and Malloy prove that the market already believes in durable specs and cheap
+refresh. Pillar 6 is not a novel gamble. The delta is authorship. A person writes a Rill spec. An
+agent writes a ChartSpec, and the review gate checks it. Then both refresh the same way.</p>
+
+<h3 id="after-merge">3.9 What changed when the team merged this</h3>
 
 <p>No code path changed. State this clearly, because the two documents read like instructions and
-they are not instructions. The merge made four proposals available for review:</p>
+they are not instructions. Pull request&nbsp;#13 added two Markdown files. Nothing in the repository
+reads those files. The merge made four proposals available for review:</p>
 
 <div class="scroller">
 <table>
-  <thead><tr><th>Proposal</th><th>Vehicle</th><th>Stated confidence</th></tr></thead>
+  <thead><tr><th>Proposal</th><th>Which option</th><th>Vehicle</th><th>Stated confidence</th></tr></thead>
   <tbody>
-    <tr><td>A semantic type layer for the ChartSpec</td><td>an ADR in <code>docs/adr/</code>. That directory does not exist yet. Someone makes it when a decision is truly resolved.</td><td>High</td></tr>
-    <tr><td>Flint as a named complement in §2 of the product document</td><td>an edit to the product document, beside the existing Cortex Analyst note</td><td>High</td></tr>
-    <tr><td>A ChartSpec → <code>flint-py</code> Vega-Lite spike behind the adapter boundary</td><td>a ticket with a time limit, for single-mark cases only</td><td>Medium</td></tr>
-    <tr><td>ECharts through a Node sidecar</td><td>deferred</td><td>Low — it depends on the spike</td></tr>
+    <tr><td>A semantic type layer for the ChartSpec</td><td>A</td><td>an ADR in <code>docs/adr/</code>. That directory does not exist yet. Someone makes it when a decision is truly resolved.</td><td>High</td></tr>
+    <tr><td>Flint as a named complement in §2 of the product document</td><td>C</td><td>an edit to the product document, beside the existing Cortex Analyst note</td><td>High</td></tr>
+    <tr><td>A ChartSpec → <code>flint-py</code> Vega-Lite spike behind the adapter boundary</td><td>B</td><td>a ticket with a time limit, for single-mark cases only</td><td>Medium</td></tr>
+    <tr><td>ECharts through a Node sidecar</td><td>B, later</td><td>deferred</td><td>Low — it depends on the spike</td></tr>
   </tbody>
 </table>
 </div>
+
+<p>Option C is the cheapest of the four. It is one paragraph in the product document. It pre-empts
+the question "isn't this just Flint?" the same way the product document already pre-empts "but Claude
+already does this." The suggested sentence is the one-liner from section 2.4.</p>
 
 <div class="callout bad">
   <span class="tag">Explicit non-actions</span>
@@ -800,6 +1173,10 @@ they are not instructions. The merge made four proposals available for review:</
   solver. Do not move to MCP first. And do not describe Flint as a competitor, inside or outside the
   team. The renderer was never the unique selling point.</p>
 </div>
+
+<p>Four questions remain as tickets. This page already named the first in section 3.6. The other
+three are: the exact lossy boundary of ChartSpec → Flint input, whether <code>flint-py</code> will
+grow an ECharts backend, and whether the team pins the ontology tables or depends on the package.</p>
 
 <h3>What this page does not verify</h3>
 
@@ -815,8 +1192,8 @@ document. That code is not in the repository.</p>
 
 <h2 id="quiz">4. Quiz</h2>
 
-<p>Five questions about the behavior and the contracts, not about the vocabulary. Select an option to
-see if it is correct.</p>
+<p>Five questions about the behavior and the contracts, not about the vocabulary. The expanded
+sections above contain each answer. Select an option to see if it is correct.</p>
 
 <div class="quiz" id="quiz"></div>
 
