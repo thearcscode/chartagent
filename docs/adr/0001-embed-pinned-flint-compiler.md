@@ -1,7 +1,7 @@
 # 1. Pin Flint; compile in the client
 
-- **Status:** Accepted (amended 2026-08-22)
-- **Date:** 2026-08-21; amended 2026-08-22
+- **Status:** Accepted (amended 2026-08-22, 2026-08-23)
+- **Date:** 2026-08-21; amended 2026-08-22, 2026-08-23
 - **Supersedes:** the backend and integration claims in `docs/research/flint-chart-leverage.md`
   (written 2026-07-22 against flint-chart 0.2.x). The 2026-08-21 *in-process embed*
   decision in this same file is withdrawn; pin, no-fork, date normalisation, and
@@ -123,6 +123,12 @@ Concretely:
    Server-side rasterisation (PNG for a review gate, scheduled digests, thumbnails) is
    a separate decision — not a dependency of the compile path.
 
+   That separate decision is now made (2026-08-23): **ADR-0003** puts rasterisation in a
+   browser running our own pinned harness, behind a public protocol, in an optional extra,
+   for the review gate only. The claim above is unchanged and still holds — the compile
+   path takes on no runtime, and a caller who never runs the review gate never installs a
+   browser.
+
 ### Engine choice (withdrawn 2026-08-22)
 
 The 2026-08-21 table (PythonMonkey default, QuickJS fallback) described a CPython
@@ -141,8 +147,9 @@ and recommenders all come along.
 
 **What we accept.** A drawn chart requires a JavaScript runtime on the caller. The
 library does not return an ECharts option object or a PNG. Headless jobs (Airflow,
-email thumbnails, VLM critique) are not a library compile promise; they wait on the
-rasterisation decision. We do not control the compiler's internals — when Flint
+email thumbnails, VLM critique) are not a library compile promise; as of 2026-08-23 they
+are served — where they are served at all — by the optional review rasteriser of ADR-0003,
+never by the compile path. We do not control the compiler's internals — when Flint
 changes how axis titles are placed, client output changes with it.
 
 **What this obliges us to build.** A pinned-fixture CI job that re-runs all 705 cases
@@ -245,4 +252,5 @@ next client compiles.
 - ADR-0002 — the assembler argument *is* `input`; `x_chartagent` is the sibling Flint
   ignores.
 - How the matching Flint JS is distributed — packaging ticket, not this ADR.
-- Server-side PNG / VLM — rasterisation ticket; do not assume an engine in CPython.
+- ADR-0003 — server-side PNG / VLM: a browser running our pinned harness, optional extra,
+  review gate only. Settled 2026-08-23; there is no engine in CPython to assume.
