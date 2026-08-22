@@ -47,10 +47,27 @@ for (const [name, exportName] of Object.entries(BACKENDS)) {
   }
   const charts = {};
   for (const d of defs) {
+    // The vocabulary lives in TWO arrays, not one. encodingActions carries
+    // colorScheme and sort, with a `control` block of the same shape as a
+    // ChartPropertyDef. Reading only properties[] under-reports by 21 entries
+    // and wrongly makes Heatmap.colorScheme look undeclared.
+    const actions = (d.encodingActions ?? []).map((a) => ({
+      key: a.key,
+      label: a.label ?? null,
+      type: a.control?.type ?? null,
+      defaultValue: undefined,
+      min: a.control?.min,
+      max: a.control?.max,
+      step: a.control?.step,
+      options: a.control?.options,
+      check: a.isApplicable,
+      source: "encodingActions",
+      dependencies: a.dependencies ?? [],
+    }));
     charts[d.chart] = {
       channels: d.channels ?? [],
       mark_cognitive_channel: d.markCognitiveChannel ?? null,
-      properties: (d.properties ?? []).map((p) => ({
+      properties: [...(d.properties ?? []), ...actions].map((p) => ({
         key: p.key,
         type: p.type, // continuous | binary | discrete
         label: p.label ?? null,
@@ -62,6 +79,8 @@ for (const [name, exportName] of Object.entries(BACKENDS)) {
         max: p.max ?? null,
         step: p.step ?? null,
         options: p.options ? p.options.map(canonOption) : null,
+        source: p.source ?? "properties",
+        dependencies: p.dependencies ?? [],
         // check() is a JS closure over encodings, channelSemantics AND the data
         // rows. It cannot cross into Python. We record only that it exists.
         data_dependent: Boolean(p.check),

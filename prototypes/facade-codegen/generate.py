@@ -6,9 +6,9 @@ Two modes, because the probe found properties[] is a UI-affordance registry, not
 an input schema (see README "What properties[] actually is"):
 
   strict    what ADR-0002 Decision 7 assumed: extra='forbid', min/max as ge/le.
-            Rejects 4 of the 30 real fixtures. Kept so the cost is visible.
-  advisory  extra='allow', min/max as json_schema_extra. Admits all 30, still
-            rejects invented enum values and wrong types.
+  advisory  extra='allow', min/max as metadata. Catches no misspelled key.
+  keys      extra='forbid', min/max as metadata. The recommended split: Flint's
+            declared key set is authoritative, its min/max are only UI bounds.
 
 No hand-written vocabulary anywhere in this file: every literal comes from the
 bundle (ADR-0002 Decision 7). One model per (backend, chart type).
@@ -77,10 +77,11 @@ def annotation(prop: dict, strict: bool) -> tuple[str, str]:
 
 def main() -> None:
     vocab = json.load(open(sys.argv[1]))
-    mode = sys.argv[3] if len(sys.argv) > 3 else "advisory"
-    if mode not in ("strict", "advisory"):
-        raise SystemExit("mode must be strict or advisory")
-    strict = mode == "strict"
+    mode = sys.argv[3] if len(sys.argv) > 3 else "keys"
+    if mode not in ("strict", "advisory", "keys"):
+        raise SystemExit("mode must be strict, advisory or keys")
+    strict = mode == "strict"                 # forbid unknown keys AND enforce min/max
+    forbid_unknown = mode in ("strict", "keys")  # `keys` forbids names, not ranges
     out = []
     all_charts = sorted({c for b in vocab["backends"].values() for c in b})
     out.append(HEADER.format(
@@ -97,7 +98,7 @@ def main() -> None:
             cls = f"{ident(backend).title()}{ident(chart)}Properties"
             out.append(f"class {cls}(BaseModel):")
             out.append(f'    """{backend} / {chart}. channels: {", ".join(spec["channels"]) or "none"}"""')
-            extra = "forbid" if strict else "allow"
+            extra = "forbid" if forbid_unknown else "allow"
             out.append(f"    model_config = ConfigDict(extra={extra!r})")
             if not spec["properties"]:
                 out.append("    pass")

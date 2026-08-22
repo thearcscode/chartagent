@@ -3,10 +3,10 @@
 **Question.** Can the typed Python façade over Flint's frame be *generated from the
 pinned bundle*, or can it only be hand-written?
 
-**Answer: generated — yes, from the IIFE, no TypeScript source needed.** But the
-metadata it generates from is a **UI-affordance registry, not an input schema**, so
-ADR-0002 Decision 7 stands on *what* is generated and needs amending on *how strictly
-the result may validate*.
+**Answer: generated — yes, from the IIFE, no TypeScript source needed.** ADR-0002
+Decision 7 stands. Two specifics in it need correcting: the chart-type vocabulary is
+**per backend and 48 wide, not a flat 33**, and Flint's declared `min`/`max` are
+**slider bounds, not validation bounds**.
 
 This is a throwaway probe. It reuses `../flint-embed/build/flint.iife.js` and its
 fixture corpus; it does not rewrite the loading logic.
@@ -21,58 +21,78 @@ All of it, at runtime, from the IIFE — nothing needed from `src/` or the `.d.t
 
 | Export | Gives |
 | --- | --- |
-| `vlAllTemplateDefs` and its `ec` / `cjs` / `pl` / `excel` siblings | per-backend chart types, each with `channels`, `markCognitiveChannel`, `properties` |
+| `vlAllTemplateDefs` and its `ec` / `cjs` / `pl` / `excel` siblings | per-backend chart types, each with `channels`, `markCognitiveChannel`, `properties`, `encodingActions` |
 | `def.properties[]` | `ChartPropertyDef`: `key`, `type`, `label`, `defaultValue`, `min`/`max`/`step`, `options`, `check` |
+| `def.encodingActions[]` | `EncodingActionDef`: `key`, `label`, `dependencies`, `isApplicable`, and a `control` block of the same shape. **The second half of the vocabulary** — 21 entries, keys `colorScheme` and `sort` |
 | `channels`, `channelGroups` | the 26 channels and their 5 groups |
 | `SemanticTypes` | 44 semantic type names |
 | `THEME_PRESETS` | 10 preset names |
 
 At flint-chart@0.5.1 that is **48 distinct chart types across 5 backends** (36 vl,
-37 ec, 22 cjs, 38 pl, 18 excel; union 48, intersection 11) and **296 properties**,
-generating **151 Pydantic models**.
+37 ec, 22 cjs, 38 pl, 18 excel; union 48, intersection 11) and **317 declared entries**
+— 296 from `properties[]` plus 21 from `encodingActions[]` — generating **151 Pydantic
+models**.
+
+> ⚠️ **Read both arrays.** An earlier pass of this probe read only `properties[]` and
+> concluded Flint "under-declares" because `Heatmap.colorScheme` was missing. It is not
+> missing; it lives in `encodingActions`. Reading one array under-reports by 21 entries
+> and produces a wrong verdict on how strict the façade may be.
 
 > ⚠️ **ADR-0002 Decision 7 says "33 strings".** The pinned bundle ships 48, and there
 > is no single flat list — the vocabulary is per backend. A `Literal` of 33 cannot be
 > right for any backend. Decision 7 needs the number and the shape corrected.
 
-## What `properties[]` actually is
+## How strict may the façade be?
 
-The probe's real finding. `properties[]` describes **a control panel**, not an accepted
-input. Four pieces of evidence, all from the corpus and the pinned bundle:
+Only one of the two strictness knobs turns out to cost anything.
 
-1. **It under-declares.** `Heatmap.colorScheme` appears in **no** version's
-   `properties[]`, yet a fixture sets it and the compiled Vega-Lite spec *changes*.
-   Flint honours properties it does not advertise.
-2. **`min`/`max` are slider bounds, not validation bounds.** `Bar Table.maxRows`
-   declares `min: 5`, but the corpus uses `maxRows: 0` as a live "no limit" sentinel
-   and Flint honours it — the compiled spec differs from both `5` and `20`.
-3. **Removed keys are silently ignored, never rejected.** `Rose Chart.innerRadius`
-   (dropped after 0.2.1) and `Strip Plot.jitterWidth` still sit in the corpus; Flint
-   accepts both and does nothing with them.
-4. **Flint never rejects an unknown key at all.** So "the façade admits exactly what
-   the bundle admits" is unachievable as literally stated: Flint's admit-set is
-   *everything*. The useful target is narrower — admit everything Flint honours, and
-   still catch what Flint would silently swallow.
+**Unknown keys — forbid them. It is free.** Once `encodingActions` is read, every key
+the corpus uses *and Flint honours* is declared. The only two undeclared keys are
+`Rose Chart.innerRadius` (removed in 0.5.1) and `Strip Plot.jitterWidth`, and the probe
+measured both: **neither changes the compiled output**. Flint accepts and ignores them.
+Rejecting them loses no capability — it reports corpus drift.
 
-### The two modes, so the trade-off is priced
+**`min`/`max` — do not enforce them. They are slider bounds.** `Bar Table.maxRows`
+declares `min: 5`, yet the corpus uses `maxRows: 0` as a live "no limit" sentinel and
+the compiled spec differs from both `5` and `20`.
 
-`generate.py` emits both. The tests run both.
+`generate.py` emits three modes so the split is visible rather than argued:
 
-| | `strict` (what Decision 7 assumed) | `advisory` (what the evidence supports) |
+| | unknown keys | `min`/`max` | real fixtures admitted | catches `logScale` typo |
+| --- | --- | --- | --- | --- |
+| `strict` | forbid | `ge`/`le` | 27 / 30 | yes |
+| **`keys`** ← recommended | **forbid** | **metadata** | **28 / 30** | **yes** |
+| `advisory` | allow | metadata | 30 / 30 | **no** |
+
+`keys` loses only the two drifted fixtures. `advisory` admits everything, including
+every misspelling, which makes it no safer than passing a bare `dict` to Flint.
+
+### Why a misspelling matters at all
+
+Flint never raises on an unknown key — it ignores it. Measured on a real Scatter Plot
+fixture, with `logScale_y` the correct name:
+
+| written into `chart_spec` | Flint raises | compiled spec changes |
 | --- | --- | --- |
-| unknown keys | `extra='forbid'` | `extra='allow'` |
-| `min`/`max` | `ge=` / `le=` | `json_schema_extra` |
-| real fixtures admitted | **26 / 30** | **30 / 30** |
-| invented enum value | rejected | rejected |
-| wrong type | rejected | rejected |
+| `logScale_y` | no | **yes** |
+| `logScale` | no | no |
+| `logscale_y` | no | no |
+| `logScaleY` | no | no |
 
-Strict rejects four fixtures Flint compiles happily. Advisory keeps the two checks
-Flint itself lacks — enum membership and type — which is the whole value the façade
-adds over a bare `dict`.
+A wrong name produces a chart that silently ignores the instruction, with no error
+anywhere in the library, the client or the logs. **This is not primarily a planner
+risk** — a planner handed the generated schema as a constrained-output contract cannot
+emit a bad name. It is a risk for the paths with no schema in front of them: a stored
+input frame replayed on **zero-LLM refresh** after a Flint pin bump, a direct caller of
+the public API, and the hosted product's spec editor.
+
+`Rose Chart.innerRadius` is that failure, already in the corpus: it was valid at 0.2.1,
+Flint removed it, and a stored frame using it now compiles to a chart quietly missing
+its inner radius.
 
 ## The residue that cannot be generated
 
-- **`check(ctx)` — 140 of 296 properties (47%).** A JS closure over `ctx.encodings`,
+- **`check(ctx)` / `isApplicable(ctx)` — 161 of 317 entries (51%).** A JS closure over `ctx.encodings`,
   `ctx.channelSemantics` **and the data rows** (the `logScale` checks iterate rows
   looking for non-positives). It cannot cross into Python, and it should not try:
   applicability is a *client* concern, and since ADR-0001's amendment the client is
@@ -80,6 +100,8 @@ adds over a bare `dict`.
 - **Required-ness.** There is no `required` flag anywhere in the metadata — the field
   set is `check, defaultValue, key, label, max, min, options, step, type`. Every
   property is optional. Nothing to derive, nothing to hand-write.
+- **`encodingActions.dependencies`** (e.g. `colorScheme` depends on the `color`
+  channel) is extracted but not yet enforced; it is a cross-field rule, not a type.
 - **The frame envelope** (`data`, `semantic_types`, `chart_spec`, `options`,
   `theme_spec`) is not in the runtime metadata. It is 5 keys, stable across 0.2.1 to
   0.5.1, and is the one part worth hand-writing.
@@ -115,6 +137,9 @@ the exact silent-widening case, caught.
 
 ## Gotchas found the hard way
 
+- **The vocabulary lives in two arrays**, `properties` and `encodingActions`. Reading
+  one is the single easiest way to get this wrong, and it produces a confident,
+  wrong answer about how strict the façade may be.
 - **The fixture corpus and the bundle are pinned independently, and have drifted.**
   `FIXTURE_COMMIT=34ef451` still exercises `Rose Chart.innerRadius`, which
   flint-chart@0.5.1 removed. Any CI job asserting façade-vs-corpus needs the two pins
@@ -138,6 +163,6 @@ the exact silent-widening case, caught.
 | | |
 | --- | --- |
 | `extract.mjs` | bundle → `vocab.json`. Node, build time only. |
-| `generate.py` | `vocab.json` → Pydantic models, `strict` or `advisory`. |
+| `generate.py` | `vocab.json` → Pydantic models: `keys` (recommended), `strict`, `advisory`. |
 | `test_facade.py` | the assertion, both modes, against the 30 real fixtures. |
 | `check_bump.py` | the fail-loud narrowing gate between two vocabularies. |

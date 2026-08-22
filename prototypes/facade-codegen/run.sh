@@ -22,7 +22,8 @@ echo "==> extracting the vocabulary from each pinned bundle"
 node extract.mjs "$EMBED/flint.iife.js"        build/vocab-0.5.1.json 0.5.1
 node extract.mjs "$EMBED/old/flint-0.2.1.iife.js" build/vocab-0.2.1.json 0.2.1
 
-echo "==> generating both facade modes"
+echo "==> generating all three facade modes"
+./.venv/bin/python generate.py build/vocab-0.5.1.json build/facade_keys.py     keys
 ./.venv/bin/python generate.py build/vocab-0.5.1.json build/facade_strict.py   strict
 ./.venv/bin/python generate.py build/vocab-0.5.1.json build/facade_advisory.py advisory
 

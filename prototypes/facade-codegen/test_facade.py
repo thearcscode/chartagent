@@ -30,7 +30,8 @@ def _load(path):
 
 STRICT = _load(HERE / "build" / "facade_strict.py")
 ADVISORY = _load(HERE / "build" / "facade_advisory.py")
-facade = ADVISORY  # the mode the evidence supports; STRICT is kept to price it
+KEYS = _load(HERE / "build" / "facade_keys.py")
+facade = KEYS  # the mode the evidence supports; the other two price the extremes
 
 
 def model_for(chart_type, backend="Vegalite", mod=None):
@@ -56,10 +57,23 @@ def test_corpus_is_the_expected_size():
     assert len(CASES) == 30, f"expected 30 fixtures with chartProperties, found {len(CASES)}"
 
 
+# These two fixtures set keys the pinned 0.5.1 bundle does not declare and
+# does not honour — the corpus pin (34ef451) is older than the Flint pin.
+# They are drift, not a facade defect. See the #24 hazard note.
+CORPUS_DRIFT = {
+    "rose_chart__04__donut_rose_12_months_innerradius",   # innerRadius, removed in 0.5.1
+    "strip_plot__02__no_jitter_aligned_strip",            # jitterWidth, never declared
+}
+
+
 @pytest.mark.parametrize("name,chart_type,props", CASES, ids=[c[0] for c in CASES])
 def test_admits_every_real_fixture(name, chart_type, props):
     model = model_for(chart_type)
     assert model is not None, f"no generated model for chartType {chart_type!r}"
+    if name in CORPUS_DRIFT:
+        with pytest.raises(ValidationError):
+            model.model_validate(props)
+        pytest.skip("corpus pin predates the Flint pin — key is dead at 0.5.1")
     model.model_validate(props)
 
 
@@ -68,30 +82,56 @@ def test_every_chart_type_in_the_bundle_has_a_model():
         assert model_for(chart) is not None, f"vegalite/{chart} has no model"
 
 
-def test_strict_mode_rejects_four_real_fixtures():
-    """The price of extra='forbid' + min/max, measured rather than assumed.
-
-    properties[] is a UI-affordance registry: it under-declares (Heatmap.colorScheme
-    is honoured but undeclared), its min/max are slider bounds (Bar Table.maxRows
-    declares min=5, yet 0 is a live sentinel), and removed keys linger in the corpus.
-    """
-    rejected = []
+def _rejected_by(mod):
+    out = []
     for name, chart_type, props in CASES:
-        model = model_for(chart_type, mod=STRICT)
         try:
-            model.model_validate(props)
+            model_for(chart_type, mod=mod).model_validate(props)
         except ValidationError:
-            rejected.append((name, props))
-    assert len(rejected) == 4, [r[0] for r in rejected]
+            out.append(name)
+    return out
 
 
-def test_advisory_mode_admits_every_fixture_but_still_rejects_invented_enums():
-    # Flint itself never rejects an unknown key — it silently ignores it. So a
-    # facade cannot be "exactly as permissive as Flint" without admitting
-    # everything. Advisory keeps the enum and type checks, which Flint lacks.
-    model_for("Heatmap").model_validate({"colorScheme": "viridis"})  # undeclared, honoured
+def test_the_three_modes_are_priced_against_the_corpus():
+    """Where each mode's strictness actually costs something.
+
+    strict    27/30 — also enforces min/max, which kills the maxRows sentinel
+    keys      28/30 — forbids unknown NAMES only; the 2 losses are stale corpus
+    advisory  30/30 — forbids nothing, so it catches no misspelling either
+    """
+    assert len(_rejected_by(STRICT)) == 3
+    assert len(_rejected_by(ADVISORY)) == 0
+    assert _rejected_by(KEYS) == [
+        "rose_chart__04__donut_rose_12_months_innerradius",   # removed in 0.5.1
+        "strip_plot__02__no_jitter_aligned_strip",            # never declared
+    ]
+
+
+def test_the_two_keys_mode_rejects_are_both_ignored_by_flint_anyway():
+    # Neither key changes the compiled output at the pin (measured in the
+    # probe), so rejecting them loses no capability — it reports corpus drift.
+    # This is the #24 pin-drift hazard, not a facade design cost.
+    for chart, key in [("Rose Chart", "innerRadius"), ("Strip Plot", "jitterWidth")]:
+        vocab_keys = {p["key"] for p in VOCAB["backends"]["vegalite"][chart]["properties"]}
+        assert key not in vocab_keys
+
+
+def test_encoding_actions_are_part_of_the_vocabulary():
+    # The vocabulary lives in TWO arrays. Reading only properties[] misses 21
+    # entries and makes colorScheme look undeclared when it is not.
+    model_for("Heatmap").model_validate({"colorScheme": "viridis"})
     with pytest.raises(ValidationError):
-        model_for("Stacked Bar Chart").model_validate({"stackMode": "layered"})
+        model_for("Heatmap").model_validate({"colorScheme": "not-a-scheme"})
+    from_actions = [p for c in VOCAB["backends"]["vegalite"].values()
+                    for p in c["properties"] if p["source"] == "encodingActions"]
+    assert {p["key"] for p in from_actions} == {"colorScheme", "sort"}
+
+
+def test_keys_mode_catches_a_misspelled_property():
+    model_for("Scatter Plot").model_validate({"logScale_y": True})
+    for typo in ("logScale", "logscale_y", "logScaleY"):
+        with pytest.raises(ValidationError):
+            model_for("Scatter Plot").model_validate({typo: True})
 
 
 def test_rejects_an_invented_enum_value():
@@ -106,10 +146,11 @@ def test_wrong_type_is_still_rejected_in_advisory_mode():
         model_for("Scatter Plot").model_validate({"opacity": "very"})
 
 
-def test_declared_bounds_are_advisory_not_enforced():
-    model = model_for("Bar Table")
-    model.model_validate({"maxRows": 0})   # below declared min=5, honoured by Flint
-    assert model_for("Bar Table", mod=STRICT) is not None
+def test_declared_bounds_are_ui_bounds_not_validation_bounds():
+    # min/max drive a slider. Bar Table.maxRows declares min=5, but 0 is a live
+    # "no limit" sentinel that Flint honours — the compiled spec differs from
+    # both 5 and 20. Only `strict` mode pretends the bound is a rule.
+    model_for("Bar Table").model_validate({"maxRows": 0})
     with pytest.raises(ValidationError):
         model_for("Bar Table", mod=STRICT).model_validate({"maxRows": 0})
 
@@ -120,7 +161,7 @@ def test_data_dependent_properties_are_not_enforced_here():
     # leave applicability to the client where Flint already runs (ADR-0001).
     model = model_for("Scatter Plot")
     model.model_validate({"logScale_x": True})  # inapplicable without a quantitative x
-    n = sum(p["data_dependent"] for c in VOCAB["backends"]["vegalite"].values()
+    n = sum(bool(p["data_dependent"]) for c in VOCAB["backends"]["vegalite"].values()
             for p in c["properties"])
     total = sum(len(c["properties"]) for c in VOCAB["backends"]["vegalite"].values())
     assert n / total > 0.3, "if check() coverage collapsed, revisit the residue argument"
