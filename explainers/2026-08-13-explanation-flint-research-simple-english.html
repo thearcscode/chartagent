@@ -226,7 +226,7 @@ small.</p>
   <span class="tag">About the glossary</span>
   <p>The repository has no <code>CONTEXT.md</code> file yet, but <code>docs/agents/domain.md</code>
   says that this file must hold the project terms. The glossary below comes from
-  <code>chartagents-prd.md</code> and from <code>prototypes/chartspec-v1/chartspec_draft.py</code>.
+  <code>chartagent-prd.md</code> and from <code>prototypes/chartspec-v1/chartspec_draft.py</code>.
   Move it into <code>CONTEXT.md</code> when someone makes that file.</p>
 </div>
 
@@ -236,7 +236,7 @@ small.</p>
 <table>
   <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
   <tbody>
-    <tr><td><strong>chartagents</strong></td><td>The Python library. It gets data and an instruction, and it makes a chart.</td></tr>
+    <tr><td><strong>chartagent</strong></td><td>The Python library. It gets data and an instruction, and it makes a chart.</td></tr>
     <tr><td><strong>profiler</strong></td><td>The component that reads the data with DuckDB and measures it.</td></tr>
     <tr><td><strong><code>profile.json</code></strong></td><td>The file that the profiler writes. It holds the schema, the cardinality, the null rates, the minimum and maximum values, and some sample rows.</td></tr>
     <tr><td><strong>planner</strong></td><td>The component that calls the language model.</td></tr>
@@ -269,7 +269,7 @@ small.</p>
   <ol>
     <li><a href="#background">Background — the rail, the ChartSpec, and the prompt</a>
       <ol>
-        <li><a href="#what-chartagents">What chartagents must become</a></li>
+        <li><a href="#what-chartagent">What chartagent must become</a></li>
         <li><a href="#what-chartspec">What the ChartSpec is</a></li>
         <li><a href="#design-knowledge">Where the design knowledge comes from today</a></li>
         <li><a href="#flint-arrived">What arrived from outside</a></li>
@@ -312,14 +312,14 @@ pipeline. If this repository is new to you, four facts make the rest of the page
   chart is also a good chart, and so that the answer does not depend on a prompt?</p>
 </div>
 
-<h3 id="what-chartagents">1.1 What chartagents must become</h3>
+<h3 id="what-chartagent">1.1 What chartagent must become</h3>
 
-<p>chartagents is a Python library. It gets a data source and an instruction, for example "monthly
+<p>chartagent is a Python library. It gets a data source and an instruction, for example "monthly
 revenue by region, last two years". It then makes a finished chart. It operates behind an API. It
 does not operate in a chat window. A person embeds it in their own product. They do not chat with
 it.</p>
 
-<p>The product document, <code>chartagents-prd.md</code>, has six pillars. Three of them apply
+<p>The product document, <code>chartagent-prd.md</code>, has six pillars. Three of them apply
 here. Read each one as a constraint on Flint, not only as a product sentence:</p>
 
 <ul class="tight">
@@ -328,7 +328,7 @@ here. Read each one as a constraint on Flint, not only as a product sentence:</p
   <code>profile.json</code> file. That file holds the schema, the data types, the cardinality, the
   null rates, the minimum and maximum values, the percentiles, and some sample rows.
   <em>The language model gets this metadata only.</em> Section 3.6 uses this. Flint in a chat must
-  guess many of those facts. chartagents can measure them.</li>
+  guess many of those facts. chartagent can measure them.</li>
   <li><strong>Pillar 3 — reliability by design.</strong> The deterministic rail does most requests.
   The language model emits a ChartSpec, the system validates it, and trusted code draws the chart.
   There is no generated code on this path. A request that the grammar cannot express goes to the
@@ -346,7 +346,7 @@ contract (ECharts JSON, Plotly, PNG, SVG, HTML). Pillar 4 is the review gate. Pi
 custom-code rail. Option B in section 3.7 touches pillar 1. The rest of this page is about pillars
 2, 3, and 6.</p>
 
-<div class="flow" role="img" aria-label="The chartagents pipeline: data source, profiler, planner, rail router, renderer, review gate, artifacts.">
+<div class="flow" role="img" aria-label="The chartagent pipeline: data source, profiler, planner, rail router, renderer, review gate, artifacts.">
   <div class="stage"><span class="label">data source</span>CSV · Parquet · warehouse connection · result set in memory</div>
   <div class="arrow">↓ the profiler reads the data in place</div>
   <div class="stage"><span class="label">profiler (DuckDB)</span><code>profile.json</code> — schema, cardinality, minimum and maximum, sample rows</div>
@@ -359,7 +359,7 @@ custom-code rail. Option B in section 3.7 touches pillar 1. The rest of this pag
   <div class="arrow">↓</div>
   <div class="stage"><span class="label">artifacts</span>ChartSpec · ECharts JSON · PNG or SVG · HTML · review report</div>
 </div>
-<p class="caption">Figure 1. The pipeline from <code>chartagents-prd.md</code> §7.2. Pull
+<p class="caption">Figure 1. The pipeline from <code>chartagent-prd.md</code> §7.2. Pull
 request&nbsp;#13 is about the fourth box. That box changes a valid ChartSpec into a good chart, and
 nobody has built it yet. Flint is a candidate for that box. It is not a candidate for the boxes
 above it.</p>
@@ -494,7 +494,7 @@ are long, weak, and easy to get wrong, and language models are bad at these spec
 state the <em>meaning</em>, and a compiler must compute the low-level settings.</p>
 
 <p>That premise is the same bet as pillar 3. The model fills a small form. Trusted code does the
-rest. Flint is the form-plus-compiler for "draw this spec well". chartagents is the system around
+rest. Flint is the form-plus-compiler for "draw this spec well". chartagent is the system around
 that step.</p>
 
 <p>A person found Flint at the same time as the team started to freeze the ChartSpec grammar. That is
@@ -508,8 +508,8 @@ taken. Section 3 lists those decisions as Option A, Option B, and Option C.</p>
 
 <div class="callout">
   <span class="tag">Agree to this before you continue</span>
-  <p>Flint is not a competitor to chartagents. It occupies the layer under the deterministic rail,
-  the layer that Figure 1 shows as unbuilt. The unique selling point of chartagents was never the
+  <p>Flint is not a competitor to chartagent. It occupies the layer under the deterministic rail,
+  the layer that Figure 1 shows as unbuilt. The unique selling point of chartagent was never the
   renderer.</p>
 </div>
 
@@ -714,7 +714,7 @@ channel. The inputs are semantic type <em>and</em> channel <em>and</em> mark.</p
   <li><strong>Claim 1</strong> (sections 2.1 to 2.3). Meaning belongs in the spec. Polish is computed
   by code.</li>
   <li><strong>Claim 2</strong> (this section). Flint is that computation layer. It is not a
-  chartagents replacement.</li>
+  chartagent replacement.</li>
 </ul>
 
 <p>Flint compiles a spec into a good native chart. That is the box in Figure 1 that the team has
@@ -728,16 +728,16 @@ product document lists that person as an explicit non-goal.</p>
   <tbody>
     <tr><td>Cortex Analyst</td><td>Which data?</td></tr>
     <tr><td>Flint</td><td>I have a spec. Draw it well.</td></tr>
-    <tr><td>chartagents</td><td>I have data and an instruction. Select the spec, guarantee its quality, and refresh it for ever.</td></tr>
+    <tr><td>chartagent</td><td>I have data and an instruction. Select the spec, guarantee its quality, and refresh it for ever.</td></tr>
   </tbody>
 </table>
 </div>
 
 <div class="callout good">
   <span class="tag">The model in one line</span>
-  <p>Flint stops at the exact point where the deterministic rail of chartagents starts to render. The
+  <p>Flint stops at the exact point where the deterministic rail of chartagent starts to render. The
   document states it like this. Cortex Analyst answers "<em>which data</em>". Flint answers
-  "<em>I have a spec, draw it well</em>". chartagents answers "<em>I have data and an instruction,
+  "<em>I have a spec, draw it well</em>". chartagent answers "<em>I have data and an instruction,
   select the spec, guarantee its quality, and refresh it for ever</em>".</p>
 </div>
 
@@ -745,7 +745,7 @@ product document lists that person as an explicit non-goal.</p>
 <code>quantitative</code> in storage and <code>Revenue</code> in meaning. Today the model must also
 invent <code>zero</code> and <code>$,.2s</code>. Tomorrow it only has to say <code>Revenue</code>,
 and a resolver fills the rest, walking from specific types down to today's four-way fallback. Flint
-is that resolver-shaped layer. chartagents is everything around it.</p>
+is that resolver-shaped layer. chartagent is everything around it.</p>
 
 <h2 id="code">3. The proposals, in pipeline sequence</h2>
 
@@ -990,15 +990,15 @@ already reads <code>profile.json</code>.</p>
 
 <p>This part of the document is an argument, not a summary, so it needs a precise statement. Flint
 operates in a chat. It asks the model to select a semantic type, and it uses distribution methods for
-the gaps. chartagents runs DuckDB over the data <em>before</em> it calls the model. Pillar 2 already
+the gaps. chartagent runs DuckDB over the data <em>before</em> it calls the model. Pillar 2 already
 paid for that profile. Option A can spend it a second time.</p>
 
-<div class="flow" role="img" aria-label="Comparison: Flint infers semantic types, chartagents can compute many of the same signals from its DuckDB profile.">
+<div class="flow" role="img" aria-label="Comparison: Flint infers semantic types, chartagent can compute many of the same signals from its DuckDB profile.">
   <div class="stage"><span class="label">Flint in a chat</span>the model guesses the type → distribution methods fill the gaps → compile</div>
-  <div class="stage new"><span class="label">chartagents</span>the DuckDB profile (cardinality, minimum and maximum, fraction or whole number, monotonic dates, currency-like ranges) → <em>seeds and checks</em> the guess of the model → resolver → compile</div>
+  <div class="stage new"><span class="label">chartagent</span>the DuckDB profile (cardinality, minimum and maximum, fraction or whole number, monotonic dates, currency-like ranges) → <em>seeds and checks</em> the guess of the model → resolver → compile</div>
 </div>
 <p class="caption">Figure 5. One resolver, better inputs. The claim of the document is parity and one
-addition. chartagents can measure the signals that Flint must guess. It can also use them to find a
+addition. chartagent can measure the signals that Flint must guess. It can also use them to find a
 column that the model typed incorrectly.</p>
 
 <p>A concrete check. The model says <code>semantic: "Date"</code> on a column. The profile says the
@@ -1067,7 +1067,7 @@ heatmap. Overlays and the custom-code <code>escape</code> marker wait.</p>
 
 <p>The second document exists because of an uncomfortable fact in its own header. Flint became
 visible late, and the team nearly missed it. So the search covers six categories. None of these
-systems occupy the full chartagents position (embeddable Python API, data in infrastructure,
+systems occupy the full chartagent position (embeddable Python API, data in infrastructure,
 deterministic rail first, review gate, zero-token refresh). Several own a piece well enough to steal
 from, or to be measured against.</p>
 
@@ -1076,15 +1076,15 @@ depend on":</p>
 
 <div class="cards">
   <div class="card"><b>Draco / Draco 2 (UW)</b><em>design knowledge as constraints</em>
-    <p style="margin:.35rem 0 0">It states design guidelines as <em>hard</em> constraints, which remove incorrect encodings, and as <em>soft</em> constraints with learned weights, which put the other encodings in sequence. The document maps these onto two parts of chartagents.</p></div>
+    <p style="margin:.35rem 0 0">It states design guidelines as <em>hard</em> constraints, which remove incorrect encodings, and as <em>soft</em> constraints with learned weights, which put the other encodings in sequence. The document maps these onto two parts of chartagent.</p></div>
   <div class="card"><b>chat2plot</b><em>Python · MIT</em>
     <p style="margin:.35rem 0 0">The closest shipped precedent for the central bet: the language model emits a validated Pydantic or JSON spec, and not code. Its list of failures is a free set of valid-but-wrong ChartSpecs to test the validators against.</p></div>
   <div class="card"><b>LIDA (Microsoft)</b><em>agent pipeline, code generation</em>
     <p style="margin:.35rem 0 0">Summarize → goal → generate code → self-evaluate → repair. It is the good version of the design that the product document argues against. A reviewer <em>will</em> ask "how is this different from LIDA?", and the product document does not name it.</p></div>
   <div class="card"><b>Vizro-AI → Vizro-MCP</b><em>McKinsey</em>
-    <p style="margin:.35rem 0 0">The team stopped AI dashboard generation and moved back to charts only, plus an MCP server. Read this as a signal about scope discipline. It is also evidence that the field went to MCP first, and that chartagents went to an API first.</p></div>
+    <p style="margin:.35rem 0 0">The team stopped AI dashboard generation and moved back to charts only, plus an MCP server. Read this as a signal about scope discipline. It is also evidence that the field went to MCP first, and that chartagent went to an API first.</p></div>
   <div class="card"><b>Evidence · Rill · Malloy</b><em>BI as code</em>
-    <p style="margin:.35rem 0 0">Durable specs with versions, and a cheap refresh. This is the pattern of pillar 6, and the market already validated it. State the difference clearly: a person writes their specs, and an agent writes the chartagents specs and the review gate checks them.</p></div>
+    <p style="margin:.35rem 0 0">Durable specs with versions, and a cheap refresh. This is the pattern of pillar 6, and the market already validated it. State the difference clearly: a person writes their specs, and an agent writes the chartagent specs and the review gate checks them.</p></div>
   <div class="card"><b>Spec Score · Vision Score</b><em>evaluation</em>
     <p style="margin:.35rem 0 0">Named metrics for the benchmark in §11. Spec Score needs no judge and is deterministic. It is a structural answer to the self-preference risk of an LLM judge, which the product document already lists.</p></div>
 </div>
@@ -1129,15 +1129,15 @@ that still draw the wrong chart. That is the input the phase-1 and phase-2 valid
 
 <p><strong>LIDA</strong> is the whole agent pipeline, with a repair loop. It generates library code.
 That is the design that pillar 3 rejects. The difference to state in the product document:
-chartagents runs a deterministic rail first, and only escapes to generated code for the minority.
+chartagent runs a deterministic rail first, and only escapes to generated code for the minority.
 A reviewer will ask "how is this not just LIDA?". The product document does not name LIDA today.
 That is a gap in positioning, not a gap in the architecture.</p>
 
 <h4>Vizro and BI-as-code are signals, not dependencies</h4>
 
 <p>Vizro stopped AI dashboard generation. A funded team narrowed to charts plus MCP. That supports
-the chartagents scope (charts, not dashboards). It also shows that the field went MCP-first.
-chartagents went API-first on purpose. The product document should now argue that choice, because
+the chartagent scope (charts, not dashboards). It also shows that the field went MCP-first.
+chartagent went API-first on purpose. The product document should now argue that choice, because
 the rest of the field went the other way.</p>
 
 <p>Evidence, Rill, and Malloy prove that the market already believes in durable specs and cheap
@@ -1185,8 +1185,8 @@ document, and this page repeats it. This includes the 70 or more types, the coun
 five dimensions, the two compiler stages, the Vega-Lite-only preview status of
 <code>flint-py</code>, and the DirectVL benchmark margins. Nobody read an upstream source during the
 work on this page. The caveat in the document about LLM judge scores also applies to the benchmark
-table that it cites. Each statement about chartagents itself comes from a direct read of
-<code>chartagents-prd.md</code> and <code>prototypes/chartspec-v1/chartspec_draft.py</code> at the
+table that it cites. Each statement about chartagent itself comes from a direct read of
+<code>chartagent-prd.md</code> and <code>prototypes/chartspec-v1/chartspec_draft.py</code> at the
 merge commit. The proposed <code>Channel</code> class in §3.1 is a summary of the prose in the
 document. That code is not in the repository.</p>
 
@@ -1200,7 +1200,7 @@ sections above contain each answer. Select an option to see if it is correct.</p
 <p class="footnote" style="margin-top:2.5rem">
 Sources examined: pull request&nbsp;#13 (commits <code>e5af358</code> and <code>2a0b4b9</code>),
 <code>docs/research/flint-chart-leverage.md</code>, <code>docs/research/adjacent-landscape.md</code>,
-<code>chartagents-prd.md</code> §§2, 7.2–7.9, 8,
+<code>chartagent-prd.md</code> §§2, 7.2–7.9, 8,
 <code>prototypes/chartspec-v1/chartspec_draft.py</code>, and <code>docs/agents/domain.md</code>.
 </p>
 
@@ -1300,7 +1300,7 @@ Sources examined: pull request&nbsp;#13 (commits <code>e5af358</code> and <code>
       correct: 2
     },
     {
-      q: "The landscape document says that Draco is prior art for two parts of chartagents at the same time. Which two parts?",
+      q: "The landscape document says that Draco is prior art for two parts of chartagent at the same time. Which two parts?",
       options: [
         {
           t: "The operation menu of the transform block, and its compilation to the SQL dialect of the source.",

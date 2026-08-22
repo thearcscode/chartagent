@@ -1,6 +1,6 @@
 # Research: Minimum Python floor + Arrow as internal interchange format
 
-Resolves the two open **§13 [Engineering, non-blocking]** questions in `chartagents-prd.md`
+Resolves the two open **§13 [Engineering, non-blocking]** questions in `chartagent-prd.md`
 (GitHub issue #8). This is AFK research: it surfaces the facts and gives a recommendation with
 tradeoffs. The decision itself graduates from these facts.
 

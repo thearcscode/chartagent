@@ -1,4 +1,4 @@
-# Add UI mockups for chartagents (`design/`)
+# Add UI mockups for chartagent (`design/`)
 
 ## What this is
 
@@ -17,16 +17,16 @@ Open any of the `.dc.html` files in `design/` directly in a browser. No install,
 no build step. `support.js` must stay alongside them. Charts render live via
 ECharts from a CDN.
 
-Start with `design/Chartagents UI.dc.html` — it holds the design system and every
+Start with `design/Chartagent UI.dc.html` — it holds the design system and every
 product screen. `design/README.md` indexes the screens and documents the tokens.
 
 ## Contents
 
-- `design/Chartagents UI.dc.html` — design system plus 11 product screens, grouped
+- `design/Chartagent UI.dc.html` — design system plus 11 product screens, grouped
   into numbered turns with stable ids (`1a`, `3b`, `5c`) for review comments.
-- `design/Chartagents Landing.dc.html` — landing page with an interactive hero,
+- `design/Chartagent Landing.dc.html` — landing page with an interactive hero,
   three product-argument sections, and two auth screens.
-- `design/Chartagents Landing Ideas.dc.html` — the three landing sections in
+- `design/Chartagent Landing Ideas.dc.html` — the three landing sections in
   isolation, kept for reference.
 - `design/README.md` — screen index, token tables, type rationale.
 
@@ -72,5 +72,5 @@ depend on the CDN.
 1. Should `5c` be a fourth tab inside the run inspector, or its own console view?
 2. Light theme currently darkens the accents to hold contrast on paper-white
    surfaces. Worth checking against any brand direction you have in mind.
-3. `Chartagents Landing Ideas.dc.html` is scratch — happy to drop it if you'd
+3. `Chartagent Landing Ideas.dc.html` is scratch — happy to drop it if you'd
    rather the folder stayed minimal.

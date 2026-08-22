@@ -178,7 +178,7 @@
 computer can run. The prototype then shows that one rule in that paragraph is not a grammar rule.</p>
 
 <div class="meta">
-  <div>project &nbsp;&nbsp;chartagents</div>
+  <div>project &nbsp;&nbsp;chartagent</div>
   <div>subject &nbsp;&nbsp;the prototype in <code>prototypes/chartspec-v1/</code></div>
   <div>branch &nbsp;&nbsp;&nbsp;research/python-arrow</div>
   <div>written &nbsp;&nbsp;18 July 2026 · this Simple English version 13 August 2026 · sections 3.1–3.8 expanded 20 August 2026</div>
@@ -197,7 +197,7 @@ computer can run. The prototype then shows that one rule in that paragraph is no
   <span class="tag">About the glossary</span>
   <p>The repository has no <code>CONTEXT.md</code> file yet, but <code>docs/agents/domain.md</code>
   says that this file must hold the project terms. The glossary below comes from
-  <code>chartagents-prd.md</code> and from <code>prototypes/chartspec-v1/chartspec_draft.py</code>.
+  <code>chartagent-prd.md</code> and from <code>prototypes/chartspec-v1/chartspec_draft.py</code>.
   Move it into <code>CONTEXT.md</code> when someone makes that file.</p>
 </div>
 
@@ -207,7 +207,7 @@ computer can run. The prototype then shows that one rule in that paragraph is no
 <table>
   <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
   <tbody>
-    <tr><td><strong>chartagents</strong></td><td>The Python library. It gets data and an instruction, and it makes a chart.</td></tr>
+    <tr><td><strong>chartagent</strong></td><td>The Python library. It gets data and an instruction, and it makes a chart.</td></tr>
     <tr><td><strong>data source</strong></td><td>A CSV file, a Parquet file, a warehouse connection, or a result set in memory.</td></tr>
     <tr><td><strong>profiler</strong></td><td>The component that reads the data with DuckDB and measures it.</td></tr>
     <tr><td><strong><code>profile.json</code></strong></td><td>The file that the profiler writes. It holds the schema, the cardinality, the null rates, the minimum and maximum values, and some sample rows.</td></tr>
@@ -254,7 +254,7 @@ computer can run. The prototype then shows that one rule in that paragraph is no
 
 <h2 id="background">1. Background: why a chart needs a contract</h2>
 
-<p>chartagents is a Python library. It gets a data set and a sentence, for example "monthly revenue
+<p>chartagent is a Python library. It gets a data set and a sentence, for example "monthly revenue
 by region, last two years". It then makes a finished chart.</p>
 
 <p>A language model does part of this work. But a language model is not sufficiently reliable to make
@@ -911,7 +911,7 @@ that tries the rules so that the team can see them fail.</p>
 <p class="footnote" style="margin-top:2.5rem">
 <strong>What this page examined:</strong> the directory <code>prototypes/chartspec-v1/</code>
 (<code>chartspec_draft.py</code>, <code>explore.py</code>, <code>README.md</code>) on branch
-<code>research/python-arrow</code>. Also sections 2, 7 and 8 of <code>chartagents-prd.md</code>, and
+<code>research/python-arrow</code>. Also sections 2, 7 and 8 of <code>chartagent-prd.md</code>, and
 the requirements table in section 9. Also the full output of the harness, before and after the two
 corrections.
 </p>
