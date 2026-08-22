@@ -1,6 +1,6 @@
-# chartagents — UI mockups
+# chartagent — UI mockups
 
-Interactive UI mockups for chartagents, built from `chartagents-prd.md` and
+Interactive UI mockups for chartagent, built from `chartagent-prd.md` and
 `prototypes/chartspec-v1/README.md`. The library ships no UI, so these define the
 surface layer around it: a design system, the five places a chart lifecycle
 becomes visible, and a public landing page.
@@ -13,15 +13,15 @@ via ECharts (CDN), the PRD's default web target.
 
 | File | Contents |
 | --- | --- |
-| `Chartagents UI.dc.html` | The mockup canvas — design system plus every product screen, grouped into numbered turns |
-| `Chartagents Landing.dc.html` | Marketing landing page with interactive hero, plus sign-in and create-account screens |
-| `Chartagents Landing Ideas.dc.html` | Scratch file: the three landing sections in isolation before they were folded into the page |
+| `Chartagent UI.dc.html` | The mockup canvas — design system plus every product screen, grouped into numbered turns |
+| `Chartagent Landing.dc.html` | Marketing landing page with interactive hero, plus sign-in and create-account screens |
+| `Chartagent Landing Ideas.dc.html` | Scratch file: the three landing sections in isolation before they were folded into the page |
 | `support.js` | Runtime required by the three documents |
 
 Every screen supports a light and dark theme, toggled by the moon icon at the top
 right of each turn header (or the app chrome, where a host app would put it).
 
-## Screen index — `Chartagents UI.dc.html`
+## Screen index — `Chartagent UI.dc.html`
 
 Screens are grouped by turn, newest first. Ids are stable and referenced in
 review comments.

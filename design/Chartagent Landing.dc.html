@@ -33,7 +33,7 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
     <div style="max-width:1180px;margin:0 auto;padding:0 32px;height:62px;display:flex;align-items:center;gap:26px">
       <div style="display:flex;align-items:center;gap:9px">
         <span style="width:20px;height:20px;border-radius:5px;background:linear-gradient(140deg,var(--teal),var(--violet))"></span>
-        <span style="font:400 18px 'Instrument Serif',serif;letter-spacing:-.01em;color:var(--ink)">chartagents</span>
+        <span style="font:400 18px 'Instrument Serif',serif;letter-spacing:-.01em;color:var(--ink)">chartagent</span>
       </div>
       <nav style="display:flex;gap:20px;font:400 12.5px 'IBM Plex Sans';color:var(--muted)">
         <span style-hover="color:var(--ink)">Docs</span>
@@ -53,10 +53,10 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
   <section style="max-width:1180px;margin:0 auto;padding:86px 32px 40px">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:26px">
       <span style="font:500 10.5px 'IBM Plex Mono';letter-spacing:.09em;padding:5px 10px;border-radius:20px;border:1px solid var(--border);color:var(--muted)">v1.0 · PYTHON</span>
-      <span style="font:400 11.5px 'IBM Plex Mono';color:var(--faint)">pip install chartagents</span>
+      <span style="font:400 11.5px 'IBM Plex Mono';color:var(--faint)">pip install chartagent</span>
     </div>
     <h1 style="margin:0;max-width:900px;font:400 78px/1.02 'Instrument Serif',serif;letter-spacing:-.028em;color:var(--ink);text-wrap:balance">Charting, as a capability your product owns.</h1>
-    <p style="margin:26px 0 0;max-width:620px;font:400 15px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">Claude gives a person a chart in a chat. chartagents gives your application a charting capability behind an API — natural language in, reviewed chart artifacts out, on data that never leaves your infrastructure.</p>
+    <p style="margin:26px 0 0;max-width:620px;font:400 15px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">Claude gives a person a chart in a chat. chartagent gives your application a charting capability behind an API — natural language in, reviewed chart artifacts out, on data that never leaves your infrastructure.</p>
     <div style="margin-top:32px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <button style="font:500 13px 'IBM Plex Sans';padding:11px 20px;border-radius:8px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Read the quickstart</button>
       <button style="font:500 13px 'IBM Plex Sans';padding:11px 20px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer" style-hover="background:var(--panel)">Open the playground</button>
@@ -229,7 +229,7 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
         <h2 style="margin:14px 0 0;font:400 38px/1.1 'Instrument Serif',serif;letter-spacing:-.02em;color:var(--ink)">Refresh forever, at zero inference cost.</h2>
         <p style="margin:18px 0 0;max-width:520px;font:400 13px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">A chart is a saved spec, not a one-off image. Re-rendering replays the stored transform, so a dashboard of any size refreshes on a cron with no model call and sub-second latency. A drifted schema fails loud with a typed error instead of drawing something quietly wrong.</p>
         <div style="margin-top:24px;font:400 11.5px/1.9 'IBM Plex Mono';color:var(--muted);border-left:2px solid var(--border);padding-left:16px">
-          <div>fresh = chartagents.render(spec, data=<span style="color:var(--teal)">"s3://sales/2026-08.parquet"</span>)</div>
+          <div>fresh = chartagent.render(spec, data=<span style="color:var(--teal)">"s3://sales/2026-08.parquet"</span>)</div>
           <div style="color:var(--faint)"># 0 tokens · 1.1 s · same picture, new numbers</div>
         </div>
       </div>
@@ -261,7 +261,7 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
           <p style="margin:16px 0 0;max-width:520px;font:400 13px/1.7 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">Refresh checks the new snapshot against the fields the spec actually references before rendering anything. The failure mode is a typed error naming the drift — not a chart that looks fine and isn't. Additive drift is ignored, so a harmless migration never trips it.</p>
         </div>
         <div style="display:flex;background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:3px">
-          <button onClick="{{ setStrict }}" style="{{ strictBtn }}">chartagents</button>
+          <button onClick="{{ setStrict }}" style="{{ strictBtn }}">chartagent</button>
           <button onClick="{{ setLoose }}" style="{{ looseBtn }}">no drift check</button>
         </div>
       </div>
@@ -379,7 +379,7 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
         <p style="margin:12px 0 0;font:400 13px/1.7 'IBM Plex Sans';color:var(--muted)">Apache-2.0. Model-agnostic. Self-hostable sandbox.</p>
       </div>
       <div style="display:flex;align-items:center;gap:10px">
-        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border);border-radius:9px;background:var(--rail);font:400 12.5px 'IBM Plex Mono';color:var(--ink)">pip install chartagents<span style="color:var(--faint);font-size:11px">copy</span></div>
+        <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border);border-radius:9px;background:var(--rail);font:400 12.5px 'IBM Plex Mono';color:var(--ink)">pip install chartagent<span style="color:var(--faint);font-size:11px">copy</span></div>
         <button style="font:500 13px 'IBM Plex Sans';padding:12px 20px;border-radius:9px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Create an account</button>
       </div>
     </div>
@@ -395,7 +395,7 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
       <div style="padding:44px 42px;background:var(--rail);display:flex;flex-direction:column;justify-content:space-between;border-right:1px solid var(--border-soft)">
         <div style="display:flex;align-items:center;gap:9px">
           <span style="width:20px;height:20px;border-radius:5px;background:linear-gradient(140deg,var(--teal),var(--violet))"></span>
-          <span style="font:400 17px 'Instrument Serif',serif;color:var(--ink)">chartagents</span>
+          <span style="font:400 17px 'Instrument Serif',serif;color:var(--ink)">chartagent</span>
         </div>
         <div>
           <div style="font:400 30px/1.2 'Instrument Serif',serif;letter-spacing:-.015em;color:var(--ink);max-width:340px">A chart is a saved spec, not a screenshot.</div>
@@ -474,7 +474,7 @@ a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
 
   <footer style="border-top:1px solid var(--border-soft);background:var(--app)">
     <div style="max-width:1180px;margin:0 auto;padding:34px 32px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
-      <span style="font:400 15px 'Instrument Serif',serif;color:var(--ink)">chartagents</span>
+      <span style="font:400 15px 'Instrument Serif',serif;color:var(--ink)">chartagent</span>
       <span style="font:400 11.5px 'IBM Plex Mono';color:var(--faint)">Apache-2.0 · PyPI · GitHub</span>
       <span style="margin-left:auto;font:400 11.5px 'IBM Plex Mono';color:var(--faint)">Instrument Serif + IBM Plex — SIL OFL 1.1</span>
     </div>
@@ -836,8 +836,8 @@ result.review                 # -> what passed, what was fixed`,
       topReason: RELEASES[this.state.release].reason,
       markCount: MARKS.filter(m => m.counts[this.state.release] > 0).length + ' of ' + MARKS.length,
 
-      startSnippet: `import chartagents
-chartagents.api_key = "ca_live_…"`
+      startSnippet: `import chartagent
+chartagent.api_key = "ca_live_…"`
     };
   }
 }

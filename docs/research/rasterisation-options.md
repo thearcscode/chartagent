@@ -524,5 +524,5 @@ python coload_probe.py                # engine co-existence smoke test (see §5)
   table, and the cross-thread QuickJS hazard.
 - ADR-0002 — the 340/110/38 per-backend unsupported counts, `options.addTooltips` at 93%, and
   the ECharts-as-default-web-target framing.
-- `chartagents-prd.md` §7.3 (review-gate tiers), P0.7 (Tier-2 VLM critique), §7.4 (rasterisation
+- `chartagent-prd.md` §7.3 (review-gate tiers), P0.7 (Tier-2 VLM critique), §7.4 (rasterisation
   and Playwright run in the `web` sandbox profile).

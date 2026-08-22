@@ -1,18 +1,45 @@
-# chartagents — Product Requirements Document
+# chartagent — Product Requirements Document
 
 
 |             |                                                                                               |
 | ----------- | --------------------------------------------------------------------------------------------- |
-| **Status**  | Draft v0.3 — review hardening pass, ready for design-doc phase                                |
+| **Status**  | Draft v0.4 — demoted to a product document; architecture is owned by `docs/adr/`               |
 | **Author**  | Sharim Pervez, with Claude                                                                    |
-| **Date**    | July 9, 2026                                                                                  |
-| **Product** | `chartagents` — an embeddable, agentic chart-creation library for Python                      |
+| **Date**    | July 9, 2026; demoted to product-only August 22, 2026                                         |
+| **Product** | `chartagent` — an embeddable, agentic chart-creation library for Python, plus a hosted product built on it |
 | **License** | Apache-2.0 (decided — patent grant, enterprise-friendly, matches ECharts/LangChain ecosystem) |
 
+
+**Changelog v0.4:** demoted to a product-only document — §7.3 and §8 superseded by ADR-0001/0002 and reduced to pointers; non-goals 1 and 2 amended for the hosted product; P0.4's Matplotlib adapter withdrawn (Flint has no Matplotlib backend) and the third-party adapter protocol moved to P2; §11 phases redrawn to the four on the wayfinding map; renamed `chartagents` → `chartagent` throughout (file renamed to `chartagent-prd.md`); §13 records the naming and two-repo/open-core decisions.
 
 **Changelog v0.3:** review hardening — determinism claim rescoped to spec-anchored reproducibility; ~80% deterministic-rail share explicitly marked a hypothesis with a Phase 0 validation gate; benchmark enlarged to ≥150 cases with an independent judge and human calibration (LLM-as-judge self-preference bias addressed); prompt injection via profiled metadata added as a first-class risk with mitigations; `raw_sql` escape scoped to file-like sources in v1; VFS persistence requirement for stateless refinement specified; schema-drift behavior on zero-LLM refresh specified; provisional cost-per-chart target published; observability hooks added to P1; team-size assumption stated.
 
 **Changelog v0.2:** all v0.1 open questions resolved (§13); tiered local sandbox (bwrap auto-detect); three-flavor `DataSource` abstraction incl. text-to-SQL integration (Cortex Analyst pattern); zero-LLM refresh API promoted to P0; patch-mode chart edits; two-filesystem model documented; screenshot-reference scoped as P2; diagrams converted to Mermaid.
+
+---
+
+
+
+## 0. Status of this document
+
+**This is a product document.** Its requirements, positioning, personas, user stories, goals, non-goals, success metrics and risks are authoritative and are what tickets cite as acceptance criteria. **Its architecture is not.** Architecture is owned by the ADRs in `docs/adr/`, which post-date this document and override it wherever the two disagree:
+
+- **[ADR-0001 — Pin Flint; compile in the client](docs/adr/0001-embed-pinned-flint-compiler.md).** We pin one Flint release per library release and return an **envelope** — `{ flint_version, backend, input }`. Compilation happens in the caller's client, not in CPython; there is no JavaScript engine in the Python process, no Node sidecar in the library runtime, no port, and no fork.
+- **[ADR-0002 — Adopt Flint's input frame as the chart spec](docs/adr/0002-adopt-flint-input-frame.md).** Flint's assembler argument *is* our chart spec. Our own grammar lives in exactly one namespaced sibling key, `x_chartagent`, and a Pydantic façade generated from the pinned bundle types it.
+
+**Reading the older sections.** This document predates both ADRs, and its vocabulary has moved. Where the text below says:
+
+| PRD v0.3 term | Read as | Owner |
+| --- | --- | --- |
+| ChartSpec v1 (the grammar) | the **input frame** plus `x_chartagent` | ADR-0002 |
+| the saved ChartSpec (the stored artifact) | the stored **input frame**, without `data` | ADR-0002 Decision 3 |
+| renderer adapter / `RendererAdapter` | a **Flint backend** (Vega-Lite, ECharts, Chart.js, Plotly, Excel) | ADR-0001 |
+| `CapabilityProfile` | Flint's own per-backend capability metadata | ADR-0002 Decision 7 |
+| the returned artifact | the **envelope**; rasterisation is a separate job | ADR-0001 Decision 5 |
+
+`CONTEXT.md` is the canonical glossary and wins over any wording here.
+
+**What did not change.** Every §13 decision except the naming check still stands. The two-rail structure, the metadata-not-data principle, the sandbox tiers, the review gate, the zero-LLM refresh guarantee and the whole requirements set survive the ADRs intact — what changed is *who compiles the spec and what grammar it is written in*, not what the product promises.
 
 ---
 
@@ -24,7 +51,7 @@ Every application team that wants "chart this data" as a product feature today f
 
 The cost of not solving this: thousands of SaaS products, internal tools, and data platforms either skip natural-language charting entirely, ship fragile home-grown LLM chart generators with no quality guarantees, or force users to leave the product and paste data into a chat assistant — losing the workflow, the branding, and control of the data.
 
-chartagents closes this gap: a pip-installable library where `create_chart_agent()` + one method call turns a natural-language instruction and a pointer to data (file, S3 path, database connection, or an in-memory result set) into production-grade chart artifacts — with the data never leaving the caller's infrastructure.
+chartagent closes this gap: a pip-installable library where `create_chart_agent()` + one method call turns a natural-language instruction and a pointer to data (file, S3 path, database connection, or an in-memory result set) into production-grade chart artifacts — with the data never leaving the caller's infrastructure.
 
 ---
 
@@ -32,7 +59,7 @@ chartagents closes this gap: a pip-installable library where `create_chart_agent
 
 ## 2. Positioning and USP
 
-**One-liner:** *Claude gives a person a chart in a chat. chartagents gives your application a charting capability behind an API.*
+**One-liner:** *Claude gives a person a chart in a chat. chartagent gives your application a charting capability behind an API.*
 
 ### The six pillars
 
@@ -47,11 +74,11 @@ chartagents closes this gap: a pip-installable library where `create_chart_agent
 
 ### "But Claude already does this"
 
-Yes — for an individual, in a chat, with an uploaded file. chartagents is for the thousand applications that want to give that experience to *their own users*, on *their own data*, with an SLA-shaped contract instead of a conversation. The Claude app validates the demand; chartagents distributes the capability. (Stripe : "banks already move money" :: chartagents : "Claude already makes charts.")
+Yes — for an individual, in a chat, with an uploaded file. chartagent is for the thousand applications that want to give that experience to *their own users*, on *their own data*, with an SLA-shaped contract instead of a conversation. The Claude app validates the demand; chartagent distributes the capability. (Stripe : "banks already move money" :: chartagent : "Claude already makes charts.")
 
 ### Adjacent-competitor note: text-to-SQL platforms
 
-Text-to-SQL systems (e.g., Snowflake Cortex Analyst) answer "*what data*"; chartagents answers "*what chart*." They are complements, not competitors — Cortex Analyst returns generated SQL whose execution yields a small result set, and Snowflake's own agent stack merely returns a bare Vega-Lite spec for charting: no review loop, no custom rail, no quality gate. chartagents is the quality-assured visualization layer downstream of any text-to-SQL system (see §7.4, DataSource flavor 3).
+Text-to-SQL systems (e.g., Snowflake Cortex Analyst) answer "*what data*"; chartagent answers "*what chart*." They are complements, not competitors — Cortex Analyst returns generated SQL whose execution yields a small result set, and Snowflake's own agent stack merely returns a bare Vega-Lite spec for charting: no review loop, no custom rail, no quality gate. chartagent is the quality-assured visualization layer downstream of any text-to-SQL system (see §7.4, DataSource flavor 3).
 
 ---
 
@@ -92,7 +119,7 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 
 **P3 — AI application developer**
 
-- As an AI app developer, I want to hand chartagents the result set my text-to-SQL system (e.g., Cortex Analyst) already produced, so that I get a reviewed, production-grade chart instead of a bare spec.
+- As an AI app developer, I want to hand chartagent the result set my text-to-SQL system (e.g., Cortex Analyst) already produced, so that I get a reviewed, production-grade chart instead of a bare spec.
 - As an AI app developer, I want to pass prior `result.messages` back into the next call, so that my users can refine charts conversationally ("now break that down quarterly") while my service stays stateless.
 - As an AI app developer, I want edits to existing charts to be token-cheap patches rather than full regenerations, so that refinement loops are fast and affordable.
 - As an AI app developer, I want streaming progress events (profiling → planning → rendering → reviewing), so that I can show live status in my UI.
@@ -108,7 +135,7 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 
 ## 5. Goals
 
-1. **Time-to-first-chart under 15 minutes** from `pip install chartagents` to a rendered chart from a natural-language instruction (measured via docs quickstart user testing).
+1. **Time-to-first-chart under 15 minutes** from `pip install chartagent` to a rendered chart from a natural-language instruction (measured via docs quickstart user testing).
 2. **≥ 95% executable-output rate and ≥ 85% rubric pass rate** on the public eval benchmark (≥ 150 cases, see P0.10) at `quality="balanced"`, scored by an **independent judge** — a model distinct from both the planner and the in-loop critique VLM, calibrated against human double-scoring each release (LLM judges measurably favor their own generations; see §14). At n = 150, the 95% confidence interval on a 95% rate is roughly ±3.5 pp — narrow enough to publish; at n = 30 it would be ±8 pp, which is not. (LIDA's ~3.5% visualization error rate is directional prior art only — its metric and task definition differ, so we cite it as context, not as a head-to-head comparison.)
 3. **≥ 75% of benchmark requests served by the deterministic rail**, keeping **median cost per chart ≤ $0.05 at** `balanced` (provisional target assuming a Sonnet-class planner and small critique model; finalized from measured token counts in Phase 2 and published with the benchmark); **refresh of an existing chart costs zero LLM tokens**.
 4. **Handle a 10 GB Parquet source with < 500 MB peak agent-process memory** — proof of the profile-don't-load architecture.
@@ -120,8 +147,8 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 
 ## 6. Non-goals
 
-1. **Not a chat application or end-user UI.** We ship a library and (later) a reference server — never a hosted consumer product. Rationale: protects against scope-creep into competing with Claude/ChatGPT, where we lose.
-2. **Not a BI platform.** No dashboard persistence, sharing, permissions, or scheduled reports in v1. Rationale: separate product category; our output composes into BI tools instead.
+1. **The library ships no UI.** `chartagent` is a library and (later) a reference server; it has no interface of its own and never becomes one. A **hosted product is a separate offering built on the library**, living in its own repository and consuming the library's public API only — it may ultimately become a commercial layer (§13, open core). Rationale unchanged: the positioning discipline of §2 still holds — neither the library nor the hosted product competes with Claude/ChatGPT's chat UI. What is ruled out is the *library* growing a UI, not the existence of a product that has one. *(Amended v0.4: v0.3 read "never a hosted consumer product," which contradicted the planned hosted product.)*
+2. **The library is not a BI platform.** No dashboard persistence, sharing, permissions, or scheduled reports in the *library* in v1 — it stays stateless, and its output composes into BI tools instead. The hosted product does save charts and refresh them on a schedule (`design/` already mocks this up), which is precisely the zero-LLM refresh guarantee of pillar 6 exercised by a first-party caller. That is a product feature built *on* the public API, not a library feature. Multi-tenancy, sharing and permissions remain out of scope for both until at least P1. *(Amended v0.4.)*
 3. **Not a general data-analysis agent.** No open-ended EDA, statistical modeling, or "find insights" in v1. The instruction in, chart out contract stays tight. Rationale: quality claims are only defensible on a bounded task. (P2 future consideration.)
 4. **Not multi-chart dashboards in v1.** One instruction → one best chart. Rationale: dashboard layout is a distinct hard problem; single-chart quality is the wedge.
 5. **Not a training/fine-tuning effort.** We engineer around frontier models via prompting, skills, and review loops. Rationale: model-agnosticism is a pillar; fine-tunes break it.
@@ -144,16 +171,16 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 ```mermaid
 flowchart TD
     DS[/"Data source<br/>(file · connection · result set)"/] --> PROF["Data profiler<br/>DuckDB scan or pushdown — metadata only"]
-    PROF --> PLAN["Chart planner<br/>intent + optional reference image → ChartSpec"]
-    PLAN --> SPEC{"ChartSpec valid &<br/>within adapter<br/>CapabilityProfile?"}
-    SPEC -- "yes (~80% hypothesis)" --> DET["Deterministic rail<br/>renderer adapters: ECharts · Plotly · Matplotlib<br/>zero generated code"]
+    PROF --> PLAN["Chart planner<br/>intent + optional reference image → input frame"]
+    PLAN --> SPEC{"Frame valid against the<br/>generated façade &<br/>backend capability?"}
+    SPEC -- "yes (~80% hypothesis)" --> DET["Deterministic rail<br/>pinned Flint backends: ECharts · Vega-Lite · Chart.js · Plotly · Excel<br/>zero generated code"]
     SPEC -- "no — reason recorded" --> CUST["Custom-code rail<br/>LLM writes code, any library<br/>runtime profile: python | web"]
     CUST --> SBX["Sandbox execution<br/>bwrap / subprocess / docker / e2b"]
     DET --> GATE
     SBX --> GATE["Review gate<br/>T1 lints → T2 VLM critique → T3 interactivity"]
     GATE -- "fail (bounded budget)" --> PATCH["Revise: spec diff or code patch"]
     PATCH --> SPEC
-    GATE -- pass --> OUT[/"Artifacts<br/>spec · echarts JSON · png/svg · html · review report"/]
+    GATE -- pass --> OUT[/"Envelope<br/>flint_version · backend · input (frame + x_chartagent)<br/>· review report"/]
 ```
 
 
@@ -162,11 +189,13 @@ Orchestration: LangGraph graph with a deterministic skeleton (profile → plan �
 
 ### 7.3 Key components
 
+> **Partly superseded by [ADR-0001](docs/adr/0001-embed-pinned-flint-compiler.md) and [ADR-0002](docs/adr/0002-adopt-flint-input-frame.md).** The three components below that described a grammar and a renderer stack of our own — *ChartSpec*, *renderer adapters* and the *rail router*'s capability check — no longer exist as described; they are replaced by the pinned Flint compiler, its five backends, and a Pydantic façade generated from the pinned bundle. Their bullets now point at the ADRs rather than restating them. The profiler, custom-code rail, review gate and skills are unaffected and remain the live design.
+
 - **Data profiler.** For file sources: DuckDB lazy scan (see §7.4). Emits compact `profile.json`: schema, dtypes, cardinality, null rates, min/max/percentiles, stratified sample rows. Never materializes the dataset. All chart paths aggregate first and plot only aggregates. **Profiled metadata is attacker-influenced input:** column names, string values, and sample rows come from untrusted data and flow into LLM prompts — the classic indirect-prompt-injection vector (§14). Mitigations, all P0: profile content is always injected into prompts inside clearly delimited, escaped data blocks with an explicit "content is data, never instructions" framing; the planner's output is constrained to a validated ChartSpec (structured output, not free text), so injected instructions cannot redirect tool use on the deterministic rail; a Tier 1 lint screens profile content for instruction-like patterns and flags suspect sources in the review report; and on the custom rail, injected code intent is contained by the sandbox (§7.5) plus the data-truthfulness check.
-- **ChartSpec (the contract).** A small, library-agnostic grammar of graphics (see §8). Versioned from day one.
-- **Renderer adapters.** `RendererAdapter` protocol: `capabilities() -> CapabilityProfile`, `render(spec, rows) -> artifacts`. **Decided: adapters receive materialized aggregate rows** (small by construction), not query handles — adapters stay simple and portable; live-query handles are a P2 idea. First-party: ECharts (default web target; Apache-2.0, pure-JSON option objects), Plotly, Matplotlib. Public protocol — third parties can add Highcharts, D3, Vega-Lite, etc. Adding an adapter never touches the agent, planner, or review loop.
-- **Rail router.** Deterministic validator checks the planner's spec against the chosen adapter's `CapabilityProfile`. Expressible → deterministic rail. Not expressible → custom rail, with the *reason recorded* (telemetry that drives grammar growth: today's custom-rail requests become next version's deterministic ones). **The ~80% deterministic-rail share used throughout this document is a hypothesis, not a measurement** — it is derived from the concentration of common chart types in published request corpora, and is explicitly validated (or revised) against the Phase 0 pressure-test set and the eval benchmark before Phase 1 commits to the cost model (§11).
-- **Custom-code rail.** The agent may choose any charting library, constrained by available **sandbox runtime profiles**: `python` (matplotlib/plotly/bokeh/seaborn/…) and `web` (Node + headless Chromium for D3/ECharts-custom/Chart.js — required to rasterize for review). Codegen prompt biases toward well-represented libraries (benchmark evidence: error rates track training-data familiarity — e.g., 1.8% incorrect code for Matplotlib vs 22% for Plotly in PandasPlotBench) unless the request pulls elsewhere. Generated code must be shaped `def make_chart(data) -> Figure` — data enters as a parameter, never inlined — which is what makes zero-LLM refresh possible (§7.6).
+- **The chart spec (the contract).** ~~A small, library-agnostic grammar of graphics of our own.~~ **Superseded by ADR-0002:** Flint's assembler argument *is* the spec — the **input frame** (`data` at render time, `semantic_types`, `chart_spec`, `options`, `theme_spec`), carrying our grammar in the single sibling key `x_chartagent` (`spec_version`, `transform`, `annotations`, `interactions`, `escape`). Still versioned from day one, via `x_chartagent.spec_version`. See §8 and ADR-0002.
+- **Renderers.** ~~A first-party `RendererAdapter` protocol with ECharts, Plotly and Matplotlib adapters, public so third parties can add their own.~~ **Superseded by ADR-0001:** we do not write renderers. Pinned **Flint** ships five backends — **Vega-Lite, ECharts, Chart.js, Plotly and Excel** — and compilation happens in the caller's client by loading Flint at `flint_version` and calling `assembleECharts` / `assembleVegaLite` / …. ECharts remains the default web target. **There is no Matplotlib backend** (see P0.4), and a public third-party adapter protocol is demoted to a P2 idea (§9 P2) — a second renderer stack means a second capability surface and a second fidelity suite, which is the exact cost ADR-0001 paid to avoid. What survives unchanged: **rendering receives materialized aggregate rows** (small by construction), not query handles; live-query handles stay a P2 idea.
+- **Rail router.** Deterministic validator checks the planner's frame against the chosen **Flint backend's** capability surface — Flint's own per-backend metadata, read off the pinned bundle, not a `CapabilityProfile` of ours (ADR-0002 Decision 7; note the vocabulary is per-backend, not flat). Expressible → deterministic rail. Not expressible → custom rail, with the *reason recorded* (telemetry that drives grammar growth: today's custom-rail requests become next version's deterministic ones). **The ~80% deterministic-rail share used throughout this document is a hypothesis, not a measurement** — it is derived from the concentration of common chart types in published request corpora, and is explicitly validated (or revised) against the Phase 0 pressure-test set and the eval benchmark before Phase 1 commits to the cost model (§11).
+- **Custom-code rail.** The agent may choose any charting library, constrained by available **sandbox runtime profiles**: `python` (matplotlib/plotly/bokeh/seaborn/…) and `web` (Node + headless Chromium for D3/ECharts-custom/Chart.js — required to rasterize for review). Codegen prompt biases toward well-represented libraries (benchmark evidence: error rates track training-data familiarity — e.g., 1.8% incorrect code for Matplotlib vs 22% for Plotly in PandasPlotBench) unless the request pulls elsewhere. Generated code must be shaped `def make_chart(data) -> Figure` — data enters as a parameter, never inlined — which is what makes zero-LLM refresh possible (§7.7).
 - **Review gate (uniform across rails — everything ends as a rendered image + optional live DOM).**
   - *Tier 1, deterministic lints (cheap, always):* code executed; artifact exists; axis labels present; legend when >1 series; label-overlap detection; colorblind-safe palette; bar-chart y-axis baseline; **data-truthfulness check** (re-run the transform independently, compare against values in the figure object); injection-pattern screen on profiled metadata (instruction-like strings in column names/sample values flagged in the review report).
   - *Tier 2, VLM critique (only if lints pass):* rubric — readability, truthfulness to data, chart-type appropriateness, aesthetics; approve or emit structured feedback. Bounded loop (budget set by `quality`), best-of-so-far selection. (Prior art: METAL's generate→critique→revise loop shows monotonic quality gains with compute.)
@@ -185,7 +214,7 @@ Orchestration: LangGraph graph with a deterministic skeleton (profile → plan �
 | **In-memory result set** | DataFrame / Arrow table / list-of-dicts — e.g., the executed output of a text-to-SQL system such as Snowflake Cortex Analyst (which returns generated SQL whose warehouse execution yields a small result set) | DuckDB queries the frame zero-copy                                                                                                                                                                                             | Trivial — data is already small |
 
 
-Flavor 3 makes chartagents the natural downstream of any text-to-SQL product: their layer decides *what data*, chartagents decides — and quality-assures — *what chart*.
+Flavor 3 makes chartagent the natural downstream of any text-to-SQL product: their layer decides *what data*, chartagent decides — and quality-assures — *what chart*.
 
 ### 7.5 Sandbox: what runs inside, and the isolation tiers (decided)
 
@@ -215,7 +244,7 @@ The **deepagents virtual filesystem** is the agent's shared workspace — `profi
 ```mermaid
 flowchart TD
     START{"What changed?"} 
-    START -- "data only" --> REFRESH["Refresh — zero LLM tokens<br/>re-run stored transform → feed renderer<br/>(custom rail: re-call make_chart(data))<br/>API: chartagents.render(spec, data) / result.refresh()"]
+    START -- "data only" --> REFRESH["Refresh — zero LLM tokens<br/>re-run stored transform → feed renderer<br/>(custom rail: re-call make_chart(data))<br/>API: chartagent.render(spec, data) / result.refresh()"]
     START -- "chart tweak<br/>(stacked, add trend line, retitle)" --> EDITQ{"Structural<br/>change?"}
     EDITQ -- no --> PATCH["Patch mode — token-cheap<br/>deterministic rail: planner emits spec diff → re-render<br/>custom rail: targeted code edits, not rewrite<br/>review gate runs in light mode (changed checks only)"]
     EDITQ -- "yes (e.g. bar → map)" --> REGEN["Full regenerate<br/>normal pipeline from planner"]
@@ -249,7 +278,7 @@ result2 = agent.create_chart(data=..., instruction="Now break that down quarterl
                              history=result.messages)
 
 # zero-LLM data refresh
-fresh = chartagents.render(result.spec, data="s3://bucket/sales.parquet")
+fresh = chartagent.render(result.spec, data="s3://bucket/sales.parquet")
 ```
 
 `result.messages` carries *references* to VFS artifacts, not raw data, so history stays small enough for stateless HTTP services. **Constraint (decided):** those references must resolve on the next call. Same-process refinement works with the default in-memory VFS; cross-request/cross-process refinement (the stateless-HTTP story) requires a persistent VFS backend — local disk for single-node deployments, LangGraph store for distributed ones — configured at `create_chart_agent()` time. If a history reference can't be resolved, the call fails with a typed error naming the missing artifact rather than silently replanning from scratch. LangGraph checkpointer/thread persistence remains available for callers who prefer server-held state.
@@ -262,22 +291,34 @@ One best chart per request. The planner internally sketches 2–3 candidates bef
 
 
 
-## 8. ChartSpec v1 outline
+## 8. The chart spec — superseded by ADR-0002
 
-Design tension to hold: **rich enough for the common majority of requests (~80% hypothesis, §7.3), small enough that a deterministic renderer fully implements it.** Library-agnostic by construction — it describes *what the chart is*, never how a library draws it.
+> **Superseded in full by [ADR-0002 — Adopt Flint's input frame as the chart spec](docs/adr/0002-adopt-flint-input-frame.md).** v0.3 outlined *ChartSpec v1*, a library-agnostic grammar of graphics of our own (`mark`, `encodings`, `layers`, `style`, `CapabilityProfile`, …). That grammar is retired. The prototype survives as `prototypes/chartspec-v1/`, whose README remains the primary source for decisions D1–D9 and the two-phase-validation finding — several of which were re-adopted into ADR-0002 rather than discarded. This section is not restated here; read the ADR.
 
-- `spec_version` — semantic version, required. Adapters declare `supports_spec <= X`.
-- `data` — source reference + **transform block (decided):** a declarative operation menu — `filter`, `group_by`, `aggregate`, `pivot`, `sort`, `limit`, window basics — compiled by *our* code to the target engine's SQL (DuckDB or pushdown dialect); plus a clearly-flagged `raw_sql` escape hatch for cases the menu can't express. `**raw_sql` is scoped to file-like sources (DuckDB) in v1**, where it is validated read-only and single-statement against a single, known dialect. Connection-like sources (flavor 2) get the declarative menu only until dialect-aware validation ships — "read-only" is not reliably checkable across warehouse dialects (side-effectful functions, external functions, comment tricks), and pushdown runs inside the caller's governance boundary, so the conservative default wins. Menu-first mirrors the two-rail philosophy at the transform level.
-- `mark` — `bar | line | area | scatter | pie/donut | heatmap | histogram | boxplot` (v1 set; grown by custom-rail telemetry).
-- `encodings` — channels (`x`, `y`, `color`, `size`, `facet`, `tooltip`) each with field, type (quantitative/temporal/ordinal/nominal), scale, axis config. Deterministic encoding rules enforced at validation (e.g., cardinality caps on `color`).
-- `layers` — bounded composition (e.g., line + point, bar + reference line).
-- `annotations` — reference lines/bands, point labels, text callouts.
-- `interactions` — flags: tooltip, zoom/pan, legend-toggle, crossfilter (adapter capability–gated).
-- `style` — theme reference, palette, title/subtitle/caption; org-skill overridable.
-- `escape` — `mode: custom_code` + `reason` (machine-recorded) + chosen `library` + `runtime_profile`.
-- `CapabilityProfile` (adapter side) — declared support matrix over marks, channels, interactions, layers, `max_spec_version`.
+**What the spec is now, in one paragraph.** The spec is Flint's own assembler argument — the **input frame** — with our grammar in one namespaced sibling key:
 
-Full Pydantic draft is the immediate next design artifact after this PRD.
+```json
+{
+  "semantic_types": { "quarter": "Quarter", "revenue_sum": "Revenue" },
+  "chart_spec":     { "chartType": "Bar Chart", "encodings": { "x": {...}, "y": {...} }, "baseSize": {...} },
+  "options":        { "addTooltips": true },
+  "theme_spec":     "economist",
+  "x_chartagent":   { "spec_version": "1.0", "transform": {...}, "annotations": [...], "interactions": {...}, "escape": null }
+}
+```
+
+The library returns this inside an **envelope** — `{ flint_version, backend, input }` (ADR-0001 Decision 5). A typed Pydantic façade, **generated from the pinned bundle and never hand-written**, is what the planner is handed and what validates a frame on the way back in.
+
+**What carried over from ChartSpec v1, and still binds:**
+
+- **The transform block, unchanged in substance, now living at `x_chartagent.transform`.** A declarative operation menu — `filter`, `group_by`, `aggregate`, `pivot`, `sort`, `limit`, window basics — compiled by *our* code to the target engine's SQL (DuckDB or pushdown dialect); plus a clearly-flagged `raw_sql` escape hatch for cases the menu can't express. **`raw_sql` is scoped to file-like sources (DuckDB) in v1**, where it is validated read-only and single-statement against a single, known dialect. Connection-like sources (flavor 2) get the declarative menu only until dialect-aware validation ships — "read-only" is not reliably checkable across warehouse dialects (side-effectful functions, external functions, comment tricks), and pushdown runs inside the caller's governance boundary, so the conservative default wins. Menu-first mirrors the two-rail philosophy at the transform level.
+- **Encodings reference transform output columns, never raw columns, and never aggregate** (D2). Flint enforces this for us: a channel carries a field name and nothing else.
+- **Canonical JSON omits nulls, and stays the spec-diff unit for patch mode** (D9).
+- **`data` is a compile-time argument, not part of the stored spec** — which is what makes the `$0.00` refresh claim true (ADR-0002 Decision 3).
+- **`baseSize` is pinned.** Flint's layout optimiser silently drops data rows when a discrete channel overflows the layout budget, and which rows survive depends on canvas size. An unpinned spec does not refresh reproducibly (ADR-0002 Decision 6).
+- **`escape`** — `mode: custom_code` + `reason` (machine-recorded) + chosen `library` + `runtime_profile`. Whether it is a field inside `x_chartagent` or a sibling result type is still open (ADR-0002 *Related*).
+
+**What was dropped:** `mark` (Flint's `chartType` replaces it, and the vocabulary is per-backend — 48 types across five backends at the 0.5.1 pin, not a flat set), `layers` (out of scope, ADR-0002 Decision 8), `style` (`theme_spec` plus our default data palette; precedence in ADR-0002), and `CapabilityProfile` (Flint's own metadata).
 
 ---
 
@@ -289,20 +330,22 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 
 ### P0 — Must have (v1.0 cannot ship without)
 
+*(Priority labels, not the phase names of §11 — see the note there.)*
+
 
 | #     | Requirement                                                                                                                                 | Acceptance criteria (abridged)                                                                                                                                                                                                                                                                                                                                                   |
 | ----- | ------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | P0.1  | `create_chart_agent()` public API with one-shot + `history=` conversational calls                                                           | Given a CSV path and instruction, when `create_chart` is called, then a result with ≥1 requested artifact, a validated spec, and serializable messages is returned; given prior messages, refinement instructions resolve against them                                                                                                                                           |
 | P0.2  | DuckDB profiler with no full-data load (file-like sources)                                                                                  | Given a 10 GB Parquet file, when profiled, then peak agent memory < 500 MB and `profile.json` < 10 KB                                                                                                                                                                                                                                                                            |
-| P0.3  | ChartSpec v1 grammar + validation, incl. declarative transform menu + flagged read-only `raw_sql` escape (file-like sources only in v1, §8) | Invalid specs rejected with typed errors before rendering; `raw_sql` containing writes/multi-statements rejected; `raw_sql` against a connection-like source rejected with a typed error; spec round-trips JSON ↔ Pydantic losslessly                                                                                                                                            |
-| P0.4  | Deterministic rail with ECharts + Matplotlib adapters; adapters receive materialized aggregate rows                                         | Given a spec within capability profile, rendering involves zero LLM-generated code and produces identical output on repeated runs                                                                                                                                                                                                                                                |
+| P0.3  | Input frame + `x_chartagent` grammar, with a Pydantic façade **generated from the pinned Flint bundle**, incl. declarative transform menu + flagged read-only `raw_sql` escape (file-like sources only in v1, §8, ADR-0002) | Invalid frames rejected with typed errors before rendering; `raw_sql` containing writes/multi-statements rejected; `raw_sql` against a connection-like source rejected with a typed error; frame round-trips JSON ↔ Pydantic losslessly; deleting `x_chartagent` leaves a document upstream Flint compiles byte-for-byte identically, asserted across all 705 fixtures on every Flint bump (ADR-0002 Decision 2) |
+| P0.4  | Deterministic rail over **ECharts plus at least one other pinned Flint backend** (Vega-Lite, Chart.js, Plotly or Excel); rendering receives materialized aggregate rows. *(Amended v0.4: v0.3 said "ECharts + Matplotlib adapters" — Flint has no Matplotlib backend, so that requirement was unsatisfiable. Static-image needs go through rasterisation, not a Matplotlib renderer. The public third-party adapter protocol moves from a P0 promise to a P2 idea.)* | Given a frame within the backend's capability surface, compilation involves zero LLM-generated code and produces identical output on repeated runs at a fixed `flint_version` |
 | P0.5  | Custom-code rail with `python` runtime profile; generated code parameterized as `make_chart(data)`                                          | Given a request the grammar can't express, the router records the reason; code executes only in the sandbox; re-invoking with new data requires no LLM call                                                                                                                                                                                                                      |
 | P0.6  | Sandbox protocol + tiered local backends (`bwrap` auto-detect → `subprocess` fallback) + `docker`                                           | On Linux with user namespaces, `sandbox="local"` selects bwrap and generated code cannot read host paths outside binds; on fallback, active tier is logged; docker backend enforces container isolation                                                                                                                                                                          |
 | P0.7  | Review gate tier 1 (lints) + tier 2 (VLM, bounded loop)                                                                                     | Charts failing lints never reach the VLM; loop respects `quality` budget; on exhaustion, best-so-far returned with `review.passed=False` and failing checks listed                                                                                                                                                                                                               |
 | P0.8  | Data-truthfulness check                                                                                                                     | Given a rendered chart, plotted aggregate values match an independent re-execution of the transform within tolerance, else the chart fails review                                                                                                                                                                                                                                |
 | P0.9  | Typed structured errors                                                                                                                     | Unreadable source / unanswerable instruction produce typed errors, never a fabricated chart                                                                                                                                                                                                                                                                                      |
 | P0.10 | Eval benchmark in CI                                                                                                                        | ≥ 150 dataset+instruction pairs across the chart taxonomy (a ≥ 30-pair smoke subset runs on every prompt/model change; the full set runs nightly and pre-release); rubric scored by a judge model distinct from the planner and the in-loop critique VLM; ≥ 20% of cases human-double-scored per release to calibrate the judge; published numbers always come from the full set |
-| P0.11 | Zero-LLM refresh API — `chartagents.render(spec, data)` / `result.refresh()`                                                                | Given a saved spec and a new data snapshot with the same schema, an updated artifact is produced with zero LLM calls, on both rails; given a snapshot where a spec-referenced column is renamed/dropped/retyped, a typed `SchemaDriftError` is raised naming the drifted fields — never a silently wrong chart (§7.7)                                                            |
+| P0.11 | Zero-LLM refresh API — `chartagent.render(spec, data)` / `result.refresh()`                                                                | Given a saved spec and a new data snapshot with the same schema, an updated artifact is produced with zero LLM calls, on both rails; given a snapshot where a spec-referenced column is renamed/dropped/retyped, a typed `SchemaDriftError` is raised naming the drifted fields — never a silently wrong chart (§7.7)                                                            |
 | P0.12 | In-memory result-set DataSource (flavor 3)                                                                                                  | Given a DataFrame/Arrow table (e.g., a text-to-SQL result), `create_chart` completes without file I/O and without re-uploading data anywhere                                                                                                                                                                                                                                     |
 
 
@@ -310,7 +353,7 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 
 ### P1 — Nice to have (fast follows)
 
-- Plotly adapter; `web` sandbox runtime profile (Node + headless Chromium) enabling D3/custom-JS on the custom rail.
+- Remaining pinned Flint backends promoted to first-class (Plotly, Chart.js, Excel); `web` sandbox runtime profile (Node + headless Chromium) enabling D3/custom-JS on the custom rail.
 - Tier 3 interactivity verification via Playwright.
 - Connection-like DataSource with dialect pushdown (Snowflake, Postgres) — flavor 2 productionized.
 - Patch-mode edits formalized: spec-diff emission on the deterministic rail; targeted code edits on the custom rail; light-mode review for unchanged aspects.
@@ -326,8 +369,10 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 
 - **Screenshot as style reference** ("make my data look like this chart"): a VLM step extracts *style and structure only* — chart type, layout, palette, annotation patterns — into a draft ChartSpec; user's data fills encodings; normal two-rail routing applies; review gate adds visual-similarity comparison against the reference. Prior art: ChartMimic's Customized Mimic task (reference image + own data); frontier models capable but unsolved (GPT-4o 83.2). Design hook now: planner input signature is `instruction + optional reference_image` from day one. Numeric data extraction from images is a non-goal (§6.6).
 - Multi-chart dashboards / small-multiple layouts (spec `layers`/`facet` designed with this in mind).
-- Query-handle adapter handoff (live data fetch in the browser).
-- Vega-Lite adapter and spec export; macOS `sandbox-exec` local tier.
+- Query-handle handoff (live data fetch in the browser).
+- **A public third-party renderer protocol** — demoted here from P0.4 in v0.4. Flint already ships five backends, so a second renderer stack buys a second capability surface and a second fidelity suite; revisit only if a backend Flint will never carry is genuinely needed.
+- Server-side rasterisation as a user-facing export product (PNG/SVG on demand). Rasterisation as *review infrastructure* is in scope earlier — see P0.7 and ADR-0003 when it lands.
+- macOS `sandbox-exec` local tier.
 - Insight/EDA mode ("what should I chart?").
 - Reference HTTP server + JS client SDK; per-tenant theming registry.
 
@@ -360,19 +405,23 @@ Full Pydantic draft is the immediate next design artifact after this PRD.
 
 ## 11. Phased milestones
 
+*(Redrawn v0.4. The v0.3 table described a Phase 0 that has already happened under a different architecture — its ChartSpec v1 draft and adapter-protocol RFC are dead items, retired by ADR-0001/0002. The four phases below are the ones carried on the wayfinding map, and they run as **two tracks**: the OSS library and the hosted product built on it. Durations are deliberately dropped — the v0.3 week estimates assumed the renderer stack we no longer build.)*
 
-| Phase                                | Scope                                                                                                                                                                                                                                   | Exit criteria                                                                                                                                                                                                                                                                                                               |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0 — Spec & spike** (2–3 wks)       | ChartSpec v1 Pydantic draft incl. transform menu + `raw_sql` validation; pressure-test against a 50-request corpus (20 nasty + 30 representative real requests); DuckDB profiler prototype; adapter protocol RFC; bwrap detection spike | Spec survives pressure tests or revisions documented; **measured deterministic-rail share on the corpus published internally — if < 60%, grammar scope and cost model revisited before Phase 1** (validates the ~80% hypothesis, §7.3); profiler meets P0.2 numbers; bwrap/subprocess auto-detect works on target platforms |
-| **1 — Deterministic core** (4–6 wks) | Profiler + planner + ChartSpec validation + ECharts/Matplotlib adapters + lints + tiered local & docker sandboxes + in-memory DataSource + zero-LLM render API + eval harness v0                                                        | P0.1–P0.4, P0.6, P0.9–P0.12 green; deterministic rail works end-to-end incl. refresh                                                                                                                                                                                                                                        |
-| **2 — Agentic quality** (4–6 wks)    | Custom-code rail (python profile, parameterized codegen); VLM review loop; data-truthfulness check; quality dial                                                                                                                        | P0.5, P0.7, P0.8 green; benchmark targets hit at `balanced`                                                                                                                                                                                                                                                                 |
-| **3 — v1.0 launch** (2–3 wks)        | Docs (incl. text-to-SQL integration guide), quickstart, published benchmark results, API freeze, PyPI release under Apache-2.0                                                                                                          | All P0 acceptance criteria pass in CI; launch post with benchmark table                                                                                                                                                                                                                                                     |
-| **4 — Fast follows**                 | P1 list (web runtime, Playwright tier 3, Plotly adapter, pushdown connections, patch-mode formalization, streaming, skills, E2B)                                                                                                        | Driven by launch telemetry, esp. custom-rail reasons                                                                                                                                                                                                                                                                        |
+> **Reading "P0" in this document.** The map's phase names collide with §9's priority labels. A bare **P0/P1/P2/P3** means a **phase** here in §11; a **P0.n / P1 / P2** in §9 and in exit criteria means a **requirement priority**. They are not aligned and are not meant to be — P0 the *phase* ships none of the P0 *requirements* except P0.3, because the compile core deliberately precedes the planner.
 
+| Phase | Library track | Hosted-product track | Exit criteria |
+| --- | --- | --- | --- |
+| **P0 — compile core + app skeleton** | Pinned Flint vendored per ADR-0001; Pydantic façade **generated** from the pinned bundle; the envelope `{ flint_version, backend, input }` as the public return; the delete-`x_chartagent` CI invariant running all 705 fixtures on every bump | App skeleton compiles a stored frame in the browser and re-renders it against fresh rows | P0.3 green; envelope is the library's only return type; fixture job green on the pin; app renders and refreshes a hand-written frame. **No LLM anywhere in this phase, and no JavaScript engine in CPython** |
+| **P1 — deterministic rail end-to-end** | Profiler, planner, rail routing, typed errors, zero-LLM refresh, in-memory + file-like DataSources | App shows a real generated chart, end to end from an instruction | P0.1–P0.4, P0.9, P0.11, P0.12 green; deterministic rail works end-to-end including refresh; **measured deterministic-rail share published internally — if < 60%, grammar scope and cost model are revisited before P2 commits** (validates the ~80% hypothesis, §7.3) |
+| **P2 — agentic quality** | Custom-code rail (python profile, parameterized codegen); sandbox tiers; review gate T1+T2; data-truthfulness check; quality dial; eval benchmark in CI | Quality signals surfaced in the product | P0.5–P0.8, P0.10 green; benchmark targets hit at `balanced` |
+| **P3 — launch** | Docs (incl. text-to-SQL integration guide), quickstart, published benchmark results, API freeze, PyPI release under Apache-2.0 | Hosted product public | All P0 acceptance criteria pass in CI; launch post with benchmark table |
+| **Fast follows** | P1 requirements list (§9): remaining Flint backends, Playwright tier 3, pushdown connections, patch-mode formalization, streaming, skills, E2B | Driven by launch telemetry, esp. custom-rail reasons | — |
 
-**Resourcing assumption:** the timeline above assumes 2 full-time engineers (phases largely sequential, with benchmark construction parallelizable). One engineer stretches the total to roughly 6–8 months; scale expectations accordingly.
+**Why the compile core moved earlier than v0.3's Phase 1.** ADR-0001 and ADR-0002 already de-risked it, and it is the one phase where the app can go live at **zero inference cost** — which makes the `$0.00` refresh pillar (§2, pillar 6) demonstrable before a planner exists.
 
-No hard external deadlines. Dependency watch-items: deepagents API stability (pre-1.0 churn risk — pin versions), VLM cost/latency for the review loop (model choice per tier is configurable).
+**Resourcing assumption:** the phasing assumes 2 full-time engineers, with the two tracks running in parallel once the seam is locked — which is the point of fixing the public API surface early. One engineer serialises the tracks and stretches the total substantially.
+
+No hard external deadlines. Dependency watch-items: the Flint pin itself (a bump is a deliberate act gated by the fixture job, never an implicit resolve); deepagents API stability (pre-1.0 churn risk — pin versions); VLM cost/latency for the review loop (model choice per tier is configurable).
 
 ---
 
@@ -417,11 +466,13 @@ No hard external deadlines. Dependency watch-items: deepagents API stability (pr
 | Refresh schema drift             | Schema check before refresh; drifted spec-referenced fields raise typed `SchemaDriftError`; additive drift ignored (§7.7, P0.11)                                                                                                         |
 | Minimum Python version           | `requires-python = ">=3.11"` — the hard floor imposed by matplotlib + deepagents (both forbid 3.10), chosen for maximum reach. CI matrix 3.11–3.14. The SPEC-0 line (3.12) was considered and declined in favor of reach (research #8, §13) |
 | Arrow internal interchange       | Adopted. Zero-copy verified DuckDB↔Arrow (both ways) and Polars↔Arrow; pandas zero-copy only when Arrow-backed. Guardrails: pin a tested `(duckdb, pyarrow)` pair and bump together; treat zero-copy as a fast path with copy fallbacks (multi-chunk / object-dtype / NumPy-backed pandas copy — cheap, since flavor-3 sets are small by construction); note pyarrow's ~100 MB weight in packaging + sandbox image sizing (research #8, §7.4) |
+| **Naming** *(v0.4)* | **`chartagent`, singular, everywhere** — product, distribution name, import name, and the `x_chartagent` frame key. Both singular and plural were free on PyPI as of 2026-08-21; the plural is abandoned. This closes the last v0.3 open question |
+| **Repository structure and open core** *(v0.4)* | **Two repositories.** A public Apache-2.0 `chartagent` repo holding the library, the ADRs, the prototypes, `design/` and this document; and a **separate private repo** for the hosted product. The repo boundary is what *mechanically enforces* the seam — the app consumes the library's public API only and physically cannot import internals. Compile is not an exception: the app is a client of the envelope like any other caller. **Nothing is held back from the OSS library at v1** — the commercial surface is operation, not features. What, if anything, ever lives only in a commercial layer is revisited when commercialisation is real |
+| **Where compilation happens, and what we return** *(v0.4)* | Settled by **[ADR-0001](docs/adr/0001-embed-pinned-flint-compiler.md)**: pin Flint per library release; return the envelope `{ flint_version, backend, input }`; compile in the client. No JavaScript engine in CPython, no Node sidecar in the library runtime, no port, no fork. Rasterisation is a separate job from compilation and is not a dependency of the compile path |
+| **What the chart spec is** *(v0.4)* | Settled by **[ADR-0002](docs/adr/0002-adopt-flint-input-frame.md)**: Flint's assembler argument *is* the spec; our grammar lives only in `x_chartagent`; the Pydantic façade is generated from the pinned bundle, never hand-written. Retires ChartSpec v1 and §8 as written in v0.3 |
 
 
-**Still open:**
-
-- **[Product, non-blocking]** Naming check: `chartagents` availability on PyPI and trademark scan.
+**Still open:** nothing blocking in this document. Live architecture questions are tracked as tickets on the wayfinding map rather than here — notably where rasterisation lives (ADR-0003), the package toolchain and how the Flint bundle is vendored, the public API surface the hosted app consumes, and how strictly the generated façade validates.
 
 ---
 

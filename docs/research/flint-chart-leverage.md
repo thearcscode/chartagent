@@ -1,7 +1,7 @@
-# Research: Leveraging Microsoft `flint-chart` in chartagents
+# Research: Leveraging Microsoft `flint-chart` in chartagent
 
 AFK research. Surfaces what `microsoft/flint-chart` is, where it overlaps with the
-chartagents architecture in `chartagents-prd.md`, and gives a recommendation with
+chartagent architecture in `chartagent-prd.md`, and gives a recommendation with
 tradeoffs. The decision itself graduates from these facts.
 
 - **Date:** 2026-07-22
@@ -17,10 +17,10 @@ tradeoffs. The decision itself graduates from these facts.
 
 ## TL;DR
 
-Flint is **not a competitor** to chartagents — it occupies the exact layer *underneath*
-the deterministic rail, the layer chartagents has not yet built: "given a chart spec,
+Flint is **not a competitor** to chartagent — it occupies the exact layer *underneath*
+the deterministic rail, the layer chartagent has not yet built: "given a chart spec,
 compile it into a polished native chart." It solves that layer well, has a benchmarked
-quality edge, and is MIT-licensed. chartagents is the agentic system *around* that layer
+quality edge, and is MIT-licensed. chartagent is the agentic system *around* that layer
 (profiling, planning, sandbox, review gate, zero-cost refresh, data-source abstraction) —
 none of which Flint has or attempts.
 
@@ -138,16 +138,16 @@ generation) across three models on an LLM-judge score:
 
 A consistent, modest edge — and, more importantly, a *smaller/more-inferable* model output.
 (Caveat: LLM-judge scores, same self-preference concern the PRD already flags for
-chartagents' own benchmark in the v0.3 changelog.)
+chartagent' own benchmark in the v0.3 changelog.)
 
 ---
 
-## 2. Where Flint and chartagents overlap — and where they don't
+## 2. Where Flint and chartagent overlap — and where they don't
 
-The one-line map: **Flint stops exactly where chartagents' deterministic rail begins
+The one-line map: **Flint stops exactly where chartagent' deterministic rail begins
 rendering.**
 
-| Capability | Flint | chartagents |
+| Capability | Flint | chartagent |
 | --- | --- | --- |
 | Spec → polished native chart (VL / ECharts / Chart.js) | ✅ core competency | ⛳ planned ("validated spec → hand-written renderer"), not built |
 | Semantic-type → layout/format/color decisions | ✅ 70+ types, 5 dimensions | ❌ only 4-way `DataType` |
@@ -161,10 +161,10 @@ rendering.**
 | Python-first embeddable API | ⚠️ preview, VL-only | ✅ the whole product |
 | MCP server for chat authoring | ✅ | ❌ **explicit non-goal** (chat analyst is out of scope) |
 
-**Conclusion:** Flint is a *renderer/compiler library*; chartagents is an *end-to-end
+**Conclusion:** Flint is a *renderer/compiler library*; chartagent is an *end-to-end
 agentic system*. They are complements. The right mental model is exactly the PRD's existing
 treatment of Snowflake Cortex Analyst (§2): Cortex Analyst answers "*what data*"; Flint
-answers "*given a spec, draw it well*"; chartagents answers "*given data + an instruction,
+answers "*given a spec, draw it well*"; chartagent answers "*given data + an instruction,
 decide the spec, guarantee its quality, and refresh it forever.*"
 
 ---
@@ -206,7 +206,7 @@ The Flint-derived decisions become the **adapter-default layer** — the floor e
 else overrides. A spec that sets nothing inherits good semantic defaults; an org skill or
 explicit value still wins. No new precedence concept required.
 
-### Why this fits chartagents' existing decisions rather than fighting them
+### Why this fits chartagent' existing decisions rather than fighting them
 
 - **D2 (aggregation lives in the transform, not on the channel).** Flint's aggregation
   *role* (`additive`/`intensive`) is a **default/hint**, not an authority. It doesn't
@@ -222,14 +222,14 @@ explicit value still wins. No new precedence concept required.
   resolution is naturally phase-2 (needs `profile.json`), the same phase where cardinality
   caps already live. Clean home.
 
-### The chartagents-does-it-better angle
+### The chartagent-does-it-better angle
 
 Flint pushes semantic-type inference onto the LLM (then falls back to data-distribution
-guesses). **chartagents already profiles the data with DuckDB before the LLM is called.**
+guesses). **chartagent already profiles the data with DuckDB before the LLM is called.**
 That means many semantic signals Flint infers heuristically — cardinality, min/max,
-fractional-vs-whole distribution, monotonic dates, currency-ish ranges — chartagents can
+fractional-vs-whole distribution, monotonic dates, currency-ish ranges — chartagent can
 compute *deterministically from the profile* and hand to the resolver, or use to *validate*
-the LLM's semantic-type guess. So the chartagents + semantic-types combination can feed the
+the LLM's semantic-type guess. So the chartagent + semantic-types combination can feed the
 resolver **better annotations than Flint-in-a-chat ever gets**. This is a genuine edge, not
 just parity.
 
@@ -246,14 +246,14 @@ match all 46 types on day one (the tiered fallback means we can ship T0+T1 and g
 The PRD's deterministic rail is "validated spec → hand-written renderer, zero generated
 code." Flint's compiler *is* a hand-written, semantics-aware renderer — already built,
 already benchmarked, already shipping in Data Formulator. The question is whether
-chartagents compiles `ChartSpec → Flint ChartAssemblyInput → native spec` instead of
+chartagent compiles `ChartSpec → Flint ChartAssemblyInput → native spec` instead of
 writing per-mark renderers itself.
 
 ### Upside
 
 - **Multi-backend for free.** PRD pillar 1 promises ECharts JSON, Plotly, PNG/SVG/HTML.
   Flint gives ECharts + Vega-Lite + Chart.js from one input — a large chunk of the
-  output-artifact contract, without chartagents maintaining three renderers.
+  output-artifact contract, without chartagent maintaining three renderers.
 - **Layout/format quality that's already tuned** and independently benchmarked to beat
   direct generation.
 - **Fits the adapter model (issue #9).** Flint becomes *one adapter* behind the
@@ -264,7 +264,7 @@ writing per-mark renderers itself.
 
 ### The real costs — flag these loudly
 
-- **Language boundary.** chartagents is Python; ECharts (the PRD's *primary* web output)
+- **Language boundary.** chartagent is Python; ECharts (the PRD's *primary* web output)
   from Flint natively is JS/TS only today. `flint-py` compiles **Vega-Lite only** and is
   **source-only preview (no PyPI)**. So to get ECharts from Flint in a Python process you'd
   have to (a) wait for `flint-py` to grow an ECharts backend, (b) run `flint-js` via a Node
@@ -292,19 +292,19 @@ until the Vega-Lite spike proves the mapping is clean.
 
 - **Flint validates the thesis and does *not* threaten the USP.** Microsoft independently
   concluded that a semantic intermediate layer beats raw-spec LLM generation — the same bet
-  chartagents' deterministic rail makes. But Flint is a *library*, not a *product*: no
+  chartagent' deterministic rail makes. But Flint is a *library*, not a *product*: no
   profiling, no review gate, no zero-cost refresh, no data-source abstraction, no
   data-stays-in-infra guarantee. The moat was always the agentic wrapper, and Flint leaves
   it entirely intact.
-- **`flint-mcp` targets the niche chartagents explicitly de-scopes.** Flint's MCP server is
+- **`flint-mcp` targets the niche chartagent explicitly de-scopes.** Flint's MCP server is
   for the individual authoring charts *in a chat/coding tool* — the exact "ad-hoc analyst in
   a chat" the PRD lists as a non-goal. So `flint-mcp` is not competition for the core; it's
-  confirmation that the chat niche is being served by others, which *sharpens* chartagents'
+  confirmation that the chat niche is being served by others, which *sharpens* chartagent'
   "embeddable, SLA-shaped, data-in-infra" differentiation.
 - **Update the PRD §2 adjacent-competitor section.** Add Flint alongside Cortex Analyst as a
-  named *complement* chartagents can sit on top of. Suggested framing: *"Flint answers 'draw
-  this spec well'; chartagents decides the spec, guarantees its quality across a review gate,
-  and refreshes it forever at $0 inference. chartagents can consume Flint as one deterministic
+  named *complement* chartagent can sit on top of. Suggested framing: *"Flint answers 'draw
+  this spec well'; chartagent decides the spec, guarantees its quality across a review gate,
+  and refreshes it forever at $0 inference. chartagent can consume Flint as one deterministic
   renderer among several."* This pre-empts the "isn't this just Flint?" objection the same way
   the PRD already pre-empts "but Claude already does this."
 
@@ -325,7 +325,7 @@ don't frame Flint as a competitor internally or externally — it isn't one.
 
 ### Open questions this research surfaces (for tickets)
 
-1. How many of Flint's 46 T2 types can chartagents' DuckDB profile infer *deterministically*,
+1. How many of Flint's 46 T2 types can chartagent' DuckDB profile infer *deterministically*,
    vs how many still need an LLM guess? (Bounds how much LLM planning the ontology actually
    removes.)
 2. What is the exact lossy boundary of `ChartSpec → ChartAssemblyInput`? (Layers,
@@ -345,6 +345,6 @@ don't frame Flint as a competitor internally or externally — it isn't one.
   — motivation, DirectVL benchmark, Data Formulator adoption.
 - [Show HN: Microsoft releases Flint, a visualization language for AI agents](https://news.ycombinator.com/item?id=48834924)
 - [Microsoft and Renmin University Open-Source 'Flint'](https://www.chinatechnews.com/2026/07/16/125428-microsoft-and-renmin-university-open-source-flint-to-solve-ai-chart-generation-clashes)
-- Internal: `chartagents-prd.md` (§2, §7.3, §7.4, §7.7, pillars 1–6);
+- Internal: `chartagent-prd.md` (§2, §7.3, §7.4, §7.7, pillars 1–6);
   `prototypes/chartspec-v1/chartspec_draft.py` (issue #3);
   `docs/agents/domain.md` (ADR conventions).
