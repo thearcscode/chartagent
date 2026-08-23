@@ -17,12 +17,20 @@ Flint's assembler argument — the document we store and return. It is `data` (a
 _Avoid_: ChartSpec (retired grammar), compiled spec, option object
 
 **Envelope**:
-The library's last object: `{ flint_version, backend, input }`. `input` is the input frame. `backend` is the planner's recommended assembler; the caller may ignore it.
-_Avoid_: compiled ECharts option, Vega-Lite spec, PNG as the library return
+The library's last object. Its wire format is exactly three keys: `{ flint_version, backend, input }`. `input` is the input frame. `backend` is `bind`'s required argument — the planner fills it from P1 on — and the caller may ignore it and pass the same `input` to a different assembler. Diagnostics (`row_count`, `elapsed`, `warnings`) ride on the object and never serialise into `input`.
+_Avoid_: compiled ECharts option, Vega-Lite spec, PNG as the library return; widening the wire format
 
 **x_chartagent**:
 The one top-level sibling on the input frame that holds our grammar (`spec_version`, `transform`, `annotations`, `interactions`, `escape`). Flint ignores it.
 _Avoid_: putting our grammar in `chartProperties`
+
+**Bind**:
+What the library does: take a stored input frame plus a data source, run `x_chartagent.transform`, attach the rows as `input.data`, and return the envelope. `chartagent.bind(spec, data, *, backend)`. It neither compiles nor rasterises.
+_Avoid_: render (retired — the library does not render), `chartagent.render`, calling bind a compile step
+
+**Advisory**:
+A frozen `{ code, message }` object on `Envelope.warnings`, describing something the library did or ignored — not a Python warning, because the caller has to render it. Distinct from Flint's `_warnings`, which are produced at compile time in the client and never reach CPython.
+_Avoid_: `warnings.warn`, conflating these with Flint `_warnings`
 
 **Compile**:
 Flint turning an input frame plus rows into a backend-native document (`assembleECharts`, `assembleVegaLite`, …). Happens in the client, not in CPython.
