@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Colour-vision check for the design tokens in README.md.
+Colour-vision check for the design tokens, and the binding that keeps them one set.
 
     python3 palette-check.py
 
@@ -11,6 +11,11 @@ Answers three questions the token tables assert but do not prove:
 2. Is each series visible against the panel it is drawn on? (WCAG contrast.)
 3. Is the data palette really disjoint from the state hues, or does it only look
    that way to trichromats?
+
+It also answers a fourth question the tables cannot: do the copies agree? The
+tokens exist in this file, in `tokens.css`, and inlined in each `.dc.html` canvas,
+and `tokens.css` is the copy Chartagent Studio vendors (ADR-0006). `check_tokens`
+binds them.
 
 Dichromat simulation is Viénot, Brettel & Mollon (1999) — the standard linear-RGB
 LMS projection. It models *dichromacy*, the severe case; anomalous trichromacy is
@@ -23,11 +28,15 @@ and that lint should not drag in a numerics stack.
 from __future__ import annotations
 
 import math
+import re
 from itertools import combinations
+from pathlib import Path
 
 # --- tokens, mirrored from README.md ---------------------------------------
-# Kept as literals rather than parsed out of the mockups: if the two ever drift,
-# a failing check here is the signal, and a parser would hide it.
+# Kept as literals rather than parsed out of `tokens.css`: a check that read its
+# subject as its own reference would prove nothing. `check_tokens` asserts these
+# literals, `tokens.css` and every canvas agree, so drift is still a failure here
+# rather than something a parser silently absorbs.
 
 # Published Okabe-Ito, minus its bluish-green (the only entry inside the teal band
 # the rail reserves) and minus its yellow (unusable on a near-white panel), with the
@@ -283,6 +292,88 @@ XYZ_TO_RGB = (
 )
 
 RESERVED_HALF_WIDTH = 28.0  # degrees of CIELAB hue kept clear around teal/violet
+
+
+# --- token binding ----------------------------------------------------------
+# `tokens.css` is the canonical artifact: Studio vendors it byte-identically and
+# diffs it in CI at the pinned library SHA (ADR-0006). Nothing else crosses —
+# the canvases are mockups in a dialect no app can run, so the tokens are the
+# whole of what becomes real.
+#
+# The assertion is deliberately one-directional. `tokens.css` is the superset;
+# a canvas declares whatever subset it uses — the two landing pages carry no
+# `--series-*`, and no light block redeclares them, because one data palette
+# serves both themes. So: every token a file *does* declare must match
+# `tokens.css`. Not: every file must declare every token.
+
+HERE = Path(__file__).parent
+TOKENS_CSS = HERE / "tokens.css"
+THEME_SELECTOR = {"dark": ":root", "light": 'body[data-theme="light"]'}
+
+
+def parse_tokens(text: str, selector: str) -> dict[str, str]:
+    """Custom properties declared in one selector's block. Empty if absent."""
+    match = re.search(re.escape(selector) + r"\s*\{(.*?)\}", text, re.S)
+    if match is None:
+        return {}
+    body = re.sub(r"/\*.*?\*/", "", match.group(1), flags=re.S)
+    declared: dict[str, str] = {}
+    for declaration in body.split(";"):
+        declaration = declaration.strip()
+        if declaration.startswith("--"):
+            name, value = declaration.split(":", 1)
+            declared[name.strip()] = value.strip()
+    return declared
+
+
+def check_tokens() -> list[str]:
+    print("\n=== token binding: literals, tokens.css, every canvas ===")
+    if not TOKENS_CSS.exists():
+        return [f"{TOKENS_CSS.name} is missing, and it is the canonical token file"]
+
+    css = TOKENS_CSS.read_text()
+    canonical = {theme: parse_tokens(css, sel) for theme, sel in THEME_SELECTOR.items()}
+    if not canonical["dark"]:
+        return [f"{TOKENS_CSS.name} declares no tokens under :root"]
+    # A light block inherits every token it does not redeclare, which is how one
+    # data palette serves both themes.
+    canonical["light"] = {**canonical["dark"], **canonical["light"]}
+
+    problems: list[str] = []
+    checked = 0
+    for theme in ("dark", "light"):
+        literals = {f"--series-{i}": c for i, c in enumerate(SERIES[theme], 1)}
+        literals |= {f"--{hue}": value for hue, value in STATE[theme].items()}
+        literals["--panel"] = PANEL[theme]
+        for name, value in literals.items():
+            checked += 1
+            found = canonical[theme].get(name)
+            if found != value:
+                problems.append(
+                    f"{theme} {name}: this script says {value}, "
+                    f"{TOKENS_CSS.name} says {found}"
+                )
+    print(f"  {checked} literals in this file agree with {TOKENS_CSS.name}"
+          if not problems else f"  {len(problems)} of {checked} literals disagree")
+
+    for canvas in sorted(HERE.glob("*.dc.html")):
+        declared = 0
+        drifted = 0
+        text = canvas.read_text()
+        for theme, selector in THEME_SELECTOR.items():
+            for name, value in parse_tokens(text, selector).items():
+                declared += 1
+                found = canonical[theme].get(name)
+                if found != value:
+                    drifted += 1
+                    problems.append(
+                        f"{canvas.name} {theme} {name}: canvas says {value}, "
+                        f"{TOKENS_CSS.name} says {found}"
+                    )
+        note = "match" if not drifted else f"{drifted} drifted"
+        print(f"  {canvas.name:34s} {declared:3d} declared, {note}")
+
+    return problems
 
 
 def lab_to_hex(lab: tuple[float, float, float]) -> str | None:
@@ -586,7 +677,7 @@ def main() -> None:
             search(theme)
         return
 
-    problems: list[str] = []
+    problems: list[str] = check_tokens()
     for theme in ("dark", "light"):
         problems += check_series(theme)
         problems += check_contrast(theme)
@@ -600,8 +691,8 @@ def main() -> None:
         raise SystemExit(1)
     floors = ", ".join(f"{v[:6]} {MIN_DELTA[v]:.0f}" for v in VISIONS)
     print(
-        f"pass. closest pair clears every floor ({floors}) and every series "
-        f"is >= {CONTRAST_MIN:.0f}:1 on its panel."
+        f"pass. closest pair clears every floor ({floors}), every series "
+        f"is >= {CONTRAST_MIN:.0f}:1 on its panel, and every copy of the tokens agrees."
     )
 
 

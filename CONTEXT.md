@@ -1,6 +1,6 @@
 # chartagent
 
-An embeddable agentic chart-creation library for Python, plus a hosted product that consumes its public API.
+An embeddable agentic chart-creation library for Python, plus Chartagent Studio, the hosted application that consumes its public API.
 
 ## Language
 
@@ -8,9 +8,11 @@ An embeddable agentic chart-creation library for Python, plus a hosted product t
 The Python library (singular). Also the product name and the `x_chartagent` namespace.
 _Avoid_: chartagents (abandoned plural), ChartSpec-as-the-stored-document
 
-**Hosted product**:
-The separate application that consumes chartagent's public API only.
-_Avoid_: the app as a second compiler, sidecar
+**Chartagent Studio**:
+The hosted application, and its name. A separate product in a separate repo
+(`thearcscode/chartagent-studio`) that consumes chartagent's public API only. In speech it
+is **Studio** against **the library**. Its server binds; its browser compiles (ADR-0006).
+_Avoid_: the app as a second compiler, sidecar, "the hosted product" as a name
 
 **Input frame**:
 Flint's assembler argument — the document we store and return. It is `data` (at render time), `semantic_types`, `chart_spec`, `options`, `theme_spec`, plus `x_chartagent`.
