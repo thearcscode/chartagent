@@ -1,8 +1,8 @@
 # 2. Adopt Flint's input frame as the chart spec
 
-- **Status:** Accepted
-- **Date:** 2026-08-21
-- **Builds on:** ADR-0001 (pin Flint; compile in the client)
+- **Status:** Accepted (amended 2026-08-23)
+- **Date:** 2026-08-21; Decision 2 job-shape amended 2026-08-23 (ADR-0004)
+- **Builds on:** ADR-0001 (pin Flint; compile in the client); ADR-0004 (fixture jobs)
 - **Retires:** `prototypes/chartspec-v1/` — the grammar this replaces
 
 ## Context
@@ -70,9 +70,11 @@ Concretely:
 
 2. **CI invariant: deleting `x_chartagent` must leave a document that upstream Flint
    compiles, byte for byte identical to the same document without it.** This is the whole
-   decision expressed as a test, and it is the job that already runs all 705 fixtures on
-   every Flint bump (ADR-0001). If a Flint release ever starts reading unknown top-level
-   keys, this job fails on the release rather than in production.
+   decision expressed as a test. The job that asserts it is ADR-0004's
+   `fixtures-invariant` — every commit, both add and delete, all 705 × 5, including
+   `_`-prefixed metadata — not "on every Flint bump." If a Flint release ever starts
+   reading unknown top-level keys, that job fails on the release rather than in
+   production.
 
 3. **`data` is a compile-time argument, not part of the stored spec.** Flint's frame takes
    rows inline. We store the frame *without* `data` and supply it per render from
@@ -138,8 +140,8 @@ the one real loss, and the façade narrows it to a generated `Literal` rather th
 it. We also inherit `chartProperties` as an untyped bag for per-template knobs, which is
 precisely the surface where every upstream breaking change has landed.
 
-**What this obliges us to build.** The delete-`x_chartagent` invariant as a CI job on the
-existing 705-fixture run. A generator that derives the Pydantic façade from the pinned
+**What this obliges us to build.** The delete-`x_chartagent` invariant as ADR-0004's
+per-commit job. A generator that derives the Pydantic façade from the pinned
 bundle. Phase-2 validation — field existence and cardinality caps against a data profile —
 which stays ours, because `chartspec-v1`'s finding still holds: a spec can be
 grammatically valid and still unrenderable against a given dataset, and the planner needs
@@ -246,8 +248,9 @@ storing output means re-planning to change target.
 ## Related
 
 - ADR-0001 — pin Flint and compile in the client; source of the `baseSize` hazard, the
-  `theme_spec` gap on ECharts, the envelope around this frame, and the 705-fixture CI job
-  this ADR extends.
+  `theme_spec` gap on ECharts, and the envelope around this frame.
+- ADR-0004 — the 705-fixture jobs this ADR's Decision 2 is asserted by; no upstream
+  `expected.json`.
 - `prototypes/flint-frame/` — the probe behind every number above.
 - `prototypes/chartspec-v1/` — retired by this decision. Keep it: its README is the primary
   source for D1–D9 and for the two-phase validation finding, which survives.

@@ -2,6 +2,7 @@
 
 - **Status:** Accepted (amended 2026-08-22, 2026-08-23)
 - **Date:** 2026-08-21; amended 2026-08-22, 2026-08-23
+  (2026-08-23 also withdraws the CI-oracle / "unexplained diff" obligation — ADR-0004)
 - **Supersedes:** the backend and integration claims in `docs/research/flint-chart-leverage.md`
   (written 2026-07-22 against flint-chart 0.2.x). The 2026-08-21 *in-process embed*
   decision in this same file is withdrawn; pin, no-fork, date normalisation, and
@@ -63,9 +64,10 @@ Concretely:
 
 1. **Pin.** One Flint release per library release we ship. Upgrades are a deliberate
    version bump with a fixture re-run, never an implicit resolution. The pin is how the
-   generated Pydantic façade, the CI oracle, and the client's `assemble*` stay on the
-   same compiler. How the matching JavaScript reaches the browser (vendored IIFE in the
-   wheel, npm peer, HTML helper) is a packaging question, not this one.
+   generated Pydantic façade, the fixture jobs (ADR-0004), and the client's `assemble*`
+   stay on the same compiler. How the matching JavaScript reaches the browser (vendored
+   IIFE in the wheel, npm peer, HTML helper) is a packaging question, not this one.
+   There is no CI oracle — ADR-0004.
 
 2. **No JavaScript engine in the Python process.** The 2026-08-21 constraint — one
    context per thread, never shared, because a shared QuickJS context SIGSEGVs — is
@@ -105,8 +107,8 @@ Concretely:
    default web target). The caller may ignore it and pass the same `input` to a
    different assembler. `x_chartagent` rides on `input`; Flint reads named fields only
    and does not throw on an unknown sibling (ADR-0002, 705/705, zero throws). CI keeps
-   the delete-`x_chartagent` invariant so a future Flint cannot start rejecting the key
-   on a version bump.
+   the delete-`x_chartagent` invariant (ADR-0004, every commit) so a future Flint cannot
+   start rejecting the key on a version bump.
 
    The browser (or notebook, or bundler) loads Flint at `flint_version` and calls
    `assembleECharts` / `assembleVegaLite` / … then hands the result to that backend's
@@ -152,10 +154,14 @@ are served — where they are served at all — by the optional review rasterise
 never by the compile path. We do not control the compiler's internals — when Flint
 changes how axis titles are placed, client output changes with it.
 
-**What this obliges us to build.** A pinned-fixture CI job that re-runs all 705 cases
-on every Flint bump (Node is the oracle, as it already was). A generator that derives
-the Pydantic façade from the pin. The envelope as the public return type. Date
-normalisation in the transform layer. The delete-`x_chartagent` invariant.
+**What this obliges us to build.** The fixture jobs of **ADR-0004** — a per-commit
+delete-`x_chartagent` invariant, and a bump gate that diffs the pin we shipped against
+the pin we are about to ship. The 2026-08-21 wording ("fails on any unexplained diff",
+"Node is the oracle") is withdrawn: there is no engine to agree with, upstream
+`expected.json` is not a reference, and roughly half of all fixtures differ
+legitimately on a real bump. A generator that derives the Pydantic façade from the
+pin. The envelope as the public return type. Date normalisation in the transform
+layer.
 
 **Known hazard, unrelated to where compile runs.** Flint's optimizer filters data when
 a discrete channel exceeds the layout budget, and which rows survive depends on canvas
@@ -254,3 +260,5 @@ next client compiles.
 - How the matching Flint JS is distributed — packaging ticket, not this ADR.
 - ADR-0003 — server-side PNG / VLM: a browser running our pinned harness, optional extra,
   review gate only. Settled 2026-08-23; there is no engine in CPython to assume.
+- ADR-0004 — fixture jobs: no upstream oracle; compare the shipped IIFE to the next
+  one. Settled 2026-08-23; withdraws the CI-oracle lines above.

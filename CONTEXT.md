@@ -37,5 +37,17 @@ Re-running `x_chartagent.transform` for new rows and compiling the same stored i
 _Avoid_: storing compiled output, storing rows in the spec
 
 **Flint pin**:
-The exact `flint-chart` version the façade, CI oracle, and client `assemble*` must share.
-_Avoid_: unpinned npm resolve, a Python port as the compiler
+The exact `flint-chart` version the façade, the fixture jobs, and client `assemble*` must share. Paired with a fixture commit: `FIXTURE_COMMIT` must resolve to the git tag named by `FLINT_VERSION`.
+_Avoid_: unpinned npm resolve, a Python port as the compiler, "CI oracle" (there is none — see **Bump gate**)
+
+**Fixture invariant**:
+The per-commit assertion that adding and then deleting `x_chartagent` leaves compiled output and `_`-prefixed metadata unchanged across the fixture corpus. Self-relative, so it needs no reference output. Its failure means our architecture broke.
+_Avoid_: calling it a parity or regression test
+
+**Bump gate**:
+The differential job that runs when the Flint pin moves: the same fixture inputs compiled by the IIFE we shipped and the IIFE we are about to ship. It asks what changed between two pins, never whether output is correct.
+_Avoid_: an oracle, upstream `expected.json` as a reference, an allowlist of forgiven diffs, re-fetching the old pin from npm
+
+**Dirty input**:
+A fixture `input.json` that names a property the pin's vocabulary does not declare. Tracked as a count: existence is upstream dirt, a rising count on a bump is a failure.
+_Avoid_: an exceptions file, treating any dirty input as a failure by itself
