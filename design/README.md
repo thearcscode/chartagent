@@ -32,6 +32,12 @@ Settled by [ADR-0005](../docs/adr/0005-bind-is-the-public-seam.md) and
 
 **Turn 6 — the spec editor, three ways, plus the states they share**
 
+**Locked on `6b`** (2026-08-24, [#27](https://github.com/thearcscode/chartagent/issues/27)): the
+generated form is the editor and the JSON is a drawer over the same document. `6c`'s
+answer is taken for *data only* — the source is bound at request time, never stored in
+the frame — and the pipeline is not the home screen. `6a` and `6c` remain as the record
+of what was rejected; `6d` and `6e` are locked as drawn.
+
 - `6a` Document first. The frame is the surface, the chart is a preview, and the
   outline rail is the only concession to not hand-writing JSON.
 - `6b` Chart first. The inspector is generated from `vocabulary()` — option
