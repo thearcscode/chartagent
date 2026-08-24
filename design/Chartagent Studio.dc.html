@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics=""><meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&amp;family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root{--bg:#0a0a0c;--app:#121216;--panel:#17171c;--raised:#1d1d23;--rail:#0f0f13;--border:#2a2a32;--border-2:#26262e;--border-soft:#22222a;--border-faint:#1b1b22;--border-strong:#3d3d47;--ink:#ecebf0;--muted:#8b8a97;--faint:#6a6975;--btn-hover:#ffffff;--chip:rgba(255,255,255,.07);--teal:#57d3cb;--violet:#a78bfa;--violet-2:#c4b2fd;--amber:#e8b568;--red:#e8737d;--red-ink:#e0aeb3;--blue:#7aa2f7;--series-1:#0072b2;--series-2:#e69f00;--series-3:#56b4e9;--series-4:#d55e00;--series-5:#7f7f7f}
+body[data-theme="light"]{--bg:#e9e7e2;--app:#ffffff;--panel:#faf9f7;--raised:#f1efea;--rail:#f6f5f2;--border:#dcd8d0;--border-2:#e3dfd8;--border-soft:#e8e5de;--border-faint:#eeebe5;--border-strong:#bfb9ae;--ink:#191817;--muted:#6b6862;--faint:#8f8b83;--btn-hover:#000000;--chip:rgba(0,0,0,.06);--teal:#0d8f86;--violet:#6b4de0;--violet-2:#4f34bd;--amber:#a8730c;--red:#c33f4b;--red-ink:#8a3a42;--blue:#3a6fd8}
+/* support.js paints html+body with the host canvas colour and caps both at height:100%,
+   so body's background stops one viewport down and the canvas shows through below it.
+   html can't read --bg: the light override lives on body[data-theme]. */
+html{background:#0a0a0c}
+html:has(body[data-theme="light"]){background:#e9e7e2}
+body{margin:0;background:var(--bg);font-family:"IBM Plex Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--violet);text-decoration:none}a:hover{color:var(--violet-2)}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+</style></helmet>
+
+<section style="padding:44px 48px 40px" id="t6">
+  <div style="display:flex;align-items:baseline;gap:12px;margin:0 0 6px">
+    <a href="#t6" style="font:600 10px 'IBM Plex Mono',monospace;padding:4px 8px;background:var(--ink);color:var(--bg);border-radius:4px">6</a>
+    <span style="font:400 26px/1 'Instrument Serif',serif;color:var(--ink)">Chartagent Studio v0 — the spec editor, before there is a planner</span>
+    <button onClick="{{ toggleTheme }}" style="margin-left:auto;display:flex;align-items:center;gap:7px;font:500 11px 'IBM Plex Sans';padding:6px 12px;border-radius:20px;border:1px solid var(--border);background:var(--app);color:var(--ink);cursor:pointer" style-hover="border-color:var(--border-strong)"><span style="position:relative;display:inline-block;width:12px;height:12px;border-radius:50%;background:currentColor;overflow:hidden"><span style="position:absolute;top:-4px;left:-5px;width:12px;height:12px;border-radius:50%;background:var(--app)"></span></span>{{ themeLabel }}</button>
+  </div>
+  <p style="margin:0 0 8px;max-width:860px;font:400 12.5px/1.65 'IBM Plex Sans';color:var(--muted);text-wrap:pretty">Every screen in <a href="./Chartagent%20UI.dc.html">the UI canvas</a> assumes a planner upstream. Studio v0 has none — it opens a Flint frame, binds it, renders it, saves it, and refreshes it at <span style="color:var(--ink)">$0.00</span>. <a href="#6a">6a</a>, <a href="#6b">6b</a> and <a href="#6c">6c</a> are three surfaces that disagree about what the primary object is: the document, the chart, or the pipeline. <a href="#6d">6d</a> is the refusal set all three share; <a href="#6e">6e</a> is refresh.</p>
+  <p style="margin:0 0 8px;max-width:860px;font:400 12.5px/1.65 'IBM Plex Sans';color:var(--muted);text-wrap:pretty"><span style="color:var(--ink)">Locked 2026-08-24 on <a href="#6b">6b</a></span> — the generated <span style="font-family:'IBM Plex Mono'">vocabulary()</span> form is the editor, and the JSON is a drawer over the <span style="color:var(--ink)">same</span> document rather than a second surface. <a href="#6c">6c</a>'s answer is taken for <span style="color:var(--ink)">data only</span>: the source is a bound object at request time, never stored in the frame — the pipeline is not the home screen. <a href="#6a">6a</a> and <a href="#6c">6c</a> stay on this canvas as the record of what was rejected and why. <a href="#6d">6d</a> and <a href="#6e">6e</a> are locked as drawn.</p>
+  <p style="margin:0 0 30px;max-width:860px;font:400 12.5px/1.65 'IBM Plex Sans';color:var(--faint);text-wrap:pretty">PROTOTYPE — THROWAWAY. Numbers are drawn from <a href="../docs/adr/0005-bind-is-the-public-seam.md">ADR-0005</a> and <a href="../docs/adr/0006-the-server-binds-the-browser-compiles.md">ADR-0006</a>; the data is invented.</p>
+
+  <div style="display:flex;flex-wrap:wrap;gap:34px;align-items:flex-start">
+
+    <div id="6a" style="flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#6a" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">6a</a>Document first — the frame is the surface, the chart is the preview</div>
+      <div style="width:1180px;height:720px;background:var(--app);border:1px solid var(--border-2);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+
+        <div style="height:52px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:14px;padding:0 20px">
+          <span style="font:400 12px 'IBM Plex Mono';color:var(--ink)">revenue-by-region</span>
+          <span style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">spec 1.2 · saved 4m ago</span>
+          <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">backend</span>
+            <span style="display:flex;gap:2px;padding:2px;background:var(--panel);border:1px solid var(--border-soft);border-radius:7px">
+              <span style="font:500 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;background:var(--border);color:var(--ink)">echarts</span>
+              <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;color:var(--muted)">vegalite</span>
+              <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;color:var(--muted)">chartjs</span>
+              <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;color:var(--muted)">plotly</span>
+              <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:5px;color:var(--faint);text-decoration:line-through" title="isExcelSupported() returned false for this chart type">excel</span>
+            </span>
+          </span>
+          <button style="font:500 11px 'IBM Plex Sans';padding:7px 14px;border-radius:7px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Save</button>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:184px 1fr 452px;min-height:0">
+
+          <div style="background:var(--rail);border-right:1px solid var(--border-soft);padding:16px 0;display:flex;flex-direction:column;gap:2px">
+            <div style="padding:0 16px 8px;font:500 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.06em">DOCUMENT</div>
+            <div style="padding:7px 16px;font:400 11px 'IBM Plex Mono';color:var(--muted);display:flex"><span>x_chartagent</span></div>
+            <div style="padding:7px 16px 7px 26px;font:400 11px 'IBM Plex Mono';color:var(--muted);display:flex"><span>transform</span><span style="margin-left:auto;color:var(--faint)">4</span></div>
+            <div style="padding:7px 16px 7px 26px;font:400 11px 'IBM Plex Mono';color:var(--muted);display:flex"><span>semantic_types</span><span style="margin-left:auto;color:var(--faint)">3</span></div>
+            <div style="padding:7px 16px;margin-top:6px;font:400 11px 'IBM Plex Mono';color:var(--muted);display:flex"><span>chart_spec</span></div>
+            <div style="padding:7px 16px 7px 26px;font:400 11px 'IBM Plex Mono';color:var(--muted);display:flex"><span>encodings</span><span style="margin-left:auto;color:var(--faint)">3</span></div>
+            <div style="padding:7px 16px 7px 26px;font:400 11px 'IBM Plex Mono';background:var(--chip);color:var(--ink);display:flex"><span>chartProperties</span><span style="margin-left:auto;color:var(--faint)">7</span></div>
+            <div style="padding:7px 16px 7px 26px;font:400 11px 'IBM Plex Mono';color:var(--muted);display:flex"><span>theme_spec</span><span style="margin-left:auto;color:var(--amber)">!</span></div>
+            <div style="padding:7px 16px;margin-top:6px;font:400 11px 'IBM Plex Mono';color:var(--muted);display:flex"><span>base_size</span><span style="margin-left:auto;color:var(--faint)">640×400</span></div>
+            <div style="margin-top:auto;padding:14px 16px 0;border-top:1px solid var(--border-faint);display:flex;flex-direction:column;gap:5px;font:400 10px/1.6 'IBM Plex Mono';color:var(--faint)">
+              <div>flint 0.5.1</div>
+              <div>sha 34ef451</div>
+              <div style="color:var(--muted)">48 chart types · 37 echarts</div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border-soft)">
+            <div style="height:34px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;gap:10px;padding:0 18px">
+              <span style="font:400 10.5px 'IBM Plex Mono';color:var(--ink)">frame.json</span>
+              <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">canonical · nulls omitted</span>
+              <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--teal)">validated against the pin</span>
+            </div>
+            <div style="flex:1;overflow:hidden;padding:13px 18px;font:400 10.5px/1.5 'IBM Plex Mono';white-space:pre;color:var(--muted)">{{ frameJson }}</div>
+            <div style="border-top:1px solid var(--border-faint);padding:11px 18px;display:flex;align-items:center;gap:9px;background:var(--panel)">
+              <span style="width:6px;height:6px;border-radius:50%;background:var(--amber);flex:none"></span>
+              <span style="font:400 10.5px 'IBM Plex Mono';color:var(--muted)">line 32 · <span style="color:var(--ink)">theme_spec</span> is set, and echarts discards it</span>
+              <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">1 advisory · 0 errors</span>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;min-width:0;background:var(--app)">
+            <div style="height:34px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;gap:10px;padding:0 18px">
+              <span style="font:400 10.5px 'IBM Plex Mono';color:var(--ink)">preview</span>
+              <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">640×400 · pinned</span>
+              <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">60 / 60 points drawn</span>
+            </div>
+            <div style="padding:16px 18px 6px;display:flex;align-items:center;gap:10px">
+              <span style="font:400 10.5px 'IBM Plex Mono';color:var(--muted)">sales_q3.parquet</span>
+              <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">4.1 MB · 12,480 rows</span>
+              <button style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--muted);background:transparent;border:1px solid var(--border);border-radius:5px;padding:3px 9px;cursor:pointer" style-hover="color:var(--ink);border-color:var(--border-strong)">swap source</button>
+            </div>
+            <div id="doc-chart" style="flex:1;margin:6px 18px 0;min-height:0;background:var(--panel);border:1px solid var(--border-soft);border-radius:9px"></div>
+            <div style="padding:12px 18px;display:flex;flex-direction:column;gap:7px">
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:7px;background:color-mix(in oklab,var(--amber) 9%,transparent);border:1px solid color-mix(in oklab,var(--amber) 26%,transparent)">
+                <span style="font:500 9.5px 'IBM Plex Mono';color:var(--amber);letter-spacing:.05em">SERVER</span>
+                <span style="font:400 10.5px 'IBM Plex Mono';color:var(--ink)">theme_spec_ignored</span>
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--muted)">— echarts discards it; house palette applied after assemble</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:7px;background:var(--panel);border:1px solid var(--border-soft)">
+                <span style="font:500 9.5px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">SERVER</span>
+                <span style="font:400 10.5px 'IBM Plex Mono';color:var(--muted)">dates_normalised</span>
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">— 1 column rewritten to ISO-8601</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:38px;border-top:1px solid var(--border-soft);background:var(--rail);display:flex;align-items:center;gap:16px;padding:0 20px;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">
+          <span>bind <span style="color:var(--muted)">41 ms</span></span>
+          <span>60 rows bound <span style="color:var(--faint)">of 12,480</span></span>
+          <span>compile <span style="color:var(--muted)">6 ms</span></span>
+          <span style="color:var(--ink)">$0.00</span>
+          <span>no model call</span>
+          <span style="margin-left:auto">POST /specs/8f2c/bind {"backend":"echarts"}</span>
+        </div>
+      </div>
+      <p style="margin:2px 0 0;width:1180px;font:400 11.5px/1.6 'IBM Plex Sans';color:var(--faint);text-wrap:pretty">Honest about what the document is, and the only surface where a hand edit is unambiguous — but it answers "not hand-writing JSON" with "yes you are". The outline rail is the only concession.</p>
+    </div>
+
+    <div id="6b" style="flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#6b" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">6b</a>Chart first — the form is generated from <span style="font-family:'IBM Plex Mono';color:var(--ink)">vocabulary()</span>, the document is a drawer</div>
+      <div style="width:1180px;height:720px;background:var(--app);border:1px solid var(--border-2);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+
+        <div style="height:52px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:12px;padding:0 20px">
+          <span style="font:400 12px 'IBM Plex Mono';color:var(--ink)">revenue-by-region</span>
+          <span style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">spec 1.2 · unsaved</span>
+          <span style="font:400 10px 'IBM Plex Mono';color:var(--teal);padding:4px 9px;border-radius:20px;background:color-mix(in oklab,var(--teal) 12%,transparent);border:1px solid color-mix(in oklab,var(--teal) 30%,transparent)">2 EDITS · NOT A REBIND</span>
+          <button onClick="{{ toggleDrawer }}" style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';color:var(--muted);background:transparent;border:1px solid var(--border);border-radius:6px;padding:5px 11px;cursor:pointer" style-hover="color:var(--ink);border-color:var(--border-strong)">{{ drawerLabel }}</button>
+          <button style="font:500 11px 'IBM Plex Sans';padding:7px 14px;border-radius:7px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">Save</button>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:1fr 356px;min-height:0">
+
+          <div style="display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border-soft)">
+            <div style="padding:14px 22px 0;display:flex;align-items:center;gap:10px">
+              <span style="font:400 11px 'IBM Plex Mono';color:var(--ink)">sales_q3.parquet</span>
+              <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">4.1 MB · 12,480 rows · uploaded 2h ago</span>
+              <span style="font:400 10px 'IBM Plex Mono';color:var(--faint);padding:3px 8px;border-radius:4px;background:var(--chip)">bound at request, never stored in the frame</span>
+              <button style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--muted);background:transparent;border:1px solid var(--border);border-radius:5px;padding:3px 9px;cursor:pointer" style-hover="color:var(--ink);border-color:var(--border-strong)">swap source</button>
+            </div>
+            <div id="canvas-chart" style="flex:1;margin:14px 22px 0;min-height:0;background:var(--panel);border:1px solid var(--border-soft);border-radius:9px"></div>
+
+            <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+              <div style="margin:12px 22px 0;height:150px;background:var(--rail);border:1px solid var(--border-soft);border-radius:9px;display:flex;flex-direction:column;overflow:hidden">
+                <div style="height:30px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;gap:9px;padding:0 14px">
+                  <span style="font:400 10px 'IBM Plex Mono';color:var(--muted)">frame.json</span>
+                  <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">the same document, read-only here</span>
+                  <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--teal)">2 uncommitted hunks</span>
+                </div>
+                <div style="flex:1;overflow:hidden;padding:9px 14px;font:400 10.5px/1.7 'IBM Plex Mono';white-space:pre;color:var(--muted)">{{ drawerJson }}</div>
+              </div>
+            </sc-if>
+
+            <div style="padding:12px 22px 14px;display:flex;align-items:center;gap:9px">
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:7px;background:color-mix(in oklab,var(--amber) 9%,transparent);border:1px solid color-mix(in oklab,var(--amber) 26%,transparent)">
+                <span style="font:500 9.5px 'IBM Plex Mono';color:var(--amber);letter-spacing:.05em">SERVER</span>
+                <span style="font:400 10.5px 'IBM Plex Mono';color:var(--ink)">theme_spec_ignored</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 11px;border-radius:7px;background:var(--panel);border:1px solid var(--border-soft)">
+                <span style="font:500 9.5px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">COMPILE</span>
+                <span style="font:400 10.5px 'IBM Plex Mono';color:var(--muted)">_warnings</span>
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">— legend truncated to 5 entries</span>
+              </div>
+              <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">origin is on the badge, because the two rails cannot be merged</span>
+            </div>
+          </div>
+
+          <div style="background:var(--rail);display:flex;flex-direction:column;min-width:0">
+            <div style="padding:13px 16px;border-bottom:1px solid var(--border-soft);display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">backend</span>
+                <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">a view, not an edit</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:3px;padding:3px;background:var(--panel);border:1px solid var(--border-soft);border-radius:7px">
+                <button style="{{ bE }}" onClick="{{ pickEcharts }}">echarts</button>
+                <button style="{{ bV }}" onClick="{{ pickVegalite }}">vegalite</button>
+                <button style="{{ bC }}" onClick="{{ pickChartjs }}">chartjs</button>
+                <button style="{{ bP }}" onClick="{{ pickPlotly }}">plotly</button>
+                <button style="font:400 10px 'IBM Plex Mono';padding:5px 0;border-radius:5px;border:0;background:transparent;color:var(--faint);cursor:not-allowed;text-decoration:line-through" title="isExcelSupported() is false for line — 340 of 705 documents are unsupported by Excel">excel</button>
+              </div>
+              <div style="font:400 10px/1.5 'IBM Plex Mono';color:var(--faint)">{{ backendNote }}</div>
+            </div>
+
+            <div style="display:flex;gap:2px;padding:10px 16px 0">
+              <span style="font:500 10.5px 'IBM Plex Mono';padding:5px 11px;border-radius:5px;background:var(--border);color:var(--ink)">properties</span>
+              <span style="font:400 10.5px 'IBM Plex Mono';padding:5px 11px;border-radius:5px;color:var(--muted)">encodings</span>
+              <span style="font:400 10.5px 'IBM Plex Mono';padding:5px 11px;border-radius:5px;color:var(--muted)">transform</span>
+            </div>
+
+            <div style="flex:1;overflow:hidden;padding:13px 16px;display:flex;flex-direction:column;gap:11px">
+
+              <div style="display:flex;align-items:baseline;gap:8px">
+                <span style="font:500 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.06em">LINE CHART</span>
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">17 declared · 9 data-dependent</span>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <div style="display:flex;align-items:baseline;gap:7px"><span style="font:400 11.5px 'IBM Plex Sans';color:var(--ink)">Curve</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">curveType</span></div>
+                <div style="display:flex;gap:3px;padding:3px;background:var(--panel);border:1px solid var(--border-soft);border-radius:6px">
+                  <span style="flex:1;text-align:center;font:400 10.5px 'IBM Plex Mono';padding:5px 0;border-radius:4px;color:var(--muted)">Linear</span>
+                  <span style="flex:1;text-align:center;font:500 10.5px 'IBM Plex Mono';padding:5px 0;border-radius:4px;background:var(--border);color:var(--ink)">Smooth</span>
+                  <span style="flex:1;text-align:center;font:400 10.5px 'IBM Plex Mono';padding:5px 0;border-radius:4px;color:var(--muted)">Step</span>
+                </div>
+                <div style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">option labels come from the pin, not from us</div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <div style="display:flex;align-items:baseline;gap:7px"><span style="font:400 11.5px 'IBM Plex Sans';color:var(--ink)">Max rows</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">maxRows</span></div>
+                <div style="display:flex;align-items:center;gap:9px">
+                  <input value="0" style="width:62px;font:400 11px 'IBM Plex Mono';padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--ink)">
+                  <div style="flex:1;height:3px;border-radius:2px;background:var(--border-soft);position:relative">
+                    <span style="position:absolute;left:0;top:-3px;width:9px;height:9px;border-radius:50%;background:var(--border-strong)"></span>
+                  </div>
+                  <span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">5 – 500</span>
+                </div>
+                <div style="display:flex;align-items:center;gap:6px;font:400 9.5px/1.5 'IBM Plex Mono';color:var(--amber)"><span>▲</span><span style="color:var(--muted)">5 is a <span style="color:var(--ink)">slider bound, not a limit</span>. 0 is live and means no cap.</span></div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:5px">
+                <div style="display:flex;align-items:baseline;gap:7px"><span style="font:400 11.5px 'IBM Plex Sans';color:var(--ink)">Show point labels</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">showPointLabels</span></div>
+                <div style="display:flex;align-items:center;gap:9px">
+                  <span style="width:30px;height:17px;border-radius:9px;background:var(--border);position:relative;flex:none"><span style="position:absolute;top:2px;left:2px;width:13px;height:13px;border-radius:50%;background:var(--faint)"></span></span>
+                  <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">off</span>
+                  <span style="margin-left:auto;font:400 9.5px 'IBM Plex Mono';color:var(--teal);padding:2px 7px;border-radius:4px;background:color-mix(in oklab,var(--teal) 12%,transparent)">checked at compile</span>
+                </div>
+                <div style="font:400 9.5px/1.5 'IBM Plex Mono';color:var(--muted)">data_dependent — <span style="color:var(--ink)">check()</span> runs in the browser, against the rows. We render it; we cannot pre-validate it.</div>
+              </div>
+
+              <div style="display:flex;flex-direction:column;gap:5px;opacity:.45">
+                <div style="display:flex;align-items:baseline;gap:7px"><span style="font:400 11.5px 'IBM Plex Sans';color:var(--ink)">Stack offset</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">stackOffset</span></div>
+                <div style="display:flex;gap:3px;padding:3px;background:var(--panel);border:1px solid var(--border-soft);border-radius:6px">
+                  <span style="flex:1;text-align:center;font:400 10.5px 'IBM Plex Mono';padding:5px 0;border-radius:4px;color:var(--muted)">None</span>
+                  <span style="flex:1;text-align:center;font:400 10.5px 'IBM Plex Mono';padding:5px 0;border-radius:4px;color:var(--muted)">Expand</span>
+                </div>
+              </div>
+              <div style="margin-top:-8px;font:400 9.5px/1.5 'IBM Plex Mono';color:var(--faint)">disabled — <span style="color:var(--muted)">encodingActions.dependencies</span> requires <span style="color:var(--muted)">stacked: true</span></div>
+
+              <div style="margin-top:auto;padding-top:12px;border-top:1px solid var(--border-faint);display:flex;flex-direction:column;gap:4px;font:400 9.5px/1.6 'IBM Plex Mono';color:var(--faint)">
+                <div>317 declared entries · 161 data-dependent</div>
+                <div>every label and option here is read from the pin</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:38px;border-top:1px solid var(--border-soft);background:var(--rail);display:flex;align-items:center;gap:16px;padding:0 20px;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">
+          <span>bind <span style="color:var(--muted)">{{ bindMs }}</span></span>
+          <span>60 rows bound</span>
+          <span>compile <span style="color:var(--muted)">6 ms</span></span>
+          <span style="color:var(--ink)">$0.00</span>
+          <span>no model call</span>
+          <span style="margin-left:auto">flint 0.5.1 · sha 34ef451 · served from flint_bundle()</span>
+        </div>
+      </div>
+      <p style="margin:2px 0 0;width:1180px;font:400 11.5px/1.6 'IBM Plex Sans';color:var(--faint);text-wrap:pretty">The answer to "someone who is not hand-writing JSON", and the only variant that can show what <span style="font-family:'IBM Plex Mono'">vocabulary()</span> carries that a JSON schema does not. Costs the sense that the document is the artifact — the drawer is there to buy it back.</p>
+    </div>
+
+    <div id="6c" style="flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#6c" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">6c</a>Pipeline first — source, transform, rows, encodings, backend, each a stage you can stop at</div>
+      <div style="width:1180px;height:720px;background:var(--app);border:1px solid var(--border-2);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+
+        <div style="height:52px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:14px;padding:0 20px">
+          <span style="font:400 12px 'IBM Plex Mono';color:var(--ink)">revenue-by-region</span>
+          <span style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">spec 1.2</span>
+          <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">one document · five renders · nothing about the backend is stored</span>
+        </div>
+
+        <div style="padding:16px 20px 0;display:flex;align-items:center;gap:0">
+          <div style="flex:none;display:flex;flex-direction:column;gap:3px;padding:9px 13px;border-radius:8px;background:var(--panel);border:1px solid var(--border-soft)">
+            <span style="font:500 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">SOURCE</span>
+            <span style="font:400 11px 'IBM Plex Mono';color:var(--ink)">sales_q3.parquet</span>
+            <span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">upload · 4.1 MB</span>
+          </div>
+          <span style="flex:none;width:26px;height:1px;background:var(--border)"></span>
+          <div style="flex:none;display:flex;flex-direction:column;gap:3px;padding:9px 13px;border-radius:8px;background:var(--panel);border:1px solid var(--border-soft)">
+            <span style="font:500 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">TRANSFORM</span>
+            <span style="font:400 11px 'IBM Plex Mono';color:var(--ink)">group_by 2 · agg 1 · sort · limit</span>
+            <span style="font:400 9.5px 'IBM Plex Mono';color:var(--teal)">declarative · pre-flight ran</span>
+          </div>
+          <span style="flex:none;width:26px;height:1px;background:var(--border)"></span>
+          <div style="flex:none;display:flex;flex-direction:column;gap:3px;padding:9px 13px;border-radius:8px;background:var(--raised);border:1px solid var(--border)">
+            <span style="font:500 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">BOUND ROWS</span>
+            <span style="font:400 11px 'IBM Plex Mono';color:var(--ink)">12,480 → 60 rows</span>
+            <span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">envelope.row_count</span>
+          </div>
+          <span style="flex:none;width:26px;height:1px;background:var(--border)"></span>
+          <div style="flex:none;display:flex;flex-direction:column;gap:3px;padding:9px 13px;border-radius:8px;background:var(--panel);border:1px solid var(--border-soft)">
+            <span style="font:500 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">ENCODINGS</span>
+            <span style="font:400 11px 'IBM Plex Mono';color:var(--ink)">x · y · color</span>
+            <span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">against transform output</span>
+          </div>
+          <span style="flex:none;width:26px;height:1px;background:var(--border)"></span>
+          <div style="flex:none;display:flex;flex-direction:column;gap:3px;padding:9px 13px;border-radius:8px;background:var(--panel);border:1px solid var(--border-soft)">
+            <span style="font:500 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">COMPILE</span>
+            <span style="font:400 11px 'IBM Plex Mono';color:var(--ink)">assembleECharts</span>
+            <span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">in this browser</span>
+          </div>
+          <span style="margin-left:auto;font:400 10px/1.6 'IBM Plex Mono';color:var(--faint);text-align:right">the seam sits between<br>rows and compile</span>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:430px 1fr;min-height:0;padding:16px 20px 0;gap:18px">
+
+          <div style="display:flex;flex-direction:column;gap:12px;min-height:0">
+            <div style="flex:none;background:var(--rail);border:1px solid var(--border-soft);border-radius:9px;overflow:hidden">
+              <div style="height:30px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;gap:9px;padding:0 13px">
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">transform output</span>
+                <span style="margin-left:auto;font:400 9.5px 'IBM Plex Mono';color:var(--faint)">60 rows · 3 columns</span>
+              </div>
+              <div style="padding:9px 13px 12px;font:400 10px/1.9 'IBM Plex Mono';color:var(--muted)">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;color:var(--faint);border-bottom:1px solid var(--border-faint);padding-bottom:4px"><span>month</span><span>region</span><span style="text-align:right">revenue_sum</span></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr"><span>2026-01</span><span>NA</span><span style="text-align:right;color:var(--ink)">38,412</span></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr"><span>2026-02</span><span>NA</span><span style="text-align:right;color:var(--ink)">39,905</span></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr"><span>2026-03</span><span>EMEA</span><span style="text-align:right;color:var(--ink)">33,180</span></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr"><span>2026-04</span><span>APAC</span><span style="text-align:right;color:var(--ink)">27,644</span></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;color:var(--faint)"><span>…</span><span></span><span style="text-align:right">56 more</span></div>
+              </div>
+            </div>
+
+            <div style="flex:none;background:var(--rail);border:1px solid var(--border-soft);border-radius:9px;overflow:hidden">
+              <div style="height:30px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;gap:9px;padding:0 13px">
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">channels</span>
+                <span style="margin-left:auto;font:400 9.5px 'IBM Plex Mono';color:var(--faint)">columns → encodings</span>
+              </div>
+              <div style="padding:11px 13px;display:flex;flex-direction:column;gap:7px;font:400 10.5px 'IBM Plex Mono'">
+                <div style="display:flex;align-items:center;gap:9px"><span style="width:48px;color:var(--faint)">x</span><span style="padding:3px 9px;border-radius:5px;background:var(--chip);color:var(--ink)">month</span><span style="color:var(--faint)">temporal</span></div>
+                <div style="display:flex;align-items:center;gap:9px"><span style="width:48px;color:var(--faint)">y</span><span style="padding:3px 9px;border-radius:5px;background:var(--chip);color:var(--ink)">revenue_sum</span><span style="color:var(--faint)">quantitative</span></div>
+                <div style="display:flex;align-items:center;gap:9px"><span style="width:48px;color:var(--faint)">color</span><span style="padding:3px 9px;border-radius:5px;background:var(--chip);color:var(--ink)">region</span><span style="color:var(--faint)">nominal · 5 distinct</span></div>
+              </div>
+            </div>
+
+            <div style="flex:1;min-height:0;background:var(--rail);border:1px solid var(--border-soft);border-radius:9px;overflow:hidden;display:flex;flex-direction:column">
+              <div style="height:30px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;gap:9px;padding:0 13px">
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">backends</span>
+                <span style="margin-left:auto;font:400 9.5px 'IBM Plex Mono';color:var(--faint)">support for <span style="color:var(--muted)">line</span>, from the pin</span>
+              </div>
+              <div style="flex:1;padding:9px 13px;display:flex;flex-direction:column;gap:2px;font:400 10.5px 'IBM Plex Mono'">
+                <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:5px;background:var(--chip)"><span style="width:8px;height:8px;border-radius:2px;background:var(--ink)"></span><span style="color:var(--ink)">echarts</span><span style="margin-left:auto;color:var(--faint)">37 types · rendering</span></div>
+                <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:5px"><span style="width:8px;height:8px;border-radius:2px;border:1px solid var(--border-strong)"></span><span style="color:var(--muted)">vegalite</span><span style="margin-left:auto;color:var(--faint)">36 types · supported</span></div>
+                <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:5px"><span style="width:8px;height:8px;border-radius:2px;border:1px solid var(--border-strong)"></span><span style="color:var(--muted)">chartjs</span><span style="margin-left:auto;color:var(--faint)">22 types · supported</span></div>
+                <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:5px"><span style="width:8px;height:8px;border-radius:2px;border:1px solid var(--border-strong)"></span><span style="color:var(--muted)">plotly</span><span style="margin-left:auto;color:var(--faint)">38 types · supported</span></div>
+                <div style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:5px"><span style="width:8px;height:8px;border-radius:2px;border:1px dashed var(--border-strong)"></span><span style="color:var(--faint)">excel</span><span style="margin-left:auto;color:var(--faint)">18 types · workbook, not a canvas</span></div>
+                <div style="margin-top:auto;font:400 9.5px/1.55 'IBM Plex Mono';color:var(--faint)">no thumbnails are stored — each of these renders live when picked</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;min-width:0;gap:10px">
+            <div id="pipe-chart" style="flex:1;min-height:0;background:var(--panel);border:1px solid var(--border-soft);border-radius:9px"></div>
+            <div style="flex:none;display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:8px;background:var(--panel);border:1px solid var(--border-soft)">
+              <span style="font:500 9.5px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">DRAWN</span>
+              <span style="font:400 10.5px 'IBM Plex Mono';color:var(--ink)">60 series points</span>
+              <span style="font:400 10px 'IBM Plex Mono';color:var(--faint)">= envelope.row_count · nothing was dropped</span>
+              <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">base_size 640×400, pinned</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:38px;margin-top:14px;border-top:1px solid var(--border-soft);background:var(--rail);display:flex;align-items:center;gap:16px;padding:0 20px;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">
+          <span>bind <span style="color:var(--muted)">41 ms</span></span>
+          <span>compile <span style="color:var(--muted)">6 ms</span></span>
+          <span style="color:var(--ink)">$0.00</span>
+          <span>no model call</span>
+          <span style="margin-left:auto">stopping at any stage costs nothing — the rows are already here</span>
+        </div>
+      </div>
+      <p style="margin:2px 0 0;width:1180px;font:400 11.5px/1.6 'IBM Plex Sans';color:var(--faint);text-wrap:pretty">The only variant that answers "where does data come in" structurally rather than with a bar, and the only one where the seam is visible as a place. Weakest at the thing the ticket actually names — editing.</p>
+    </div>
+
+    <div id="6d" style="flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#6d" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">6d</a>Three states, not two — and the one that is neither valid nor broken. Advance with the button.</div>
+      <div style="width:1180px;height:720px;background:var(--app);border:1px solid var(--border-2);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+
+        <div style="height:52px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:12px;padding:0 20px">
+          <span style="font:400 12px 'IBM Plex Mono';color:var(--ink)">{{ stateDoc }}</span>
+          <span style="font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:20px;{{ stateChip }}">{{ stateChipLabel }}</span>
+          <span style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';color:var(--faint)">{{ stateStepLabel }}</span>
+        </div>
+
+        <div style="height:3px;display:flex;gap:3px;padding:0 20px;margin-top:12px">
+          <span style="{{ s0 }}"></span><span style="{{ s1 }}"></span><span style="{{ s2 }}"></span><span style="{{ s3 }}"></span>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:1fr 430px;min-height:0;padding:16px 20px 0;gap:18px">
+
+          <div style="display:flex;flex-direction:column;min-width:0;gap:12px">
+            <div style="flex:1;min-height:0;border-radius:9px;border:1px dashed var(--border-strong);background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:34px">
+              <span style="font:400 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.06em">{{ stateEyebrow }}</span>
+              <span style="font:400 25px/1.25 'Instrument Serif',serif;color:var(--ink);text-align:center;max-width:560px">{{ stateHeadline }}</span>
+              <span style="font:400 12.5px/1.7 'IBM Plex Sans';color:var(--muted);text-align:center;max-width:600px;text-wrap:pretty">{{ stateBody }}</span>
+              <span style="font:400 10.5px 'IBM Plex Mono';color:var(--faint);padding:5px 11px;border-radius:5px;background:var(--chip)">{{ stateOrigin }}</span>
+            </div>
+
+            <div style="flex:none;border-radius:9px;border:1px solid var(--border-soft);background:var(--rail);overflow:hidden">
+              <div style="height:31px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;gap:9px;padding:0 14px">
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">{{ repairTitle }}</span>
+                <span style="margin-left:auto;font:400 9.5px 'IBM Plex Mono';color:var(--faint)">{{ repairCost }}</span>
+              </div>
+              <div style="padding:12px 14px;display:flex;align-items:center;gap:11px">
+                <div style="flex:1;display:flex;flex-direction:column;gap:4px;font:400 10.5px/1.7 'IBM Plex Mono';color:var(--muted);white-space:pre">{{ repairDiff }}</div>
+                <div style="flex:none;display:flex;flex-direction:column;gap:7px;width:186px">
+                  <button style="font:500 11px 'IBM Plex Sans';padding:8px 12px;border-radius:7px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">{{ repairPrimary }}</button>
+                  <button style="font:500 11px 'IBM Plex Sans';padding:8px 12px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--ink);cursor:pointer" style-hover="background:var(--panel)">{{ repairSecondary }}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px;min-height:0">
+            <div style="flex:none;border-radius:9px;border:1px solid var(--border-soft);background:var(--rail);overflow:hidden">
+              <div style="height:31px;border-bottom:1px solid var(--border-faint);display:flex;align-items:center;gap:9px;padding:0 14px">
+                <span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">{{ ctxTitle }}</span>
+                <span style="margin-left:auto;font:400 9.5px 'IBM Plex Mono';color:var(--faint)">{{ ctxNote }}</span>
+              </div>
+              <div style="padding:11px 14px;font:400 10.5px/1.8 'IBM Plex Mono';color:var(--muted);white-space:pre">{{ ctxBody }}</div>
+            </div>
+
+            <div style="flex:none;border-radius:9px;border:1px solid var(--border-soft);background:var(--rail);padding:13px 14px;display:flex;flex-direction:column;gap:9px">
+              <span style="font:500 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.06em">WHERE THIS WAS DECIDED</span>
+              <div style="display:flex;flex-direction:column;gap:6px;font:400 10.5px 'IBM Plex Mono'">
+                <div style="display:flex;align-items:center;gap:9px"><span style="{{ whoServer }}">server</span><span style="color:var(--faint)">bind() · DuckDB + Pydantic</span></div>
+                <div style="display:flex;align-items:center;gap:9px"><span style="{{ whoCompile }}">compile</span><span style="color:var(--faint)">assemble* · this browser</span></div>
+                <div style="display:flex;align-items:center;gap:9px"><span style="{{ whoClient }}">client</span><span style="color:var(--faint)">our check, after compile</span></div>
+              </div>
+              <div style="font:400 9.5px/1.6 'IBM Plex Mono';color:var(--faint);text-wrap:pretty">{{ whoNote }}</div>
+            </div>
+
+            <div style="flex:1;min-height:0;border-radius:9px;border:1px solid var(--border-soft);background:var(--rail);padding:13px 14px;display:flex;flex-direction:column;gap:8px">
+              <span style="font:500 10px 'IBM Plex Mono';color:var(--faint);letter-spacing:.06em">THE THREE STATES</span>
+              <div style="display:flex;flex-direction:column;gap:7px">
+                <div style="display:flex;gap:9px;align-items:flex-start;{{ tsValid }}"><span style="width:7px;height:7px;border-radius:50%;background:var(--teal);margin-top:5px;flex:none"></span><span style="font:400 10.5px/1.6 'IBM Plex Mono'"><span style="color:var(--ink)">valid</span> <span style="color:var(--faint)">— the pin accepts it and this data supports it. It draws.</span></span></div>
+                <div style="display:flex;gap:9px;align-items:flex-start;{{ tsUnrend }}"><span style="width:7px;height:7px;border-radius:50%;background:var(--amber);margin-top:5px;flex:none"></span><span style="font:400 10.5px/1.6 'IBM Plex Mono'"><span style="color:var(--ink)">won't render here</span> <span style="color:var(--faint)">— a correct document this dataset cannot carry. Repair feedback, never an exception.</span></span></div>
+                <div style="display:flex;gap:9px;align-items:flex-start;{{ tsRejected }}"><span style="width:7px;height:7px;border-radius:50%;background:var(--red);margin-top:5px;flex:none"></span><span style="font:400 10.5px/1.6 'IBM Plex Mono'"><span style="color:var(--ink)">rejected</span> <span style="color:var(--faint)">— a typed error with a field path. Named, and it refuses to draw.</span></span></div>
+              </div>
+              <div style="margin-top:auto;font:400 9.5px/1.6 'IBM Plex Mono';color:var(--faint)">No partial render in any of the three.</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:52px;margin-top:14px;border-top:1px solid var(--border-soft);background:var(--rail);display:flex;align-items:center;gap:14px;padding:0 20px">
+          <span style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">{{ stateFooter }}</span>
+          <button onClick="{{ stateNext }}" style="margin-left:auto;font:500 11.5px 'IBM Plex Sans';padding:9px 16px;border-radius:7px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">{{ stateBtnLabel }}</button>
+        </div>
+      </div>
+      <p style="margin:2px 0 0;width:1180px;font:400 11.5px/1.6 'IBM Plex Sans';color:var(--faint);text-wrap:pretty">Step 1 is the state the ticket says has no home yet. Steps 2–4 are typed errors that already exist in <a href="../docs/adr/0005-bind-is-the-public-seam.md">ADR-0005</a> — drawn here because who decided, and where, changes what the screen can honestly say.</p>
+    </div>
+
+    <div id="6e" style="flex:none;display:flex;flex-direction:column;gap:10px;scroll-margin-top:16px">
+      <div style="display:flex;align-items:baseline;gap:9px;font:400 11px/1.3 'IBM Plex Sans';color:var(--muted)"><a href="#6e" style="font:600 10.5px 'IBM Plex Mono',monospace;padding:3px 7px;background:var(--chip);color:var(--ink);border-radius:5px">6e</a>Refresh — the same document, new data, no model call. Press the button.</div>
+      <div style="width:1180px;height:720px;background:var(--app);border:1px solid var(--border-2);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+
+        <div style="height:52px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:14px;padding:0 20px">
+          <span style="font:400 12px 'IBM Plex Mono';color:var(--ink)">Library</span>
+          <span style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">6 saved documents · owner sharim</span>
+          <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">no thumbnails stored — every card below is a live compile</span>
+        </div>
+
+        <div style="flex:1;display:grid;grid-template-columns:1fr 470px;min-height:0">
+
+          <div style="display:flex;flex-direction:column;min-width:0;border-right:1px solid var(--border-soft);padding:18px 20px;gap:13px">
+            <div style="display:flex;align-items:center;gap:11px">
+              <span style="font:400 13px 'IBM Plex Mono';color:var(--ink)">revenue-by-region</span>
+              <span style="font:400 10.5px 'IBM Plex Mono';color:var(--faint)">spec 1.2 · unchanged</span>
+              <span style="margin-left:auto;font:400 10.5px 'IBM Plex Mono';padding:4px 10px;border-radius:20px;{{ refreshChip }}">{{ refreshChipLabel }}</span>
+            </div>
+
+            <div style="flex:none;display:flex;align-items:stretch;gap:11px">
+              <div style="flex:1;padding:11px 13px;border-radius:8px;background:var(--panel);border:1px solid var(--border-soft);display:flex;flex-direction:column;gap:3px">
+                <span style="font:500 9.5px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">BOUND AGAINST</span>
+                <span style="font:400 11px 'IBM Plex Mono';color:var(--ink)">{{ srcName }}</span>
+                <span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">{{ srcMeta }}</span>
+              </div>
+              <div style="flex:none;display:flex;align-items:center;font:400 13px 'IBM Plex Mono';color:var(--faint)">→</div>
+              <div style="flex:1;padding:11px 13px;border-radius:8px;background:var(--raised);border:1px solid var(--border);display:flex;flex-direction:column;gap:3px">
+                <span style="font:500 9.5px 'IBM Plex Mono';color:var(--faint);letter-spacing:.05em">DOCUMENT DIFF</span>
+                <span style="font:400 11px 'IBM Plex Mono';color:var(--teal)">— none —</span>
+                <span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">the frame carries no data, so a new source is not an edit</span>
+              </div>
+            </div>
+
+            <div id="refresh-chart" style="flex:1;min-height:0;background:var(--panel);border:1px solid var(--border-soft);border-radius:9px"></div>
+
+            <div style="flex:none;display:flex;align-items:center;gap:14px;padding:11px 14px;border-radius:8px;background:var(--rail);border:1px solid var(--border-soft);font:400 10.5px 'IBM Plex Mono';color:var(--faint)">
+              <span>bind <span style="color:var(--muted)">{{ rBind }}</span></span>
+              <span>compile <span style="color:var(--muted)">{{ rCompile }}</span></span>
+              <span>{{ rRows }}</span>
+              <span style="color:var(--ink);font-weight:500">$0.00</span>
+              <span>0 tokens · no model call</span>
+              <button onClick="{{ doRefresh }}" style="margin-left:auto;font:500 11px 'IBM Plex Sans';padding:7px 14px;border-radius:7px;border:0;background:var(--ink);color:var(--bg);cursor:pointer">{{ refreshBtn }}</button>
+            </div>
+            <div style="font:400 10px/1.6 'IBM Plex Mono';color:var(--faint);text-wrap:pretty">{{ refreshNote }}</div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;min-width:0;background:var(--rail)">
+            <div style="height:36px;border-bottom:1px solid var(--border-soft);display:flex;align-items:center;gap:9px;padding:0 18px">
+              <span style="font:400 10.5px 'IBM Plex Mono';color:var(--ink)">saved</span>
+              <span style="margin-left:auto;font:400 10px 'IBM Plex Mono';color:var(--faint)">6 cards · 6 compiles · $0.00</span>
+            </div>
+            <div style="flex:1;padding:14px 18px;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(3,1fr);gap:12px;min-height:0">
+
+              <div style="display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+                <div id="card-1" style="flex:1;min-height:0"></div>
+                <div style="padding:7px 10px;border-top:1px solid var(--border-faint);display:flex;flex-direction:column;gap:2px"><span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">revenue-by-region</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">echarts · $0.00</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;overflow:hidden">
+                <div id="card-2" style="flex:1;min-height:0"></div>
+                <div style="padding:7px 10px;border-top:1px solid var(--border-faint);display:flex;flex-direction:column;gap:2px"><span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">arr-by-tier</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">echarts · $0.00</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;overflow:hidden">
+                <div id="card-3" style="flex:1;min-height:0"></div>
+                <div style="padding:7px 10px;border-top:1px solid var(--border-faint);display:flex;flex-direction:column;gap:2px"><span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">churn-monthly</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">echarts · $0.00</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;overflow:hidden">
+                <div id="card-4" style="flex:1;min-height:0"></div>
+                <div style="padding:7px 10px;border-top:1px solid var(--border-faint);display:flex;flex-direction:column;gap:2px"><span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">seats-per-account</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">echarts · $0.00</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--border-soft);border-radius:8px;overflow:hidden">
+                <div id="card-5" style="flex:1;min-height:0"></div>
+                <div style="padding:7px 10px;border-top:1px solid var(--border-faint);display:flex;flex-direction:column;gap:2px"><span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">pipeline-by-stage</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">echarts · $0.00</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;background:var(--panel);border:1px dashed var(--border-strong);border-radius:8px;overflow:hidden">
+                <div style="flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:10px;text-align:center">
+                  <span style="font:400 10px 'IBM Plex Mono';color:var(--amber)">won't render here</span>
+                  <span style="font:400 9.5px/1.5 'IBM Plex Mono';color:var(--faint)">color: region<br>340 distinct</span>
+                </div>
+                <div style="padding:7px 10px;border-top:1px solid var(--border-faint);display:flex;flex-direction:column;gap:2px"><span style="font:400 10px 'IBM Plex Mono';color:var(--ink)">spend-by-vendor</span><span style="font:400 9.5px 'IBM Plex Mono';color:var(--faint)">card refuses too · $0.00</span></div>
+              </div>
+            </div>
+            <div style="padding:0 18px 14px;font:400 9.5px/1.6 'IBM Plex Mono';color:var(--faint);text-wrap:pretty">Every card is one more <span style="color:var(--muted)">assemble*</span> in a browser that already holds the bundle and the envelope. The index page is the <span style="color:var(--ink)">$0.00</span> claim, not an illustration of it.</div>
+          </div>
+        </div>
+      </div>
+      <p style="margin:2px 0 0;width:1180px;font:400 11.5px/1.6 'IBM Plex Sans';color:var(--faint);text-wrap:pretty">Refresh is one <span style="font-family:'IBM Plex Mono'">bind</span> against a different source. The load-bearing detail is the empty diff — swapping data leaves the document at 1.2, so version history stays a record of edits rather than of runs.</p>
+    </div>
+
+  </div>
+
+  <p style="margin:26px 0 0;font:400 12px/1.5 'IBM Plex Sans';color:var(--muted)">Try next: "merge <a href="#6b">6b</a>'s inspector into <a href="#6c">6c</a>'s stage rail" · "what does <a href="#6d">6d</a> step 1 look like when the repair is wrong" · "the empty state, before a source exists"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{}">
+// PROTOTYPE — THROWAWAY. Studio v0's editor surface, drawn to be argued with.
+// Palette and chrome are read from design/tokens.css; nothing here invents a colour.
+const DATA_PALETTE = ['#0072b2', '#e69f00', '#56b4e9', '#d55e00', '#7f7f7f'];
+const THEMES = {
+  dark:  { axis: '#2a2a32', split: '#1e1e25', label: '#6a6975', tip: '#1d1d23', tipB: '#2a2a32', tipT: '#ecebf0', legend: '#8b8a97', series: DATA_PALETTE },
+  light: { axis: '#dcd8d0', split: '#eeebe5', label: '#8f8b83', tip: '#ffffff', tipB: '#dcd8d0', tipT: '#191817', legend: '#6b6862', series: DATA_PALETTE }
+};
+let TH = THEMES.dark, SERIES = TH.series, AX = {};
+function applyTheme(t) {
+  TH = THEMES[t] || THEMES.dark;
+  SERIES = TH.series;
+  AX = {
+    axisLine: { lineStyle: { color: TH.axis } },
+    splitLine: { lineStyle: { color: TH.split } },
+    label: { color: TH.label, fontFamily: 'IBM Plex Mono', fontSize: 10 }
+  };
+}
+applyTheme('dark');
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const REGIONS = ['NA', 'EMEA', 'APAC', 'LATAM', 'ANZ'];
+
+function wave(seed, n, base, amp) {
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    out.push(Math.round(base * (1 + i * 0.035) + Math.sin((i + seed) * 0.9) * amp + Math.cos(i * 1.7 + seed) * amp * 0.5));
+  }
+  return out;
+}
+
+class Component extends DCLogic {
+  state = { theme: 'dark', drawer: false, backend: 'echarts', step: 0, refreshed: false };
+
+  componentDidMount() {
+    document.body.dataset.theme = this.state.theme;
+    this.boot();
+  }
+
+  componentDidUpdate() {
+    const orphan = ['doc-chart', 'canvas-chart', 'pipe-chart', 'refresh-chart', 'card-1']
+      .some(id => { const el = document.getElementById(id); return el && !el.querySelector('canvas'); });
+    if (orphan && window.echarts) this.boot();
+  }
+
+  componentWillUnmount() { (this.charts || []).forEach(c => c.dispose()); }
+
+  redraw() {
+    (this.charts || []).forEach(c => c.dispose());
+    this.charts = [];
+    this.boot();
+  }
+
+  toggleTheme = () => {
+    const t = this.state.theme === 'dark' ? 'light' : 'dark';
+    document.body.dataset.theme = t;
+    this.setState({ theme: t }, () => this.redraw());
+  };
+
+  lineOpt(seriesCount, points, seed) {
+    return {
+      color: SERIES,
+      grid: { left: 58, right: 24, top: 30, bottom: 36 },
+      tooltip: { trigger: 'axis', backgroundColor: TH.tip, borderColor: TH.tipB, textStyle: { color: TH.tipT, fontFamily: 'IBM Plex Mono', fontSize: 11 } },
+      legend: { top: 0, right: 0, icon: 'roundRect', itemWidth: 8, itemHeight: 8, textStyle: { color: TH.legend, fontFamily: 'IBM Plex Sans', fontSize: 11 } },
+      xAxis: { type: 'category', data: MONTHS.slice(0, points), axisLine: AX.axisLine, axisTick: { show: false }, axisLabel: AX.label },
+      yAxis: { type: 'value', name: 'Revenue (USD)', nameTextStyle: { color: TH.label, fontFamily: 'IBM Plex Mono', fontSize: 10, align: 'left' }, axisLine: { show: false }, splitLine: AX.splitLine, axisLabel: Object.assign({ formatter: v => '$' + (v / 1000) + 'k' }, AX.label) },
+      series: REGIONS.slice(0, seriesCount).map((r, i) => ({
+        name: r, type: 'line', smooth: 0.25, symbol: 'circle', symbolSize: 5,
+        lineStyle: { width: 2 }, data: wave(i * 3 + seed, points, 38000 - i * 5200, 4200)
+      }))
+    };
+  }
+
+  miniOpt(kind, seed) {
+    const base = { grid: { left: 3, right: 3, top: 6, bottom: 3 }, xAxis: { type: 'category', show: false, data: [0,1,2,3,4,5] }, yAxis: { type: 'value', show: false } };
+    if (kind === 'bar') {
+      return Object.assign(base, { series: [{ type: 'bar', barWidth: 9, itemStyle: { color: SERIES[0], borderRadius: [2,2,0,0] }, data: wave(seed, 6, 40, 14) }] });
+    }
+    if (kind === 'stack') {
+      return Object.assign(base, { series: [
+        { type: 'bar', stack: 's', barWidth: 11, itemStyle: { color: SERIES[0] }, data: wave(seed, 6, 26, 7) },
+        { type: 'bar', stack: 's', barWidth: 11, itemStyle: { color: SERIES[1] }, data: wave(seed + 4, 6, 16, 5) }
+      ] });
+    }
+    if (kind === 'area') {
+      return Object.assign(base, { series: [{ type: 'line', smooth: 0.35, symbol: 'none', lineStyle: { width: 1.5, color: SERIES[0] }, areaStyle: { color: SERIES[0], opacity: 0.18 }, data: wave(seed, 6, 30, 11) }] });
+    }
+    return Object.assign(base, { series: [
+      { type: 'line', smooth: 0.3, symbol: 'circle', symbolSize: 3, lineStyle: { width: 1.5, color: SERIES[0] }, itemStyle: { color: SERIES[0] }, data: wave(seed, 6, 34, 10) },
+      { type: 'line', smooth: 0.3, symbol: 'none', lineStyle: { width: 1.5, color: SERIES[1] }, data: wave(seed + 6, 6, 22, 8) }
+    ] });
+  }
+
+  boot(tries = 0) {
+    if (!window.echarts) {
+      if (tries < 80) setTimeout(() => this.boot(tries + 1), 100);
+      return;
+    }
+    applyTheme(this.state.theme);
+    this.charts = [];
+    const mk = (id, opt) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const c = window.echarts.init(el, null, { renderer: 'canvas' });
+      c.setOption(opt);
+      this.charts.push(c);
+    };
+
+    mk('doc-chart', this.lineOpt(5, 12, 0));
+    mk('canvas-chart', this.lineOpt(5, 12, 0));
+    mk('pipe-chart', this.lineOpt(5, 12, 2));
+    mk('refresh-chart', this.state.refreshed ? this.lineOpt(5, 12, 5) : this.lineOpt(4, 12, 0));
+
+    mk('card-1', this.miniOpt('line', 1));
+    mk('card-2', this.miniOpt('bar', 3));
+    mk('card-3', this.miniOpt('area', 5));
+    mk('card-4', this.miniOpt('stack', 7));
+    mk('card-5', this.miniOpt('bar', 9));
+  }
+
+  // ---- shared small styles -------------------------------------------------
+
+  dot(on, hue) {
+    return { flex: 1, height: '3px', borderRadius: '2px', background: on ? (hue || 'var(--teal)') : 'var(--border)' };
+  }
+
+  backendBtn(active) {
+    return {
+      font: "400 10px 'IBM Plex Mono'", padding: '5px 0', borderRadius: '5px', border: 0, cursor: 'pointer',
+      background: active ? 'var(--border)' : 'transparent',
+      color: active ? 'var(--ink)' : 'var(--muted)'
+    };
+  }
+
+  // A CSS string, not an object: the runtime drops object-form declarations whose
+  // values carry color-mix(), and strings go through cssToObj() intact.
+  chip(hue) {
+    const c = 'var(--' + hue + ')';
+    return "font:400 10.5px 'IBM Plex Mono';padding:4px 9px;border-radius:20px;color:" + c
+      + ';background:color-mix(in oklab,' + c + ' 12%,transparent)'
+      + ';border:1px solid color-mix(in oklab,' + c + ' 30%,transparent)';
+  }
+
+  who(active) {
+    return {
+      font: "400 10.5px 'IBM Plex Mono'", padding: '2px 8px', borderRadius: '4px', width: '58px', textAlign: 'center',
+      background: active ? 'var(--chip)' : 'transparent',
+      color: active ? 'var(--ink)' : 'var(--faint)'
+    };
+  }
+
+  tsRow(active) {
+    return { display: 'flex', gap: '9px', alignItems: 'flex-start', opacity: active ? 1 : 0.35 };
+  }
+
+  renderVals() {
+    const s = this.state.step;
+    const STATES = [
+      {
+        doc: 'spend-by-vendor', hue: 'amber', chipLabel: "WON'T RENDER HERE",
+        stepLabel: '1 / 4 · valid document, wrong dataset',
+        eyebrow: 'NOTHING THREW',
+        headline: 'A correct document this dataset cannot carry.',
+        body: 'color encodes vendor, which has 340 distinct values in vendors_fy26.csv. The palette is five hues and stops there — past that the design asks for small multiples, not a sixth colour. The document is valid at the pin, and drew fine against last quarter’s file.',
+        origin: 'our check, after the transform — bind() returned 200',
+        repairTitle: 'repair · two ways, both edits',
+        repairCost: 'spec 1.1 → 1.2 · $0.00',
+        repairDiff: '  "transform": {\n-   "group_by": ["month", "vendor"]\n+   "group_by": ["month", "vendor_top8"],\n+   "derive": [{ "as": "vendor_top8",\n+     "rank_other": { "by": "spend",\n+       "keep": 8 } }]\n  }',
+        primary: 'Group to top 8 + Other',
+        secondary: 'Facet into small multiples',
+        ctxTitle: 'chart_spec.encodings.color',
+        ctxNote: 'field path, stable',
+        ctxBody: '"color": {\n  "field": "vendor",\n  "type": "nominal"\n}\n\ndistinct   340\npalette      5\nceiling      5   README.md',
+        server: false, compile: false, client: true,
+        whoNote: 'Phase-2 validation is ours. ADR-0002 leaves field existence and cardinality caps to us, and the map still carries them as fog — so nothing in the library raises for this, and nothing will.',
+        ts: 1,
+        footer: 'Amber, not red. The document is not wrong; the pairing is.'
+      },
+      {
+        doc: 'quarterly-bookings', hue: 'red', chipLabel: 'REFUSING TO DRAW',
+        stepLabel: '2 / 4 · the only party who can see this',
+        eyebrow: 'COMPILED, THEN REFUSED',
+        headline: 'The layout optimiser dropped 4 of 12 rows at this size.',
+        body: 'base_size is pinned at 640×400. assembleECharts came back with 8 series points; the envelope says row_count is 12. We compared the two and stopped. A chart quietly showing 8 of 12 quarters is the exact failure this design system was built to refuse.',
+        origin: 'compared in this browser — the server cannot predict it, and does not try',
+        repairTitle: 'repair · the dropped categories, named',
+        repairCost: 'first option is a document edit · $0.00',
+        repairDiff: 'dropped   2025-Q1   2025-Q2\n          2025-Q3   2025-Q4\n\n  "base_size": {\n-   "width": 640, "height": 400\n+   "width": 960, "height": 520\n  }',
+        primary: 'Raise base_size to 960×520',
+        secondary: 'Drop region from color',
+        ctxTitle: 'envelope vs compiled option',
+        ctxNote: 'both are in this browser',
+        ctxBody: 'row_count           12\nseries[0].data       8\nbase_size    640 × 400\n\nADR-0005 §11\n  no predictive warning:\n  the drop is Flint’s\n  decision, at compile,\n  in the client.',
+        server: false, compile: true, client: true,
+        whoNote: 'Python refuses to warn about this, on the grounds that it would be a fabricated warning about work we do not do. That refusal is why the check has to live here or nowhere.',
+        ts: 2,
+        footer: 'The chart area stays empty. There is no partial-render state anywhere in these designs.'
+      },
+      {
+        doc: 'revenue-rose', hue: 'red', chipLabel: 'REJECTED',
+        stepLabel: '3 / 4 · the pin moved under a saved document',
+        eyebrow: 'SpecVocabularyError',
+        headline: 'innerRadius is not a key Rose Chart declares at 0.5.1.',
+        body: 'It was declared at 0.2.1, which is when this document was saved. There is no warn-and-strip: until the bump surfaced it, this chart drew without its inner radius and nothing in the library, the client or the logs said a word.',
+        origin: 'server · bind() raised before the transform ran',
+        repairTitle: 'repair · one key, one version',
+        repairCost: 'spec 1.4 → 1.5 · $0.00',
+        repairDiff: '  "chartProperties": {\n    "roseType": "area",\n    "radius": 120,\n-   "innerRadius": 40\n  }',
+        primary: 'Remove the key',
+        secondary: 'Open version history',
+        ctxTitle: 'error body',
+        ctxNote: 'carried by the mapping table',
+        ctxBody: 'type    SpecVocabularyError\nkey     innerRadius\nchart   Rose Chart\nbackend echarts\npin     0.5.1\n\npath\n  chart_spec\n    .chartProperties\n    .innerRadius',
+        server: true, compile: false, client: false,
+        whoNote: 'pydantic.ValidationError never crosses the seam, so the path is stable enough to point at a form field across library versions. That is what it is for.',
+        ts: 3,
+        footer: 'A narrowing pin bump is a breaking change. This is what it looks like from inside the editor.'
+      },
+      {
+        doc: 'latency-distribution', hue: 'red', chipLabel: 'REJECTED · VIEW ONLY',
+        stepLabel: '4 / 4 · a refusal that is not an edit',
+        eyebrow: 'BackendCapabilityError',
+        headline: 'Chart.js does not support boxplot.',
+        body: 'Switching backend is a view control, not a document edit — backend is an argument to bind, never a field on the frame. So this changes nothing about the document, and the previous render is still correct. 110 of 705 documents are unsupported by Chart.js, and 340 by Excel, which is why Excel is gated before the request rather than after it.',
+        origin: 'server · the pin’s per-backend vocabulary — 22 chart types for chartjs',
+        repairTitle: 'repair · pick a backend that draws it',
+        repairCost: 'no document change · $0.00',
+        repairDiff: 'boxplot\n  echarts    yes\n  vegalite   yes\n  plotly     yes\n  chartjs    no\n  excel      no   gated before\n                  the request',
+        primary: 'Back to echarts',
+        secondary: 'Keep the document, drop the switch',
+        ctxTitle: 'why this is not an edit',
+        ctxNote: 'ADR-0005 Decision 2',
+        ctxBody: 'bind(spec, data, *,\n     backend="chartjs")\n          ^^^^^^^\n     an argument\n\nthe frame is byte-identical\nbefore and after. one\ndocument, five renders.',
+        server: true, compile: false, client: false,
+        whoNote: 'Storing the backend on the spec would make switching a mutation, and one saved document would stop meaning five charts.',
+        ts: 3,
+        footer: 'Excel never reaches this state: isExcelSupported() greys the affordance first.'
+      }
+    ];
+    const st = STATES[s];
+
+    const BACKENDS = {
+      echarts:  { ms: '41 ms', note: '37 of 48 chart types · theme_spec discarded silently, so the house palette is applied after assemble*' },
+      vegalite: { ms: '39 ms', note: '36 of 48 chart types · the only backend upstream ever recorded output for' },
+      chartjs:  { ms: '40 ms', note: '22 of 48 chart types · 110 of 705 documents unsupported · theme_spec discarded' },
+      plotly:   { ms: '43 ms', note: '38 of 48 chart types · the widest coverage in the pin' }
+    };
+    const b = this.state.backend;
+
+    return {
+      toggleTheme: this.toggleTheme,
+      themeLabel: this.state.theme === 'dark' ? 'Light' : 'Dark',
+
+      // 6a
+      frameJson: `{
+  "x_chartagent": {
+    "transform": {
+      "group_by": ["month", "region"],
+      "aggregate": [
+        { "op": "sum", "field": "revenue", "as": "revenue_sum" }
+      ],
+      "sort": "month",
+      "limit": 60
+    },
+    "semantic_types": {
+      "month": "temporal", "region": "nominal",
+      "revenue_sum": "quantitative"
+    }
+  },
+  "chart_spec": {
+    "chartType": "Line Chart",
+    "encodings": {
+      "x": { "field": "month" },
+      "y": { "field": "revenue_sum" },
+      "color": { "field": "region" }
+    },
+    "chartProperties": {
+      "curveType": "smooth",
+      "maxRows": 0,
+      "showLegend": true,
+      "showPointLabels": false,
+      "lineWidth": 2,
+      "showGrid": true,
+      "yAxisTitle": "Revenue (USD)"
+    },
+    "theme_spec": { "palette": "house-5" }
+  },
+  "base_size": { "width": 640, "height": 400 }
+}`,
+
+      // 6b
+      drawerOpen: this.state.drawer,
+      drawerLabel: this.state.drawer ? '{ } hide document' : '{ } show document',
+      toggleDrawer: () => this.setState(x => ({ drawer: !x.drawer })),
+      drawerJson: `  "chartProperties": {
+-   "curveType": "linear",
++   "curveType": "smooth",
+-   "maxRows": 50,
++   "maxRows": 0,
+    "showLegend": true,`,
+      bE: this.backendBtn(b === 'echarts'),
+      bV: this.backendBtn(b === 'vegalite'),
+      bC: this.backendBtn(b === 'chartjs'),
+      bP: this.backendBtn(b === 'plotly'),
+      pickEcharts: () => this.setState({ backend: 'echarts' }),
+      pickVegalite: () => this.setState({ backend: 'vegalite' }),
+      pickChartjs: () => this.setState({ backend: 'chartjs' }),
+      pickPlotly: () => this.setState({ backend: 'plotly' }),
+      bindMs: BACKENDS[b].ms,
+      backendNote: BACKENDS[b].note + ' — this canvas only has the ECharts renderer loaded; Studio imports one per backend, lazily.',
+
+      // 6d
+      stateDoc: st.doc,
+      stateChip: this.chip(st.hue),
+      stateChipLabel: st.chipLabel,
+      stateStepLabel: st.stepLabel,
+      s0: this.dot(s >= 0, 'var(--amber)'), s1: this.dot(s >= 1, 'var(--red)'),
+      s2: this.dot(s >= 2, 'var(--red)'), s3: this.dot(s >= 3, 'var(--red)'),
+      stateEyebrow: st.eyebrow,
+      stateHeadline: st.headline,
+      stateBody: st.body,
+      stateOrigin: st.origin,
+      repairTitle: st.repairTitle,
+      repairCost: st.repairCost,
+      repairDiff: st.repairDiff,
+      repairPrimary: st.primary,
+      repairSecondary: st.secondary,
+      ctxTitle: st.ctxTitle,
+      ctxNote: st.ctxNote,
+      ctxBody: st.ctxBody,
+      whoServer: this.who(st.server),
+      whoCompile: this.who(st.compile),
+      whoClient: this.who(st.client),
+      whoNote: st.whoNote,
+      tsValid: this.tsRow(false),
+      tsUnrend: this.tsRow(st.ts === 1),
+      tsRejected: this.tsRow(st.ts === 3 || st.ts === 2),
+      stateFooter: st.footer,
+      stateNext: () => this.setState(x => ({ step: (x.step + 1) % 4 })),
+      stateBtnLabel: ['Next — the row-drop refusal', 'Next — a key the pin removed', 'Next — an unsupported backend', 'Start over'][s],
+
+      // 6e
+      refreshChip: this.state.refreshed ? this.chip('teal') : "font:400 10.5px 'IBM Plex Mono';padding:4px 10px;border-radius:20px;color:var(--faint);background:var(--chip)",
+      refreshChipLabel: this.state.refreshed ? 'REFRESHED · $0.00' : 'BOUND 4 AUG',
+      srcName: this.state.refreshed ? 'sales_q4.parquet' : 'sales_q3.parquet',
+      srcMeta: this.state.refreshed ? '4.6 MB · 14,206 rows · just now' : '4.1 MB · 12,480 rows · 4 Aug',
+      rBind: this.state.refreshed ? '44 ms' : '41 ms',
+      rCompile: this.state.refreshed ? '7 ms' : '6 ms',
+      rRows: this.state.refreshed ? '14,206 → 60 rows' : '12,480 → 60 rows',
+      refreshBtn: this.state.refreshed ? 'Bind back to Q3' : 'Refresh against Q4',
+      doRefresh: () => this.setState(x => ({ refreshed: !x.refreshed }), () => this.redraw()),
+      refreshNote: this.state.refreshed
+        ? 'Same document, new rows, 51 ms end to end, nothing billed. This is the pillar the whole of P0 exists to make demonstrable before a planner exists.'
+        : 'The Q4 file is already uploaded. Refreshing does not touch the document — no planner runs, no model is called, and the version stays at 1.2.'
+    };
+  }
+}
+</script>
+</body>
+</html>
