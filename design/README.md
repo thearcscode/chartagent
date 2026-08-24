@@ -3,7 +3,7 @@
 Interactive UI mockups for chartagent, built from `chartagent-prd.md` and
 `prototypes/chartspec-v1/README.md`. The library ships no UI, so these define the
 surface layer around it: a design system, the five places a chart lifecycle
-becomes visible, and a public landing page.
+becomes visible, a public landing page, and the hosted product’s v0 editor.
 
 Each file is a self-contained HTML document. Open it directly in a browser — no
 build step, no install. `support.js` must sit alongside them. Charts render live
@@ -16,10 +16,36 @@ via ECharts (CDN), the PRD's default web target.
 | `Chartagent UI.dc.html` | The mockup canvas — design system plus every product screen, grouped into numbered turns |
 | `Chartagent Landing.dc.html` | Marketing landing page with interactive hero, plus sign-in and create-account screens |
 | `Chartagent Landing Ideas.dc.html` | Scratch file: the three landing sections in isolation before they were folded into the page |
-| `support.js` | Runtime required by the three documents |
+| `Chartagent Studio.dc.html` | Chartagent Studio v0 — the spec editor and renderer, the surface the planner-era canvas does not have |
+| `support.js` | Runtime required by the four documents |
 
 Every screen supports a light and dark theme, toggled by the moon icon at the top
 right of each turn header (or the app chrome, where a host app would put it).
+
+## Screen index — `Chartagent Studio.dc.html`
+
+Studio v0 is the hosted product with **no planner**: open a Flint frame, bind it,
+render it, save it, refresh it at `$0.00`. Every screen in the UI canvas assumes
+an instruction goes in and a chart comes out, so none of them is this surface.
+Settled by [ADR-0005](../docs/adr/0005-bind-is-the-public-seam.md) and
+[ADR-0006](../docs/adr/0006-the-server-binds-the-browser-compiles.md).
+
+**Turn 6 — the spec editor, three ways, plus the states they share**
+
+- `6a` Document first. The frame is the surface, the chart is a preview, and the
+  outline rail is the only concession to not hand-writing JSON.
+- `6b` Chart first. The inspector is generated from `vocabulary()` — option
+  labels from the pin, `min`/`max` shown as *slider bounds, not limits*, a
+  dependency-disabled control, and a `data_dependent` control marked "checked at
+  compile". The document is a drawer. Backend switcher is live.
+- `6c` Pipeline first. Source → transform → bound rows → encodings → compile, with
+  the transform output as a table and per-backend support read from the pin. The
+  seam is visible as a place.
+- `6d` The three states, four steps: *won't render here* (valid document, wrong
+  dataset), the row-drop refusal, `SpecVocabularyError` after a pin bump, and
+  `BackendCapabilityError` on a backend switch. Advance with the button.
+- `6e` Refresh. One `bind` against a new source, an empty document diff, and a
+  saved-spec index where all six cards re-render live.
 
 ## Screen index — `Chartagent UI.dc.html`
 
