@@ -1,7 +1,7 @@
 # 5. `bind` is the public seam
 
-- **Status:** Accepted
-- **Date:** 2026-08-23
+- **Status:** Accepted (amended 2026-08-26)
+- **Date:** 2026-08-23; Decisions 1, 7, 10 and 11 amended 2026-08-26 (ADR-0008)
 - **Settled on:** [#25](https://github.com/thearcscode/chartagent/issues/25)
 - **Builds on:** ADR-0001 (pin Flint; compile in the client), ADR-0002 (the input frame
   *is* the spec), ADR-0003 (rasterise in a browser — this ADR supplies the `Rasteriser`
@@ -78,6 +78,20 @@ false, and an alias would keep teaching it. `bind` is the new glossary term.
 `create_chart_agent()` returns and there is no agent in Phase 0 — P0.11 is a *priority*
 label, and §11's phase table puts the agent in Phase 1. When it lands, `result.refresh()`
 is sugar over `bind`, so there is one operation and not two.
+
+**Erratum — 2026-08-26 ([#4](https://github.com/thearcscode/chartagent/issues/4),
+ADR-0008).** The signature gains one keyword:
+
+```python
+def bind(spec, data, *, backend: Backend, timeout: float | None = None) -> Envelope
+```
+
+ADR-0006 Decision 9 lists *a DuckDB statement timeout* among four caps "all as
+configuration", while Decision 12 below lists *"DuckDB connection handling"* as private —
+so Studio had a configured timeout and no way to reach it. Expiry raises `TransformError`.
+This is the only one of ADR-0006's four caps that must live inside the library, because it
+is the only one guarding *our* execution; the upload limit and the row cap stay Studio's.
+`__all__` is unchanged — `timeout` is a keyword on a name already public.
 
 **Synchronous, everywhere, including `Rasteriser`.** PRD §9 already puts the async API in
 P1. Playwright ships a sync API, so the reference rasteriser costs nothing; a sync
@@ -185,6 +199,16 @@ One error type, `stage: Literal["source", "transform_output"]`, carrying
 "retyped"]`, `expected` and `found`. Pre-check when the transform is declarative; skip
 straight to the post-check when `raw_sql` is present.
 
+**Erratum — 2026-08-26 ([#4](https://github.com/thearcscode/chartagent/issues/4),
+ADR-0008).** *"Its input columns are opaque without parsing SQL"* is now conditional.
+DuckDB will hand us its **own** parse tree — `json_serialize_sql(…)`, from the `json`
+extension built into the wheel — which reports referenced column names and reports `STAR`.
+ADR-0008 Decision 7 already requires that tree for the `raw_sql` relation allowlist, so the
+column set is free once it is parsed. The rule becomes: **run the source-stage pre-check
+when the tree yields a definite column set; skip to the post-check only when `STAR` is
+present.** The transform-output check is unchanged — it can only ever happen after the
+transform runs.
+
 **Retype detection has no baseline, so it does not ship at P0.** Renames and drops need
 nothing stored — the referenced names are in the document. A *retype* needs the type the
 spec was planned against, and nothing in the frame records source dtypes (`semantic_types`
@@ -280,6 +304,23 @@ A flat `errors.py` (#19's layout), base `ChartAgentError`. P0:
 | `RasteriserUnavailableError` | no rasteriser installed — names the extra |
 | `RasterisationError` | the render itself failed |
 
+**Erratum — 2026-08-26 ([#4](https://github.com/thearcscode/chartagent/issues/4),
+ADR-0008).** Two rows above gain detail.
+
+`RawSqlRejectedError` carries `reason: Literal["multi_statement", "not_read_only",
+"unparseable", "empty", "non_file_source", "foreign_relation"]` — plain strings at runtime,
+matching `SchemaDriftError.stage` and `DriftedField.kind` above rather than introducing a
+`StrEnum`. `foreign_relation` is new: ADR-0008 Decision 7 requires every relation a
+`raw_sql` names to be `source` or one of its own CTEs, with no table functions.
+`non_file_source` is **unreachable at P0** — flavour 2 does not exist until P1 (Decision 4
+above) — and stays in the union with a placeholder test, because ADR-0008 reads PRD §8's
+"file-like sources only" by its stated reason, *no foreign dialect*, which admits flavour 3.
+
+`SpecShapeError` gains three cases beyond the inline-`data` one: `raw_sql` present
+alongside any menu slot, a duplicate or colliding transform output name, and an
+unrecognised `transform` slot — never ignored, because a silently-dropped `filter` draws a
+chart over unfiltered data.
+
 `BackendCapabilityError` is deliberately distinct from `SpecVocabularyError`: 38 of 705
 fixtures are unsupported by ECharts, 110 by Chart.js, 340 by Excel, and this is the error
 #27's backend-switch affordance surfaces. Deferred to P1 because both need the agent:
@@ -307,6 +348,25 @@ Frozen `Advisory` objects with a stable `code` and a `message`, in a tuple. Not
 error and no warning (ADR-0001, measured across three presets), and ECharts is the default
 web target. This converts the project's most-cited silent failure into a visible one.
 `dates_normalised` exists because we rewrote the caller's strings and they should know.
+
+**Erratum — 2026-08-26 ([#4](https://github.com/thearcscode/chartagent/issues/4),
+ADR-0008).** Five codes become **six**. `non_finite_nulled` carries the count of non-finite
+floats converted to `null`: measured, `SELECT 1/0` returns `inf` in DuckDB — not `NULL`,
+not an error — and `json.dumps` emits the bare token `Infinity`, which is invalid JSON that
+a browser's `JSON.parse` rejects outright. Left alone it produces an envelope the client
+cannot parse, with nothing in this error surface explaining it. It is not folded into
+`dates_normalised`; none of the five fit.
+
+`dates_normalised` also widens. It is no longer only *"rewritten to ISO-8601"* but also
+**converted to UTC** — ADR-0008 Decision 9 pins `TimeZone='UTC'` on our connection, because
+`current_setting('TimeZone')` is read from the operating system. **N is columns, not
+values**, and the message names them: `"3 columns normalised to ISO-8601 (UTC): ts,
+created_at, closed_at"`. A `TIMESTAMPTZ` column counts unconditionally, even where its
+values were already UTC — that is a data accident, and the caller needs to know the column
+is UTC *by policy* to reason about the next refresh. `Advisory` stays `{code, message}`; the
+column list lives in the message rather than widening the type. All three serialisation
+rules apply to `raw_sql` output too — serialisation is a property of the envelope, not of
+how the rows were produced.
 
 **Not a warning: predictive layout row-drop.** ADR-0001's optimiser hazard — 59 of 705
 fixtures returned a different row count — is decided by Flint at compile time, in the
@@ -408,6 +468,7 @@ Phase 0, and requiring it would make the sandbox a dependency of the spec editor
   reference transform output), Decision 5 (canonical JSON), Decision 6 (pinned `baseSize`).
 - ADR-0003 — rasterise in a browser; the `Rasteriser` shape whose signature is Decision 9.
 - ADR-0004 — the bump gate whose narrowing verdict Decision 12 promotes to a breaking change.
+- ADR-0008 — the transform this seam runs; amends Decisions 1, 7, 10 and 11 here.
 - [#36](https://github.com/thearcscode/chartagent/issues/36) — façade strictness and
   per-backend `chartType`. Behaviour behind these names; no signature here depends on it.
 - The `source_schema` amendment to ADR-0002 — Decision 7's missing baseline.
