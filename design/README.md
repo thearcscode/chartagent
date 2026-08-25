@@ -64,7 +64,8 @@ review comments.
   the light-mode review showing which 2 of 9 checks re-ran.
 - `5b` Schema drift recovery, three steps: detected (spec-vs-snapshot field
   table) → remapping (`plan_tier` → `tier_name`, plus a cast for the retype) →
-  refreshed (spec 1.0 → 1.1, $0.00, mapping recorded). Advance with the button.
+  refreshed (app revision 1 → 2, `spec_version` unchanged at 1.0, $0.00,
+  mapping recorded). Advance with the button.
 - `5c` Escape-reason telemetry. Reason histogram, drill-down showing `pie + line`
   as 311 of 438 `E_LAYER_COMBO` runs, a proposed grammar change with estimated
   rail shift, and custom-rail share by release. Intended as a fourth tab in `1c`.

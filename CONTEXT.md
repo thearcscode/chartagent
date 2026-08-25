@@ -30,6 +30,10 @@ _Avoid_: putting our grammar in `chartProperties`
 What the library does: take a stored input frame plus a data source, run `x_chartagent.transform`, attach the rows as `input.data`, and return the envelope. `chartagent.bind(spec, data, *, backend)`. It neither compiles nor rasterises.
 _Avoid_: render (retired — the library does not render), `chartagent.render`, calling bind a compile step
 
+**Bind cache**:
+Studio's, not the library's. The last *successful* transform output for a saved chart, written to object storage as `{ revision_id, rows }` JSON by a user-initiated bind, and pointed at by one `bind_caches` row. A Library load fetches it and compiles in the client instead of binding; a stale or missing pointer shows *Refresh to bind*. Rows only — never the envelope, the backend, or an advisory, because `theme_spec_ignored` is backend-dependent (ADR-0007).
+_Avoid_: thumbnail, stored render, caching the envelope; treating a cache read as a refresh, or a Library load as a reason to re-read the source
+
 **Advisory**:
 A frozen `{ code, message }` object on `Envelope.warnings`, describing something the library did or ignored — not a Python warning, because the caller has to render it. Distinct from Flint's `_warnings`, which are produced at compile time in the client and never reach CPython.
 _Avoid_: `warnings.warn`, conflating these with Flint `_warnings`
