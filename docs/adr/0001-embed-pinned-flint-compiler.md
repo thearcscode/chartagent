@@ -1,7 +1,7 @@
 # 1. Pin Flint; compile in the client
 
-- **Status:** Accepted (amended 2026-08-22, 2026-08-23)
-- **Date:** 2026-08-21; amended 2026-08-22, 2026-08-23
+- **Status:** Accepted (amended 2026-08-22, 2026-08-23, 2026-08-26)
+- **Date:** 2026-08-21; amended 2026-08-22, 2026-08-23; Decision 3 scoped 2026-08-26 (ADR-0008)
   (2026-08-23 also withdraws the CI-oracle / "unexplained diff" obligation — ADR-0004)
 - **Supersedes:** the backend and integration claims in `docs/research/flint-chart-leverage.md`
   (written 2026-07-22 against flint-chart 0.2.x). The 2026-08-21 *in-process embed*
@@ -81,6 +81,19 @@ Concretely:
    run V8, SpiderMonkey, or JavaScriptCore. Normalising upstream eliminates the
    divergence. Where a string is irreducibly ambiguous (a bare `"Jan"`), state the
    meaning with a `semantic_types` annotation rather than relying on parsing.
+
+   **Erratum — 2026-08-26 ([#4](https://github.com/thearcscode/chartagent/issues/4),
+   ADR-0008).** This decision is often read alongside the Evidence section's *"ISO-8601
+   normalisation PythonMonkey matches Node on all 705"* as though the transform layer
+   closes that gap. It does not, and ADR-0008 Decision 9 is where it stops:
+   **normalisation applies only to columns DuckDB already types as
+   `DATE`/`TIMESTAMP`/`TIMESTAMPTZ`, and a `VARCHAR` is never inspected.** The `"Jan 2020"`
+   case above is a *string* column, so it is untouched — sniffing it would mean rewriting
+   values we guessed at, which is the same silently-wrong-chart class this decision exists
+   to prevent, and it is indeterminate on values like `03/04/2020`. The residual case is
+   served by the last sentence above (`semantic_types`), by ADR-0008's `bin` op, and by an
+   explicit cast in `raw_sql` — not by automatic normalisation. The engine-divergence
+   argument stands unchanged.
 
 4. **No fork, and no modification, for the product build.** We consume the released
    package and add nothing to it. An earlier draft of this decision described "our fork"

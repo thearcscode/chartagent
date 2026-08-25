@@ -1,7 +1,7 @@
 # 2. Adopt Flint's input frame as the chart spec
 
-- **Status:** Accepted (amended 2026-08-23)
-- **Date:** 2026-08-21; Decision 2 job-shape amended 2026-08-23 (ADR-0004)
+- **Status:** Accepted (amended 2026-08-23, 2026-08-26)
+- **Date:** 2026-08-21; Decision 2 job-shape amended 2026-08-23 (ADR-0004); Decision 3's transform specified 2026-08-26 (ADR-0008)
 - **Builds on:** ADR-0001 (pin Flint; compile in the client); ADR-0004 (fixture jobs)
 - **Retires:** `prototypes/chartspec-v1/` — the grammar this replaces
 
@@ -80,6 +80,24 @@ Concretely:
    rows inline. We store the frame *without* `data` and supply it per render from
    `x_chartagent.transform`, which is what makes the `$0.00` refresh claim true: the stored
    artifact describes how to get the rows, never the rows themselves.
+
+   **Erratum — 2026-08-26 ([#4](https://github.com/thearcscode/chartagent/issues/4)).**
+   This decision asserts the transform's *existence* and leaves its shape unspecified.
+   **ADR-0008 specifies it**: eight fixed slots in one canonical order — `filter` →
+   `derive` → `bin` → `group_by`/`aggregate` → `having` → `sort` → `limit` — over a closed
+   24-node expression AST, compiled to DuckDB's relational API rather than to SQL text, with
+   `raw_sql` as an exclusive-or alternative held by three independent locks. Two additions
+   to PRD §8's op list are load-bearing *for this decision in particular*: without `derive`
+   and `bin`, and given Decision 4 below forbidding derivation at the encoding, a monthly
+   time series was inexpressible in the menu — so the escape hatch, not the menu, would have
+   been the ordinary path to a refreshable spec.
+
+   The `transform` in the example above is **not valid** under that specification: every
+   `aggregate` entry now requires an explicit `name` (`{"name": "revenue_sum", "op": "sum",
+   "field": "revenue"}`), because Decision 4 below makes the output column name a contract
+   the encodings depend on, and an implicit `{field}_{op}` rule would be a second grammar to
+   version. The example is left as written, since it is what the frame looked like when this
+   decision was taken; ADR-0008's example is the current one.
 
 4. **Encodings reference transform output columns, never raw columns, and never
    aggregate.** This was decision D2 in `chartspec-v1`, adopted there against Vega-Lite's
