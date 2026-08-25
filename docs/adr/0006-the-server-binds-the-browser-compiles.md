@@ -69,7 +69,7 @@ Routes are **SPA-private behind a Clerk session**: no API keys, no OpenAPI promi
 versioned paths. The library is the public contract; a second one would cost stability
 guarantees v0 has no business making.
 
-### 2. One Docker web service on `python:3.12-slim`, and no host vendor is chosen here
+### 2. Two services — one Docker web container on `python:3.12-slim` beside managed Postgres — and no host vendor is chosen here
 
 The shape is locked, the vendor is a later ticket. **glibc is forced twice over** — duckdb
 ships no musllinux wheels (#19) and Playwright ships no musl browsers (ADR-0003) — so
@@ -80,6 +80,15 @@ later**, so the ~0.98 GB browser image never enters the web service's image or i
 start. Fly.io's process-per-tenant advantage is not weighed here because it no longer
 exists as an advantage: it was an argument about the JavaScript context pool, and
 [#21](https://github.com/thearcscode/chartagent/issues/21) closed with the engine.
+
+**Erratum — 2026-08-25 ([#28](https://github.com/thearcscode/chartagent/issues/28),
+ADR-0007).** The sentence above — *"Postgres and, at P2, a Playwright-image background
+worker are **separate services added later**"* — has been read as deferring Postgres past
+v0. It does not. **Later means not inside the web service's image**: the reason given was
+keeping the ~0.98 GB browser image out of the web image and its cold start, which is an
+image-composition argument, not a scheduling one. ADR-0007 puts **managed Postgres in v0
+as a second service**, so v0's deployment shape is two services, not one. The Playwright
+worker is unchanged and remains P2. The host vendor remains unchosen.
 
 ### 3. FastAPI, one uvicorn process, `def` for anything that binds
 
@@ -209,6 +218,21 @@ and nothing on the server.
 This keeps the ~0.98 GB image, the hundreds of MB per concurrent render, and
 `--ipc=host`'s weakened isolation out of v0 entirely. It is also the better demonstration:
 every card on the page is itself an instance of the `$0.00` refresh claim.
+
+**Erratum — 2026-08-25 ([#28](https://github.com/thearcscode/chartagent/issues/28),
+ADR-0007).** The claim above — *"a card costs one more `assemble*` and nothing on the
+server"* — is true of the **compile** and false of the **rows**. A card needs bound rows,
+and `Chartagent Studio.dc.html`'s `6e` renders six saved documents, so as written this was
+six `bind` calls and six DuckDB reads per Library load, on a page where nothing was
+refreshed.
+
+**What stays:** no stored thumbnails, no rasterisation and no Playwright in v0, and every
+card is still a live `assemble*` in the client, which is what makes it an instance of the
+`$0.00` claim. **What changes:** the rows no longer come from a per-card bind. A
+user-initiated bind writes `{revision_id, rows}` JSON to object storage, and a normal
+Library load fetches that and compiles client-side — no bind, no DuckDB read, no run row
+(ADR-0007 Decision 6). A card whose cache pointer is stale says *Refresh to bind* rather
+than binding silently.
 
 ### 13. Failure is typed and legible; logs are structured and local
 
