@@ -1,7 +1,7 @@
 # 8. The transform menu, and the three locks on its escape hatch
 
-- **Status:** Accepted
-- **Date:** 2026-08-26
+- **Status:** Accepted (amended 2026-08-27)
+- **Date:** 2026-08-26; Decision 4's deferred type vocabulary supplied 2026-08-27 (ADR-0010)
 - **Settled on:** [#4](https://github.com/thearcscode/chartagent/issues/4)
 - **Builds on:** ADR-0001 (pin Flint; compile in the client; ISO-8601 before Flint sees
   data), ADR-0002 (the input frame *is* the spec; `x_chartagent` holds our grammar),
@@ -214,6 +214,18 @@ that is correct here. There is only an allowlist.
 a date compared to a free-form string — with a precise field path, and needs no
 function-resolution model. When schemas are written, DATE/TIMESTAMP versus string-literal
 compatibility is defined explicitly, so the editor and DuckDB cannot disagree.
+
+**Erratum — 2026-08-27 ([#42](https://github.com/thearcscode/chartagent/issues/42),
+ADR-0010).** *"When schemas are written"* — they are now. ADR-0010 Decision 3 supplies the
+vocabulary this sentence deferred: **seven coarse buckets** (`number`, `string`, `boolean`,
+`date`, `timestamp`, `timestamptz`, `other`), mapped **head-based on the type DuckDB
+reports**, before its parameters — so `DECIMAL(10,2)` and `DECIMAL(18,3)` are one bucket, as
+are the `TIMESTAMP` precisions. Literal-vs-column compatibility is decided on those buckets,
+so the drift comparison and this rule share one type system rather than keeping two in step.
+
+The schema read this decision already performs is also what fills
+`Envelope.source_schema` (ADR-0005 Decision 5's erratum) — the value was computed here and
+discarded until ADR-0010 gave it a consumer.
 
 Everything else surfaces as `TransformError` with DuckDB's message as `__cause__` and **our
 node path** attached by the compiler, which is free: we know which node was being compiled

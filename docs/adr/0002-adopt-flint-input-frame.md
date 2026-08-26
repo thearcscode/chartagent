@@ -1,7 +1,7 @@
 # 2. Adopt Flint's input frame as the chart spec
 
-- **Status:** Accepted (amended 2026-08-23, 2026-08-26)
-- **Date:** 2026-08-21; Decision 2 job-shape amended 2026-08-23 (ADR-0004); Decision 3's transform specified 2026-08-26 (ADR-0008); Decisions 4, 5 and 7 amended 2026-08-26 (ADR-0009)
+- **Status:** Accepted (amended 2026-08-23, 2026-08-26, 2026-08-27)
+- **Date:** 2026-08-21; Decision 2 job-shape amended 2026-08-23 (ADR-0004); Decision 3's transform specified 2026-08-26 (ADR-0008); Decisions 4, 5 and 7 amended 2026-08-26 (ADR-0009); **Decision 1's key list amended 2026-08-27 (ADR-0010) — `x_chartagent` holds six keys, not five**
 - **Builds on:** ADR-0001 (pin Flint; compile in the client); ADR-0004 (fixture jobs)
 - **Retires:** `prototypes/chartspec-v1/` — the grammar this replaces
 
@@ -67,6 +67,23 @@ Concretely:
    `chartProperties` — see *Alternatives rejected*, and note that the evidence does **not**
    show `chartProperties` misbehaving today. This is a bet on where future breakage lands,
    not a measured defect.
+
+   **Erratum — 2026-08-27 ([#42](https://github.com/thearcscode/chartagent/issues/42),
+   ADR-0010).** The key list is **six**, not five. `source_schema` joins it: a map of
+   referenced source columns to coarse type buckets, recording the types the spec was
+   *planned against* so that a retype can be detected. It exists because ADR-0005 Decision 7
+   found PRD P0.11's retype clause undeliverable against this frame — `semantic_types` maps
+   transform *output* columns to Flint semantic meanings and is a different fact about
+   different columns. **ADR-0010 specifies it**: written by the caller's save path from the
+   `Envelope.source_schema` diagnostic, never by `bind`; absent on `raw_sql` with `STAR` and
+   on frames predating the key, which draw a `retype_unchecked` advisory rather than an
+   error. Adding it takes `x_chartagent.spec_version` to **1.1** (ADR-0008 Decision 13's
+   MINOR-bump rule), and existing `1.0` frames stay valid unchanged.
+
+   This amends the *grammar*, not stored bytes: no frame is rewritten, and opening an old
+   chart does not bump its `spec_version` — only a save does. Whether the key set is
+   *closed* — what the façade does with an unknown key here — is deliberately still open;
+   ADR-0010 Decision 6 closes `source_schema`'s **values** only.
 
 2. **CI invariant: deleting `x_chartagent` must leave a document that upstream Flint
    compiles, byte for byte identical to the same document without it.** This is the whole
