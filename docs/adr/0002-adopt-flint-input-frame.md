@@ -1,7 +1,7 @@
 # 2. Adopt Flint's input frame as the chart spec
 
 - **Status:** Accepted (amended 2026-08-23, 2026-08-26)
-- **Date:** 2026-08-21; Decision 2 job-shape amended 2026-08-23 (ADR-0004); Decision 3's transform specified 2026-08-26 (ADR-0008)
+- **Date:** 2026-08-21; Decision 2 job-shape amended 2026-08-23 (ADR-0004); Decision 3's transform specified 2026-08-26 (ADR-0008); Decisions 4, 5 and 7 amended 2026-08-26 (ADR-0009)
 - **Builds on:** ADR-0001 (pin Flint; compile in the client); ADR-0004 (fixture jobs)
 - **Retires:** `prototypes/chartspec-v1/` — the grammar this replaces
 
@@ -105,9 +105,31 @@ Concretely:
    The planner therefore has to name derived columns (`revenue_sum`) explicitly — the same
    cost D2 already accepted.
 
+   **Erratum — 2026-08-26 ([#36](https://github.com/thearcscode/chartagent/issues/36),
+   ADR-0009).** *"Flint enforces it for us"* is **false**, and so is the fate-table row
+   below that repeats it. An `aggregate` key inside an encoding object compiles and
+   **changes the compiled chart** — measured at 0.5.1. Flint ignores unknown encoding keys
+   silently but honours this one, so nothing upstream was ever enforcing this rule. The
+   decision itself stands and is now enforced *by us*: ADR-0009 Decision 6 types an encoding
+   as `str | {field, type?}` with `extra='forbid'`, and records `aggregate` as the single
+   deliberate narrowing of the façade against Flint.
+
+   The count is also off. A channel is `{ field }` at **1830 of 1842** upstream channels,
+   not 1830 of 1830: 12 channels are **string shorthand** (`"color": "value"`, on
+   `Choropleth` and `Map`). The shorthand carries a field name and nothing else, so the
+   claim survives; ADR-0009 admits it and normalises it to `{field}` on validation.
+
 5. **Canonical JSON omits nulls, and stays the spec-diff unit for patch mode.** Decision D9,
    unchanged. It is safe against this frame because no fixture upstream uses an explicit
    null, so absent and `null` remain the same statement.
+
+   **Erratum — 2026-08-26 ([#36](https://github.com/thearcscode/chartagent/issues/36),
+   ADR-0009).** For one field this rule is **load-bearing, not a diff convention**.
+   `theme_spec: null` does not read as "no theme" — it **crashes Flint**
+   (`Cannot read properties of null (reading 'extends')`), while an absent `theme_spec`
+   compiles. Absent and `null` are therefore *not* the same statement there. ADR-0009
+   Decision 7 rejects it as `SpecShapeError` rather than coercing it to absent, because a
+   caller who wrote `null` meant something and should be told which.
 
 6. **`baseSize` is part of the spec and is pinned.** ADR-0001 recorded that Flint's layout
    optimizer filters data rows when a discrete channel overflows the layout budget, and that
@@ -120,6 +142,20 @@ Concretely:
    planner keeps completion and validation without us maintaining a parallel vocabulary. The
    façade must be *generated from the pinned bundle*, never hand-written, or it becomes the
    translation layer this ADR exists to avoid.
+
+   **Erratum — 2026-08-26 ([#36](https://github.com/thearcscode/chartagent/issues/36),
+   ADR-0009).** The principle — generated from the pin, never hand-written — is what
+   [#17](https://github.com/thearcscode/chartagent/issues/17)'s probe confirmed, and it
+   stands. Two specifics inside it were wrong. **`chartType` is not a flat `Literal` of 33
+   strings**: the pinned bundle ships 48 chart types in union and 11 in intersection, and
+   the vocabulary is **per backend** (36 vegalite / 37 echarts / 22 chartjs / 38 plotly / 18
+   excel), so one flat list is wrong for every backend at once. And **`chartProperties` is
+   not `ChartPropertyDef` alone** — the vocabulary lives in *two* runtime arrays,
+   `properties[]` and `encodingActions[]`, 317 entries together.
+
+   How strictly the generated façade may validate — which this decision left implied — is
+   settled by **ADR-0009**, along with the five sites beyond `chartProperties` that carry
+   the same silent-ignore failure.
 
 8. **Layers stay out of scope.** Flint's template registry is why its output looks good, and
    a generic overlay engine gives that up. If composition is revisited, the cheap routes come
@@ -170,7 +206,7 @@ those errors as repair feedback rather than hard failures.
 | # | Decision | Fate |
 | --- | --- | --- |
 | D1 | `mark` as a discriminated union of objects | **Lost.** `chartType` is a string; the façade recovers a `Literal`, not the per-mark parameters. |
-| D2 | No `aggregate` on the channel; encodings reference transform output | **Kept, and now enforced upstream** — a Flint channel is `{ field }`. |
+| D2 | No `aggregate` on the channel; encodings reference transform output | **Kept — but enforced by us, not upstream.** ~~now enforced upstream~~; see the Decision 4 erratum (2026-08-26, ADR-0009): Flint honours `aggregate` on an encoding, and the façade is what forbids it. |
 | D3 | `tooltip` as a list of channels | **Superseded.** Flint has no tooltip channel; `options.addTooltips` is a boolean, used by 93% of fixtures. |
 | D4 | Per-mark channel contract as data, not branching code | **Superseded, better.** Flint ships `ChartPropertyDef` / `EncodingActionDef`, generated rather than hand-maintained. |
 | D5 | Layers as bounded overlays on a base mark | **Deferred** — out of scope by explicit decision, see Decision 8. |
@@ -272,6 +308,9 @@ storing output means re-planning to change target.
 - `prototypes/flint-frame/` — the probe behind every number above.
 - `prototypes/chartspec-v1/` — retired by this decision. Keep it: its README is the primary
   source for D1–D9 and for the two-phase validation finding, which survives.
+- ADR-0009 — what the façade validates: Decision 7's strictness, the per-backend chart-type
+  vocabulary, and the five sites beyond `chartProperties` that carry the same silent-ignore
+  failure. Amends Decisions 4, 5 and 7 above.
 - `design/README.md` — the state / data palette split the precedence rule above refers to.
 - Not yet decided: whether `escape` belongs inside `x_chartagent` as a field or is a sibling
   result type. `chartspec-v1`'s README raises this and it is still open.

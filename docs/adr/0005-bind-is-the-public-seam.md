@@ -1,16 +1,17 @@
 # 5. `bind` is the public seam
 
 - **Status:** Accepted (amended 2026-08-26)
-- **Date:** 2026-08-23; Decisions 1, 7, 10 and 11 amended 2026-08-26 (ADR-0008)
+- **Date:** 2026-08-23; Decisions 1, 7, 10 and 11 amended 2026-08-26 (ADR-0008); Decisions 3, 8, 10 and 12 amended 2026-08-26 (ADR-0009)
 - **Settled on:** [#25](https://github.com/thearcscode/chartagent/issues/25)
 - **Builds on:** ADR-0001 (pin Flint; compile in the client), ADR-0002 (the input frame
   *is* the spec), ADR-0003 (rasterise in a browser — this ADR supplies the `Rasteriser`
   signature it deferred), ADR-0004 (fixture jobs)
 - **Amends:** PRD §7.8's public API sketch and P0.11's `chartagent.render(spec, data)` /
   `result.refresh()`. The requirement is unchanged; the names are not.
-- **Leaves open:** how strictly the generated façade validates, and how `chartType` is
-  typed per backend — [#36](https://github.com/thearcscode/chartagent/issues/36). That is
-  behaviour behind these names, and no signature here moves whichever way it lands.
+- **~~Leaves open~~ — closed 2026-08-26 by ADR-0009:** how strictly the generated façade
+  validates, and how `chartType` is typed per backend
+  ([#36](https://github.com/thearcscode/chartagent/issues/36)). No signature here moved, as
+  predicted — but four decisions gained errata, listed in ADR-0009's *What this amends*.
 
 ## Context
 
@@ -121,6 +122,22 @@ surprise at the far end of the call.
 always what comes back on the envelope. `InputFrame` is the hand-written 5-key frame
 envelope — the one part of the façade that cannot be generated (#17) — whose
 `chart_spec.chartProperties` is typed by a *generated* per-(backend, chart type) model.
+
+**Erratum — 2026-08-26 ([#36](https://github.com/thearcscode/chartagent/issues/36), ADR-0009).**
+`chartProperties` **cannot be statically typed on `InputFrame` at all**, because the frame
+has no backend — Decision 2 above is what makes that so. Property key sets diverge per
+backend for 39 of 48 chart types (`Scatter Plot` is 6 keys on vegalite, 1 on echarts, 0 on
+excel), so no model keyed on `chartType` alone exists to hang on the field. ADR-0009
+Decision 2 splits validation in two: the frame validates what is backend-free (`chartType`,
+channel names, encoding objects, `theme_spec`, `semantic_types`), and `bind` validates what
+is backend-keyed (chart-type membership in the requested backend, then `chartProperties`
+against the generated model). On `InputFrame` the field is an open mapping.
+
+ADR-0009 also splits the first refusal below in two. A key the pin declares **nowhere**
+stays `SpecVocabularyError`; a key it declares for **another** backend but not the
+requested one is `BackendCapabilityError` naming the keys — 9 of 30 property fixtures are
+in that position, and collapsing them would make a portable document indistinguishable from
+a stale one.
 
 Two refusals:
 
@@ -243,6 +260,16 @@ exposed so a form can say applicability is the client's call. The generated Pyda
 models stay public too — they are in the signature — but forms are built from
 `vocabulary()`.
 
+**Erratum — 2026-08-26 ([#36](https://github.com/thearcscode/chartagent/issues/36), ADR-0009).**
+`vocabulary()` carries more than this decision lists, because ADR-0009 demoted three things
+from gates to affordances. `ChartVocabulary` also holds the **per-chart-type `channels`
+list** — which under-declares by 19 measured pairs Flint honours, so it can inform a form
+and must never validate one — and `vocabulary()` additionally exposes the **global channel
+export**, the **theme presets** and the **semantic-type names**, all three of which *are*
+closed and *are* validated. The rule for a reader: what `vocabulary()` exposes is not the
+same set as what the façade rejects on, and ADR-0009 Decision 13 keeps the bump gate
+aligned with the second set.
+
 **`flint_bundle`.** The app cannot render without loading Flint at the exact bytes the
 envelope's `flint_version` claims. #19 vendored the IIFE as package data under private
 `_bundle/`, leaving the app to either reach into a private path or fetch from a CDN — and
@@ -321,6 +348,26 @@ alongside any menu slot, a duplicate or colliding transform output name, and an
 unrecognised `transform` slot — never ignored, because a silently-dropped `filter` draws a
 chart over unfiltered data.
 
+**Erratum — 2026-08-26 ([#36](https://github.com/thearcscode/chartagent/issues/36), ADR-0009).**
+Three rows above move again.
+
+`SpecVocabularyError` gains **`kind`**, because it now covers seven rejection sites rather
+than one: `Literal["chart_type", "channel", "property", "enum_option", "semantic_type",
+"theme_preset", "encoding_key"]` — plain strings, matching `SchemaDriftError.stage` and
+`RawSqlRejectedError.reason` above. It is `enum_option` and not `option`, because the
+frame's top-level `options` bag is the one place ADR-0009 does **not** reject on and the
+collision would read backwards. Each raise carries **every offender of its own kind** as a
+tuple, following `DriftedField`; kinds are never mixed on one error, and ADR-0009 Decision
+11 fixes the check order that decides which kind wins.
+
+`BackendCapabilityError` is no longer only "the chart type is unsupported by the requested
+backend" — it also fires for a **property key the pin declares for another backend**, and
+**names the offending keys** when the failure is a knob rather than a chart type.
+
+`SpecShapeError` gains a fourth case: **`theme_spec: null`**, which crashes Flint outright
+(`Cannot read properties of null (reading 'extends')`) where an absent `theme_spec`
+compiles. It is rejected, never coerced to absent.
+
 `BackendCapabilityError` is deliberately distinct from `SpecVocabularyError`: 38 of 705
 fixtures are unsupported by ECharts, 110 by Chart.js, 340 by Excel, and this is the error
 #27's backend-switch affordance surfaces. Deferred to P1 because both need the agent:
@@ -397,7 +444,18 @@ normalisation, and `x_chartagent` parsing internals.
 **A Flint pin bump is not by itself a library breaking change. A narrowing is.** The five
 failures `check_bump.py` already exits non-zero on — chart type removed, property removed,
 property retyped, enum option removed, backend export missing — each mean a stored frame
-that bound yesterday raises `SpecVocabularyError` today. That is the rule tying #19's
+that bound yesterday raises `SpecVocabularyError` today.
+
+**Erratum — 2026-08-26 ([#36](https://github.com/thearcscode/chartagent/issues/36), ADR-0009).**
+The breaking surface is **wider than these five**, because ADR-0009 closed four more
+vocabularies. A removed **theme preset**, a removed **global channel**, a removed
+**semantic type**, or a chart type removed from **one backend's** list each also turn a
+frame that bound yesterday into one that raises today, and each is therefore a narrowing
+and a major under pre-1.0 SemVer. `backend export missing` stays. Changes to a
+per-chart-type `channels` list, to `min`/`max`/`step`, and to `dependencies` are **reported
+and not fatal** — the façade does not reject on them, so they cannot break a stored frame.
+The rule, in one line: the gate fails on exactly what the façade rejects on; anything the
+façade merely exposes is a report. That is the rule tying #19's
 SemVer policy to #24's bump gate, and it answers how the pin relates to our version number
 without encoding the pin in it (PyPI refuses local versions anyway).
 
@@ -469,8 +527,9 @@ Phase 0, and requiring it would make the sandbox a dependency of the spec editor
 - ADR-0003 — rasterise in a browser; the `Rasteriser` shape whose signature is Decision 9.
 - ADR-0004 — the bump gate whose narrowing verdict Decision 12 promotes to a breaking change.
 - ADR-0008 — the transform this seam runs; amends Decisions 1, 7, 10 and 11 here.
-- [#36](https://github.com/thearcscode/chartagent/issues/36) — façade strictness and
-  per-backend `chartType`. Behaviour behind these names; no signature here depends on it.
+- ADR-0009 — what the façade validates, settling
+  [#36](https://github.com/thearcscode/chartagent/issues/36); amends Decisions 3, 8, 10 and
+  12 here. No signature moved.
 - The `source_schema` amendment to ADR-0002 — Decision 7's missing baseline.
 - [#26](https://github.com/thearcscode/chartagent/issues/26),
   [#27](https://github.com/thearcscode/chartagent/issues/27),
