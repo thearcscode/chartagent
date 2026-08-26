@@ -1,7 +1,7 @@
 # 5. `bind` is the public seam
 
-- **Status:** Accepted (amended 2026-08-26)
-- **Date:** 2026-08-23; Decisions 1, 7, 10 and 11 amended 2026-08-26 (ADR-0008); Decisions 3, 8, 10 and 12 amended 2026-08-26 (ADR-0009)
+- **Status:** Accepted (amended 2026-08-26, 2026-08-27)
+- **Date:** 2026-08-23; Decisions 1, 7, 10 and 11 amended 2026-08-26 (ADR-0008); Decisions 3, 8, 10 and 12 amended 2026-08-26 (ADR-0009); Decisions 5, 7 and 11 amended 2026-08-27 (ADR-0010) — **Decision 7's retype deferral is closed**
 - **Settled on:** [#25](https://github.com/thearcscode/chartagent/issues/25)
 - **Builds on:** ADR-0001 (pin Flint; compile in the client), ADR-0002 (the input frame
   *is* the spec), ADR-0003 (rasterise in a browser — this ADR supplies the `Rasteriser`
@@ -182,6 +182,22 @@ The app still needs more than that — how long the transform took, how many row
 back, what we quietly changed. Those hang off the `Envelope` **object** as attributes
 that never serialise into `input`: `.row_count`, `.elapsed`, `.warnings`.
 
+**Erratum — 2026-08-27 ([#42](https://github.com/thearcscode/chartagent/issues/42),
+ADR-0010).** A fourth diagnostic joins them: **`.source_schema`**, the referenced-column
+bucket map for the source this bind read. Same rule — it hangs off the object and never
+serialises into `input`, and the wire format stays exactly three keys. `bind` already reads
+this schema for ADR-0008 Decision 4's identifier allowlist and discarded it until now, so it
+costs nothing new.
+
+It is a diagnostic and not an accessor on purpose: computing it does **I/O against a
+DataSource**, so exposing it as `source_schema(spec, data)` would have made it the second
+verb that reads a source, against Decision 1's one-verb P0 surface. `__all__` is unchanged —
+`Envelope` was already public and this is an attribute on it.
+
+Name it for what it is: **what *this bind* saw**, never "the stored baseline". The stored
+baseline is whatever a save wrote into `x_chartagent.source_schema`, which may be older, and
+telling the two apart is the entire point of the comparison.
+
 ### 6. `bind` runs the transform in-process. No sandbox at P0
 
 PRD §7.5 puts *"transform queries on both rails (LLM-derived)"* inside the sandbox. At
@@ -234,6 +250,24 @@ maps *output* columns to Flint semantic types, which is a different thing). The 
 and therefore an **ADR-0002 amendment** — graduated as its own ticket rather than smuggled
 in here. Until it lands, P0.11's retype clause is unmet and the transform fails loudly
 instead.
+
+**Erratum — 2026-08-27 ([#42](https://github.com/thearcscode/chartagent/issues/42),
+ADR-0010).** **The deferral is closed and retype detection ships.** ADR-0010 adds
+`x_chartagent.source_schema` as the sixth key, over **seven coarse buckets** (`number`,
+`string`, `boolean`, `date`, `timestamp`, `timestamptz`, `other`) rather than the raw dtypes
+this paragraph imagined — the rule being *collapse where the chart does not change, split
+where it does*, so `INTEGER` → `BIGINT` is silent and `VARCHAR` → `DATE` raises.
+
+Two narrowings to the shape above. **`kind: "retyped"` is a `stage: "source"` kind only**:
+within a revision the transform is immutable, so if every source bucket holds then every
+output bucket holds, and output retype is *implied* rather than separately checkable — there
+is no transform-output baseline and there should not be one. And **`expected` and `found`
+both hold buckets** for a retype (`expected="string", found="date"`), with DuckDB's logical
+type carried in the message instead, since naming `DATE` in a field would imply we compare
+logical types when we deliberately do not.
+
+A missing or partial baseline is **never** an error: it raises the `retype_unchecked`
+advisory added to Decision 11, and columns that do have an entry are still checked.
 
 ### 8. Three accessors are public because the app cannot work without them
 
@@ -403,6 +437,17 @@ not an error — and `json.dumps` emits the bare token `Infinity`, which is inva
 a browser's `JSON.parse` rejects outright. Left alone it produces an envelope the client
 cannot parse, with nothing in this error surface explaining it. It is not folded into
 `dates_normalised`; none of the five fit.
+
+**Erratum — 2026-08-27 ([#42](https://github.com/thearcscode/chartagent/issues/42),
+ADR-0010).** Six codes become **seven**. `retype_unchecked` fires when a source-stage drift
+check runs and **any** referenced column lacks a baseline entry in
+`x_chartagent.source_schema`, with the columns and the reason in the message. Absence arises
+four ways — the frame predates the key, the frame was hand-authored, a save had no bound
+source, or the transform is `raw_sql` with `STAR` — and a *partial* baseline is the same
+event at a smaller size, so it is **one code with the cause in the message**, not four codes.
+That follows `additive_drift_ignored`, and branching a code on its cause would be a first
+here. `STAR` fires it too: a permanent condition should not be a silent one, and
+`raw_sql_used` already fires alongside it on every escape bind.
 
 `dates_normalised` also widens. It is no longer only *"rewritten to ISO-8601"* but also
 **converted to UTC** — ADR-0008 Decision 9 pins `TimeZone='UTC'` on our connection, because

@@ -1,7 +1,7 @@
 # 7. What Studio stores
 
-- **Status:** Accepted
-- **Date:** 2026-08-25
+- **Status:** Accepted (amended 2026-08-27)
+- **Date:** 2026-08-25; Decision 8 amended 2026-08-27 (ADR-0010) — one exception to the byte-identical cache test
 - **Settled on:** [#28](https://github.com/thearcscode/chartagent/issues/28)
 - **Builds on:** ADR-0002 (the input frame *is* the spec; canonical JSON is the diff
   unit), ADR-0005 (`canonical_json` is public precisely so this schema does not write its
@@ -234,6 +234,20 @@ cache in the same request path**, with a `save` run. If the user edited after th
 preview bind, no cache is written and the card says *Refresh to bind* honestly. A cache
 is **never fabricated for a frame that was never bound**, and a save succeeds even if the
 cache object write fails — the cache is an optimisation, and the revision is the record.
+
+**Erratum — 2026-08-27 ([#42](https://github.com/thearcscode/chartagent/issues/42),
+ADR-0010).** The byte-identical test gains **one exception**. ADR-0010 has the save path copy
+`Envelope.source_schema` into `x_chartagent.source_schema`, which changes `canonical_json` —
+so on the first honest save of every chart that predates the key, the frame being saved is
+*never* byte-identical to the one the bound result came from, and every such save would
+report *Refresh to bind* for a result that is perfectly good.
+
+So: **when the only difference between the frame being saved and the frame the cache was
+built from is `source_schema` copied from that same bind's envelope, write the cache
+anyway.** The rows remain valid because neither Flint nor the transform reads the key — it is
+a recorded fact, not an input. Every other difference still fails the test, and a cache is
+still never fabricated for a frame that was never bound. Such a save also writes
+`spec_version` `1.1`, since the frame now uses the sixth key.
 
 ### 9. Deletes are hard; Postgres names the keys, the app empties the bucket
 

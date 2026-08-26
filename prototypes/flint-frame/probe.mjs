@@ -142,12 +142,19 @@ function survey() {
 // The load-bearing question: can we carry our own grammar in this document
 // without perturbing what Flint compiles?
 
+// A hand-maintained mirror of ADR-0002 Decision 1's key list. Nothing binds the two, so
+// the delete-`x_chartagent` invariant (ADR-0004 Decision 1) exercises exactly the keys
+// named here — a key missing from this literal is untested, not merely untried. Flint never
+// reads inside the block either way, so a new key survives by construction; naming it here
+// is what makes the invariant *cover* it. Add to this whenever D1's list grows.
 const PROBE = {
   spec_version: '2.0',
   transform: { group_by: ['quarter'], aggregate: [{ op: 'sum', field: 'revenue' }] },
   annotations: [{ kind: 'band', from: '2026-01', to: '2026-03', label: 'launch' }],
   interactions: { hover: 'nearest' },
   escape: null,
+  // Sixth key, ADR-0010. Referenced source columns -> coarse type buckets.
+  source_schema: { quarter: 'date', revenue: 'number' },
 };
 
 function transparency() {
