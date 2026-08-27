@@ -146,6 +146,12 @@ They have different n, different composition and different purposes, and conflat
 what produced the §11-versus-§14 contradiction this ADR corrects. The corpus can be
 *authored* earlier (#7), but it cannot be *scored* until the planner exists (Decision 2).
 
+**Note, 2026-08-28 ([#7](https://github.com/thearcscode/chartagent/issues/7), ADR-0014).**
+*"Different composition"* is now specified: the two are **disjoint request sets sharing a
+tagging schema** (intents, dataset shapes, stress cell). The 50 is scored once and the 150
+every release, so a 50 nested inside the 150 would be re-scored continuously and tuned
+against — pre-registration would die at the first look.
+
 ### 8. Pooled 50, with the mixture pre-registered
 
 The gate is scored on the **pooled 50**, not on the 30-request representative stratum.
@@ -163,6 +169,32 @@ how the *common majority* story is read; the 50 is the only n that can tell 60 f
 
 **This ADR hands #7 exactly one constraint: the ratio is frozen before scoring, not tuned to
 the outcome.**
+
+**Note on this decision's wording, 2026-08-28
+([#7](https://github.com/thearcscode/chartagent/issues/7), ADR-0014).** This decision calls
+the 30 the *representative* stratum and the 20 the *nasty* ones. Having examined every
+available request corpus, **none measures request frequency in the wild** — nvBench 1.0 and
+2.0 are SQL- and LLM-synthesised, Quda's task mix is a factorial of its own elicitation
+protocol, and the NLV Corpus was elicited by showing participants a chart. So
+*representative* asserts an external population nothing we can reach supplies, while this
+decision's own gloss — *"how the common majority story is read"* — is already accurate. The
+strata are renamed **common-path stratum** and **adversarial stratum** in `CONTEXT.md` and
+in ADR-0014 Decision 1.
+
+**This changes no decision here.** The 30/20 ratio, scoring on the pooled 50, reporting both
+strata beside it, the Wilson trip rule and pre-registration-before-scoring all stand.
+
+ADR-0014 Decision 12 additionally records — as a finding, not an amendment — that the
+n-costing above assumes a **binomial**, while a frozen heterogeneous composition is
+**Poisson-binomial** with strictly smaller variance (measured: 1.44× smaller SD at the
+pre-registered mixture). Wilson therefore overstates sampling uncertainty and this gate is
+**harder to clear than costed**. The trip rule is unchanged; the conservatism is disclosed
+beside the interval.
+
+One further consequence ADR-0014 draws out: pre-registration freezes the **ratio**, not the
+**difficulty** of the 20 — and on this gate's arithmetic, if the common path lands exactly on
+the ~80% hypothesis the adversarial stratum must still score **≥13/20 = 65%** to clear.
+Difficulty is therefore frozen too, as a cell × stratum matrix, in ADR-0014 Decision 2.
 
 ### 9. The gate trips on the interval, not the point estimate
 
