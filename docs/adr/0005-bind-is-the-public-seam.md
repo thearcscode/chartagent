@@ -404,7 +404,17 @@ compiles. It is rejected, never coerced to absent.
 
 `BackendCapabilityError` is deliberately distinct from `SpecVocabularyError`: 38 of 705
 fixtures are unsupported by ECharts, 110 by Chart.js, 340 by Excel, and this is the error
-#27's backend-switch affordance surfaces. Deferred to P1 because both need the agent:
+#27's backend-switch affordance surfaces.
+
+**Erratum — 2026-08-27 ([#9](https://github.com/thearcscode/chartagent/issues/9),
+ADR-0012).** `BackendCapabilityError` gains **`kind`**, because it now has three raise sites
+rather than two: `Literal["chart_type", "property", "facet"]` — plain strings, matching
+`SchemaDriftError.stage`, `RawSqlRejectedError.reason` and `SpecVocabularyError.kind` above.
+The third site is **Excel plus a `column`/`row` encoding** (ADR-0012 Decision 3), which
+carries the offending channel names as a tuple. ADR-0009 Decision 11's check order gains it
+as step 7, moving `chartProperties` to step 8.
+
+Deferred to P1 because both need the agent:
 `UnanswerableInstructionError` (P0.9's second half) and `HistoryReferenceError` (§7.8's
 unresolvable VFS reference).
 

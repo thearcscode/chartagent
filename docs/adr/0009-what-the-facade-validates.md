@@ -310,6 +310,19 @@ channel is never hidden behind "this backend cannot draw this chart type":
 Step 6 sits immediately before step 7 because step 7 *selects its model* by (backend,
 chartType) and cannot run without it.
 
+**Erratum — 2026-08-27 ([#9](https://github.com/thearcscode/chartagent/issues/9),
+ADR-0012).** The order is **eight steps**. A new check is inserted between the two above:
+
+> 7. **Excel + a `column`/`row` encoding → `BackendCapabilityError`, `kind="facet"`**,
+>    carrying the offending channel names as a tuple
+> 8. `chartProperties` against the (backend, chartType) model *(the step 7 above)*
+
+It sits *after* the chart-type check so that the 12 faceted frames whose chart type Excel
+does not declare report the chart type — the more actionable of the two, since a type Excel
+will never draw is not repaired by dropping the facet. `BackendCapabilityError` gains
+`kind: Literal["chart_type", "property", "facet"]` to keep the three sites apart, exactly as
+Decision 12 does for `SpecVocabularyError`.
+
 Each error carries **all** offenders of its own kind as a tuple, following
 `SchemaDriftError.drifted`. Three misspelled property keys are one `SpecVocabularyError`
 naming three — not three refresh round-trips, which matters most on the zero-LLM path,
@@ -405,6 +418,19 @@ global 26, so they pass Decision 5's gate; Flint's own Excel assembler throws *"
 backend does not support faceting in one native Excel chart"*; and
 `bind(..., backend="excel")` raising `BackendCapabilityError` is correct. It is capability,
 not vocabulary, and it stays #9's.
+
+**Note — 2026-08-27 ([#9](https://github.com/thearcscode/chartagent/issues/9), ADR-0012).**
+Answered, and no longer an open illustration: Excel faceting is now a **named rule** that
+`bind` raises on (ADR-0012 Decision 3), admitted because it is expressible in vocabulary
+this ADR already closes — two channel names from Decision 5's global export against one
+backend name — and bound to a corpus biconditional on `fixtures-invariant` rather than kept
+true by hand. The count above is also corrected, and it does not decompose into 104:
+**114 fixtures carry a `column` or `row` channel**, of which **102 refuse for faceting** and
+**12 refuse earlier** for a chart type Excel does not declare. No faceted fixture is
+accepted by Excel, and no faceting refusal occurs without a facet channel. Where 104 came
+from is not recoverable from this ADR's text; the three numbers above are the measured ones
+(`prototypes/backend-capability/probe.mjs`). The routing answer this decision deferred is
+*filter, never fallback* (ADR-0012 Decision 7) — `bind` still does not re-route.
 
 ## What this amends
 

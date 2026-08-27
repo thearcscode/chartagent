@@ -164,6 +164,17 @@ that it is not a workbook.
 *common* Excel outcome rather than an edge case. `isExcelSupported()` gates the affordance
 before the request is made.
 
+**Erratum — 2026-08-27 ([#9](https://github.com/thearcscode/chartagent/issues/9),
+ADR-0012).** `isExcelSupported()` gates the **declared chart type** and nothing more — it is
+one line, `flintChartType in EXCEL_TYPE_MAP` — so it catches **146 of the 340**, not "Excel
+will draw this". Measured, the other 194 are 102 faceting refusals and 92 preconditions on
+the axis types, grouping and row values. The affordance therefore needs a second gate,
+**Excel plus a `column`/`row` channel** (ADR-0012 Decision 3), which `bind` now raises on;
+and the remaining 92 stay *realised capability*, visible only after `assemble*` and never
+predicted server-side. A related consequence for this decision: **353 of the 365 fixtures
+Excel accepts refuse on zero rows**, so an empty filter result is the ordinary Excel
+failure, not a corner.
+
 ### 9. Refusals, not degradation
 
 **`baseSize` is pinned in every compiled option.** After `assemble*`, the client compares

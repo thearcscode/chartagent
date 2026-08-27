@@ -67,8 +67,24 @@ Turning a compiled backend document into PNG or SVG bytes. A separate job from c
 _Avoid_: treating rasterise as what the library returns
 
 **Zero-LLM refresh**:
-Re-running `x_chartagent.transform` for new rows and compiling the same stored input frame, with no model call.
+Re-running `x_chartagent.transform` for new rows and compiling the same stored input frame, with no model call. On Excel, compile can still refuse when the new rows are empty or too few; `bind` succeeding is not that refusal.
 _Avoid_: storing compiled output, storing rows in the spec
+
+**Declared capability**:
+What the pin says a backend can draw: `(backend, chartType)` read off `vocab.json`, plus one named rule — Excel with a `column` or `row` channel. Pin-derived, data-free, decidable in CPython, and what `bind` raises `BackendCapabilityError` on. Exact for four of five backends; on Excel it is 146 of 340 refusals plus the facet rule's 102 (ADR-0012).
+_Avoid_: `CapabilityProfile`, a `supports()` predicate (that is `vocabulary(backend)` renamed), calling it a coarse form of realised capability
+
+**Realised capability**:
+Whether the assembler accepted the document and whether the output actually painted. Client-side, after compile, **reported and never predicted** — and on Excel a function of the rows, which is why the library refuses to model it. Applicability (`data_dependent`, 161 of 317 entries) lives here too.
+_Avoid_: a Python mirror of `assembleExcel`, a measured `(chartType, shape)` accept-list, treating `bind` succeeding as evidence the chart compiles
+
+**Rail routing**:
+Choosing the deterministic rail or the custom-code rail for a request (PRD §7.3). What the deterministic-rail share measures.
+_Avoid_: "router" unqualified, conflating it with backend selection
+
+**Backend selection**:
+Choosing which of Flint's five backends a frame is bound for — the planner filling `bind`'s required `backend` kwarg. A **filter** over declared capability, never a runtime fallback; ranking among the backends that qualify is planner policy and is not yet decided.
+_Avoid_: "router" unqualified, silent re-routing on `BackendCapabilityError`, a `backend` field stored on the frame
 
 **Flint pin**:
 The exact `flint-chart` version the façade, the fixture jobs, and client `assemble*` must share. Paired with a fixture commit: `FIXTURE_COMMIT` must resolve to the git tag named by `FLINT_VERSION`.
