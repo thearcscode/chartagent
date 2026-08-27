@@ -164,6 +164,12 @@ two type systems that must be kept in step.
 
 ### 4. The mapping is head-based on the reported type
 
+> **Erratum — 2026-08-27 (#5, ADR-0011).** This table is **one engine's mapping, not the
+> vocabulary.** The seven buckets are drawn where the *chart* changes, so they are
+> engine-neutral; PRD §7.4's flavour-2 sources report their own type names
+> (`NUMBER(38,0)`, `TIMESTAMP_NTZ`, `VARIANT`) and get their own head tables when they
+> land. Read the table below as the DuckDB mapping.
+
 DuckDB *accepts* 82 type names in 1.5.5 but *reports* far fewer: 21 aliases spelled every
 legal way collapse to 9 reported strings (`int4`/`int32`/`integer`/`int` → `INTEGER`;
 `string`/`text`/`varchar`/`nvarchar` → `VARCHAR`; `datetime` → `TIMESTAMP`). The table keys on
@@ -171,7 +177,24 @@ what `DESCRIBE` reports, so it needs no alias column.
 
 But reported types carry parameters, so the mapping matches the **constructor head before its
 parameters** — never the whole string. `DECIMAL(10,2)` and `DECIMAL(18,3)` are one bucket;
-so are `STRUCT(…)`, `LIST(…)`, `ARRAY[n]` and the timestamp precisions.
+so are `STRUCT(…)`, `MAP(…)`, `UNION(…)` and the timestamp precisions.
+
+> **Erratum — 2026-08-27 ([#5](https://github.com/thearcscode/chartagent/issues/5),
+> ADR-0011).** This decision named `LIST(…)` and `ARRAY[n]` as reported heads. **DuckDB
+> emits neither.** Measured (`prototypes/data-profile/reported_composites.py`, 1.5.5), lists
+> and arrays are reported **postfix** — `INTEGER[]`, `BIGINT[]`, `INTEGER[3]`,
+> `VARCHAR[][]` — so a prefix-head rule buckets `BIGINT[]` as **`number`** and
+> `VARCHAR[][]` as **`string`**. `STRUCT(…)`, `MAP(…)` and `UNION(…)` are prefix-formed and
+> were always right; `STRUCT(…)[]` is right for the wrong reason.
+>
+> The consequence lands inside this ADR's own failure mode: a `BIGINT[]` column records
+> `number`, so unnesting it to plain `BIGINT` reads `number` → `number` and raises **no**
+> `SchemaDriftError`, while ADR-0008 Decision 4's allowlist stays quiet because the name did
+> not change.
+>
+> **The rule is amended: any reported type ending in `]` is `other`, tested before any
+> prefix head.** `LIST` and `ARRAY` are struck from the table below. No implementation was
+> affected — this ADR landed the same day, against a repo with no `pyproject.toml`.
 
 | bucket | reported type heads |
 | --- | --- |
@@ -181,7 +204,7 @@ so are `STRUCT(…)`, `LIST(…)`, `ARRAY[n]` and the timestamp precisions.
 | `date` | `DATE` |
 | `timestamp` | `TIMESTAMP`, `TIMESTAMP_S`, `TIMESTAMP_MS`, `TIMESTAMP_NS` |
 | `timestamptz` | `TIMESTAMP WITH TIME ZONE` |
-| `other` | `TIME`, `TIME WITH TIME ZONE`, `INTERVAL`, `BLOB`, `BIT`, `STRUCT`, `LIST`, `ARRAY`, `MAP`, `UNION`, `JSON`, `GEOMETRY`, `VARIANT`, `NULL` |
+| `other` | any reported type ending in `]` (lists and arrays), `TIME`, `TIME WITH TIME ZONE`, `INTERVAL`, `BLOB`, `BIT`, `STRUCT`, `MAP`, `UNION`, `JSON`, `GEOMETRY`, `VARIANT`, `NULL` |
 
 Three placements are judgement calls and are recorded as such.
 
