@@ -141,10 +141,13 @@ hand-written rule is otherwise guaranteed to reach.
 
 ### 5. No Python mirror of `assembleExcel`, and no measured accept-list
 
-Excel's other 194 refusals — axis types, colour-grouped boxplots, continuous grouping,
-waterfall totals, unlegended detail series, chronological order, empty tables — stay
-**realised capability**: reported by the client after compile, never predicted by the
-library. Both available alternatives are rejected in *Alternatives rejected* below.
+Excel's remaining **92** refusals — axis types, colour-grouped boxplots, continuous
+grouping, waterfall totals, unlegended detail series, chronological order, empty tables —
+stay **realised capability**: reported by the client after compile, never predicted by the
+library. (194 is the count *before* Decision 3: 102 faceting plus these 92 were together
+what the vocabulary could not see. The facet rule takes the first group; this decision
+declines the second.) Both available alternatives are rejected in *Alternatives rejected*
+below.
 
 This is the decision most likely to be re-litigated by someone looking at a support ticket,
 so the reason is stated positively: **the library declines to answer a question it can only
