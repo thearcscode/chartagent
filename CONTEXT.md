@@ -82,6 +82,14 @@ _Avoid_: a Python mirror of `assembleExcel`, a measured `(chartType, shape)` acc
 Choosing the deterministic rail or the custom-code rail for a request (PRD §7.3). What the deterministic-rail share measures.
 _Avoid_: "router" unqualified, conflating it with backend selection
 
+**Rail share**:
+The fraction of corpus requests served by the deterministic rail. Denominator is every request; custom rail, refusal, planner failure and *nothing in the 48 fits* all count against. A `raw_sql` chart is **in** the numerator (no codegen, no sandbox, `$0.00` refresh); the `raw_sql_used` rate is published beside it. Gated once at P1 exit on the pooled 50-request corpus, when the Wilson 95% lower bound falls below 60% (ADR-0013).
+_Avoid_: measuring it against the chosen backend rather than the union, a rubric or human-labelled share before the planner exists, folding `raw_sql_used` or delivery rate into it
+
+**Delivery rate**:
+Whether a chart actually painted — the second number beside rail share, never merged with it. Where realised-capability failures land: Excel refusing on empty rows, the pyramid two-groups rule, the 17 non-painting ECharts boxplots. The rail is chosen before anything compiles, so none of these is a rail-share miss.
+_Avoid_: charging realised capability to the rail share, or dropping it and letting the share stand for what users received
+
 **Backend selection**:
 Choosing which of Flint's five backends a frame is bound for — the planner filling `bind`'s required `backend` kwarg. A **filter** over declared capability, never a runtime fallback; ranking among the backends that qualify is planner policy and is not yet decided.
 _Avoid_: "router" unqualified, silent re-routing on `BackendCapabilityError`, a `backend` field stored on the frame
