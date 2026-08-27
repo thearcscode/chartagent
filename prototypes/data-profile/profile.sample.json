@@ -1,0 +1,334 @@
+{
+  "row_count": 400000,
+  "columns": [
+    {
+      "name": "order_id",
+      "reported_type": "BIGINT",
+      "bucket": "number",
+      "null_rate": 0.0,
+      "distinct": 1001,
+      "saturated": true,
+      "stats": {
+        "min": 0.0,
+        "max": 399999.0,
+        "p01": 3999.0,
+        "p25": 100000.0,
+        "p50": 199320.0,
+        "p75": 299708.0,
+        "p99": 396000.0
+      }
+    },
+    {
+      "name": "region",
+      "reported_type": "VARCHAR",
+      "bucket": "string",
+      "null_rate": 0.0,
+      "distinct": 4,
+      "saturated": false,
+      "top": [
+        {
+          "value": "region_north",
+          "count": 240000
+        },
+        {
+          "value": "region_south",
+          "count": 100000
+        },
+        {
+          "value": "region_east",
+          "count": 48000
+        },
+        {
+          "value": "region_west",
+          "count": 12000
+        }
+      ],
+      "stats": {
+        "min": "region_east",
+        "max": "region_west",
+        "top_k_coverage": 1.0,
+        "iso8601_parse_rate": 0.0
+      }
+    },
+    {
+      "name": "sku",
+      "reported_type": "VARCHAR",
+      "bucket": "string",
+      "null_rate": 0.0,
+      "distinct": 1001,
+      "saturated": true,
+      "top": [
+        {
+          "value": "SKU-00000",
+          "count": 94
+        },
+        {
+          "value": "SKU-00058",
+          "count": 94
+        },
+        {
+          "value": "SKU-00097",
+          "count": 94
+        },
+        {
+          "value": "SKU-00136",
+          "count": 94
+        },
+        {
+          "value": "SKU-00175",
+          "count": 94
+        },
+        {
+          "value": "SKU-00214",
+          "count": 94
+        },
+        {
+          "value": "SKU-00272",
+          "count": 94
+        },
+        {
+          "value": "SKU-00311",
+          "count": 94
+        },
+        {
+          "value": "SKU-00350",
+          "count": 94
+        },
+        {
+          "value": "SKU-00389",
+          "count": 94
+        }
+      ],
+      "stats": {
+        "min": "SKU-00000",
+        "max": "SKU-04299",
+        "top_k_coverage": 0.00235,
+        "iso8601_parse_rate": 0.0
+      }
+    },
+    {
+      "name": "fulfilled",
+      "reported_type": "BOOLEAN",
+      "bucket": "boolean",
+      "null_rate": 0.0,
+      "distinct": 2,
+      "saturated": false,
+      "top": [
+        {
+          "value": true,
+          "count": 363636
+        },
+        {
+          "value": false,
+          "count": 36364
+        }
+      ]
+    },
+    {
+      "name": "amount_usd",
+      "reported_type": "DECIMAL(10,2)",
+      "bucket": "number",
+      "null_rate": 0.0,
+      "distinct": 1001,
+      "saturated": true,
+      "stats": {
+        "min": 12.0,
+        "max": 492.0,
+        "p01": 17.0,
+        "p25": 132.0,
+        "p50": 253.0,
+        "p75": 372.0,
+        "p99": 487.0
+      }
+    },
+    {
+      "name": "ordered_on",
+      "reported_type": "DATE",
+      "bucket": "date",
+      "null_rate": 0.0,
+      "distinct": 1001,
+      "saturated": true,
+      "stats": {
+        "min": "2021-03-01",
+        "max": "2024-06-12",
+        "p01": "2021-03-13",
+        "p25": "2021-12-25",
+        "p50": "2022-10-20",
+        "p75": "2023-08-17",
+        "p99": "2024-05-31"
+      }
+    },
+    {
+      "name": "updated_at",
+      "reported_type": "TIMESTAMP WITH TIME ZONE",
+      "bucket": "timestamptz",
+      "null_rate": 0.0,
+      "distinct": 1001,
+      "saturated": true,
+      "stats": {
+        "min": "2021-03-01T00:00:00Z",
+        "max": "2049-04-20T18:03:00Z",
+        "p01": "2021-06-11T18:21:29.801516Z",
+        "p25": "2028-03-13T10:21:30Z",
+        "p50": "2035-03-19T08:57:30Z",
+        "p75": "2042-03-31T19:37:30Z",
+        "p99": "2049-01-07T23:41:38.468628Z"
+      }
+    },
+    {
+      "name": "legacy_date",
+      "reported_type": "VARCHAR",
+      "bucket": "string",
+      "null_rate": 0.1111125,
+      "distinct": 8,
+      "saturated": false,
+      "top": [
+        {
+          "value": "2021-02-14",
+          "count": 44445
+        },
+        {
+          "value": "2021-03-14",
+          "count": 44445
+        },
+        {
+          "value": "2021-04-14",
+          "count": 44445
+        },
+        {
+          "value": "2021-05-14",
+          "count": 44444
+        },
+        {
+          "value": "2021-06-14",
+          "count": 44444
+        },
+        {
+          "value": "2021-07-14",
+          "count": 44444
+        },
+        {
+          "value": "2021-08-14",
+          "count": 44444
+        },
+        {
+          "value": "2021-09-14",
+          "count": 44444
+        }
+      ],
+      "stats": {
+        "min": "2021-02-14",
+        "max": "2021-09-14",
+        "top_k_coverage": 1.0,
+        "iso8601_parse_rate": 1.0
+      }
+    },
+    {
+      "name": "tags",
+      "reported_type": "BIGINT[]",
+      "bucket": "other"
+    }
+  ],
+  "sample_rows": [
+    {
+      "order_id": 64352,
+      "region": "region_north",
+      "sku": "SKU-01888",
+      "fulfilled": true,
+      "amount_usd": 403.25,
+      "ordered_on": "2023-03-23",
+      "updated_at": "2025-09-09T11:44:00Z",
+      "legacy_date": "2021-03-14"
+    },
+    {
+      "order_id": 381678,
+      "region": "region_south",
+      "sku": "SKU-03682",
+      "fulfilled": false,
+      "amount_usd": 174.06,
+      "ordered_on": "2021-05-18",
+      "updated_at": "2048-01-06T00:06:00Z",
+      "legacy_date": "2021-07-14"
+    },
+    {
+      "order_id": 189867,
+      "region": "region_south",
+      "sku": "SKU-01573",
+      "fulfilled": true,
+      "amount_usd": 125.27,
+      "ordered_on": "2021-11-23",
+      "updated_at": "2034-07-09T12:39:00Z",
+      "legacy_date": "2021-04-14"
+    },
+    {
+      "order_id": 122665,
+      "region": "region_south",
+      "sku": "SKU-01235",
+      "fulfilled": true,
+      "amount_usd": 256.54,
+      "ordered_on": "2021-11-21",
+      "updated_at": "2029-10-16T19:25:00Z",
+      "legacy_date": "2021-05-14"
+    },
+    {
+      "order_id": 319139,
+      "region": "region_north",
+      "sku": "SKU-01241",
+      "fulfilled": true,
+      "amount_usd": 82.38,
+      "ordered_on": "2024-04-13",
+      "updated_at": "2043-08-13T02:23:00Z",
+      "legacy_date": "2021-09-14"
+    },
+    {
+      "order_id": 288332,
+      "region": "region_north",
+      "sku": "SKU-01108",
+      "fulfilled": false,
+      "amount_usd": 185.55,
+      "ordered_on": "2022-01-27",
+      "updated_at": "2041-06-12T12:44:00Z",
+      "legacy_date": "2021-09-14"
+    },
+    {
+      "order_id": 253117,
+      "region": "region_north",
+      "sku": "SKU-01423",
+      "fulfilled": true,
+      "amount_usd": 407.55,
+      "ordered_on": "2024-03-22",
+      "updated_at": "2038-12-20T16:49:00Z",
+      "legacy_date": "2021-02-14"
+    },
+    {
+      "order_id": 271404,
+      "region": "region_north",
+      "sku": "SKU-00776",
+      "fulfilled": true,
+      "amount_usd": 347.65,
+      "ordered_on": "2021-09-21",
+      "updated_at": "2040-04-03T13:48:00Z",
+      "legacy_date": null
+    },
+    {
+      "order_id": 42871,
+      "region": "region_south",
+      "sku": "SKU-01849",
+      "fulfilled": true,
+      "amount_usd": 62.27,
+      "ordered_on": "2023-07-20",
+      "updated_at": "2024-03-06T13:07:00Z",
+      "legacy_date": "2021-05-14"
+    },
+    {
+      "order_id": 170365,
+      "region": "region_south",
+      "sku": "SKU-04035",
+      "fulfilled": true,
+      "amount_usd": 380.81,
+      "ordered_on": "2024-05-09",
+      "updated_at": "2033-02-23T10:25:00Z",
+      "legacy_date": "2021-05-14"
+    }
+  ]
+}
