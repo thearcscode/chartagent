@@ -549,6 +549,15 @@ arrives only once the transform ships and people take the escape hatch.
   `raw_sql` is a chart the declarative menu did not cover, which is the deterministic-rail
   share its <60% gate measures.
 
+**Note — 2026-08-27 ([#10](https://github.com/thearcscode/chartagent/issues/10),
+ADR-0013).** The second bullet conflates two measurements, and ADR-0013 Decision 4 separates
+them. **The <60% gate measures rail share** — did an LLM write chart code — and a `raw_sql`
+chart is **in its numerator**, because it runs no codegen, no sandbox, and refreshes at
+$0.00. **Menu coverage is the `raw_sql_used` rate**, published beside the share and never
+folded into it. Both sentences above stay true of the *evidence*; only the claim that
+`raw_sql_used` is what the gate measures is withdrawn. The dependency still runs on
+operating experience rather than on a blocking edge.
+
 ## Alternatives rejected
 
 **An ordered list of ops instead of fixed slots.** Rejected. Strictly more expressive, and
