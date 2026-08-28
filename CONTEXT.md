@@ -117,3 +117,19 @@ _Avoid_: an oracle, upstream `expected.json` as a reference, an allowlist of for
 **Dirty input**:
 A fixture `input.json` that names a property the pin's vocabulary does not declare. Tracked as a count: existence is upstream dirt, a rising count on a bump is a failure.
 _Avoid_: an exceptions file, treating any dirty input as a failure by itself
+
+**Sandbox**:
+Where **programs we did not write** run — custom-rail generated `make_chart` code, and nothing else. It does not contain the data vector (hostile file bytes are a named, unsolved gap) and it does not contain the transform (in-process, held by ADR-0008's three `raw_sql` locks). It receives the transform's **output** rows and never the source: no path, no credentials, no raw bytes. Reached through `SandboxBackend`, ours, adapted from deepagents' rather than inherited (ADR-0015).
+_Avoid_: "the sandbox is where data lives", sandboxing the profiler or the transform, `upload`/`run`/`download` as its shape, deepagents' `SandboxBackendProtocol` in our public contract
+
+**Boundary kind**:
+How strong a sandbox's wall is, as one of three values on a public `backend.boundary`: `none` (subprocess — rlimits only), `os` (bwrap, docker — kernel-sharing namespaces), `vm` (Firecracker-class). `require_isolation=True` means *not `none`* and raises at construction rather than falling back. **The boundary is the wall, not the rlimits** — absent cgroup v2 does not make bwrap into `none` if namespaces work. A third party can misdeclare its own kind; that is accepted and unverifiable.
+_Avoid_: the four-tier ladder and tier numbers (bwrap-versus-docker is not a sound ordering), reading it as "has memory limits", a capability set, inferring it from `PATH`
+
+**Sandbox runner**:
+The harness *we* inject around generated code. It calls `make_chart(data)`, serialises what comes back, and returns `Mapping[Format, bytes]` — so the job **requests formats** and the model never declares or names an artifact. `figure_json` is how the data-truthfulness check reads numbers, so a reviewed chart always requests it. Returned bytes are capped.
+_Avoid_: third-party backends reimplementing `Figure` serialisation, the model naming a path, artifacts crossing via the deepagents VFS, treating `plt.savefig` output as a returnable artifact
+
+**Runtime profile**:
+Which image a sandbox session runs — chosen at `__enter__`, because the image is chosen there. `python` is the one legal value today; `web` (Node + headless Chromium, for custom-rail D3/JS) is a **§9 P1 requirement in Fast follows**, and widens the `Literal` additively. A backend asked for a profile it lacks is *unsupported*, not a crash.
+_Avoid_: putting it on `ChartJob`, calling the web profile "phase P2" (phase P2 ships python only), conflating it with ADR-0003's rasterisation — that browser is trusted and runs our harness
