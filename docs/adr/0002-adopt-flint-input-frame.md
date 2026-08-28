@@ -331,3 +331,12 @@ storing output means re-planning to change target.
 - `design/README.md` — the state / data palette split the precedence rule above refers to.
 - Not yet decided: whether `escape` belongs inside `x_chartagent` as a field or is a sibling
   result type. `chartspec-v1`'s README raises this and it is still open.
+
+  **Note — 2026-08-28 ([#55](https://github.com/thearcscode/chartagent/issues/55),
+  ADR-0016 Decision 8).** This question carries **two payloads, not one**. Besides the escape
+  *reason* (whose vocabulary ADR-0013 Decision 11 fixed, and ADR-0016 Decision 3 widened to
+  four buckets), a custom-rail result carries the **generated code**, which needs a runtime and
+  a version story the reason does not. Placing one places the other, since both turn on whether
+  a custom-rail result has an input frame at all. It is also no longer a tidy-up: **P0.5 cannot
+  be met until the code has a home** — *re-invoking with new data requires no LLM call* is
+  unsatisfiable if the code was never stored — and ADR-0007's schema has no column for it.
