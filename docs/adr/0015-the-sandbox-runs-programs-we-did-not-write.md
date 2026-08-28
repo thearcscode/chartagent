@@ -36,6 +36,14 @@ a §9 P1 requirement in Fast follows; phase P2 ships the python profile only** (
 a bare P0/P1/P2 is a *phase*, a P0.n/P1/P2 in §9 is a *requirement priority*, and the two
 are not aligned).
 
+> **Reversed — 2026-08-28 ([#57](https://github.com/thearcscode/chartagent/issues/57),
+> ADR-0017 D2).** The phase ordering in the sentence above is backwards: **`web` is the
+> phase-P2 custom rail and `python` is the later widening.** The paragraph's substantive
+> point stands — the custom rail's `web` profile is untrusted generated JS and did not move
+> with ADR-0003's rasterisation — but its containment is a **sandboxed iframe**, not this
+> protocol, so *"still this protocol's problem"* is no longer true either. See Decision 7's
+> erratum below; noted here because Context is read on its own.
+
 So the sandbox's remaining job is one job, and the whole ADR follows from naming it: it
 contains **programs we did not write**. It does not contain the data vector and it does not
 contain the transform.
