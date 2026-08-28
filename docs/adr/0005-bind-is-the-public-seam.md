@@ -216,6 +216,16 @@ planner lands, planner-authored transforms route through the sandbox; that is th
 work's call, not the seam's. Recorded explicitly, because left implicit someone will read
 the P0 seam as permission to skip it.
 
+**Erratum — 2026-08-28 ([#6](https://github.com/thearcscode/chartagent/issues/6),
+ADR-0015).** The rail work has made that call, and it went the other way: **planner-authored
+transforms stay in-process at P1**. ADR-0008 already contains model-authored SQL with three
+independent locks, and routing the transform through the sandbox would move the *source
+read* inside the boundary — which ADR-0015 Decision 5 forbids, since only transform
+**output** rows ever cross. The P0 posture recorded above is unchanged; what changes is that
+it is no longer provisional. ADR-0015 Decision 1 also retires §7.5's *"any parsing of
+untrusted data content"* clause, so the sentence *"§7.5's rule is about model-authored SQL"*
+is now the whole of §7.5's rule rather than a reading of it.
+
 ### 7. Schema drift is two checks with one error, and retype detection is deferred
 
 PRD P0.11 requires a typed `SchemaDriftError` naming renamed, dropped or retyped fields,
