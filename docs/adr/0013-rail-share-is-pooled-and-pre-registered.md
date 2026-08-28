@@ -238,6 +238,26 @@ change"* panel, and it is **two buttons, not one**. A missing chart type is an u
 request nobody here can schedule; a missing transform is our backlog item. Presenting them
 identically promises a response we cannot make for half of them.
 
+**Erratum — 2026-08-28 ([#55](https://github.com/thearcscode/chartagent/issues/55),
+ADR-0016).** There are **four** buckets, not three, and Decision 10's table above gains a
+row. Decision 6's *"a review failure that escalates onto the custom rail scores custom,
+because the escalation is the escape"* had **no bucket to record**: all three above are about
+*expressibility*, and an escalation's frame was expressible and was produced — the **chart
+failed review**. Charging it to bucket 3 would send Decision 10's diagnosis to *prompt, model,
+structured output* when the lever is the gate's own numbers. So:
+
+| miss bucket | recorded by | lever | ours? |
+| --- | --- | --- | --- |
+| 4 · expressible, produced, failed review | **the gate, at escalation** | the review gate's own numbers | yes |
+
+Two fences, because this is the bucket that will be misread. **It does not touch the gated
+50** — that quiz is P1 exit, before this rail and the gate exist (Decision 7), so escalations
+are operating telemetry for Decision 12's histogram and **not a fifth stress cell**; ADR-0014
+stays closed. And **it is not a grammar-change button** — Decision 11's two-button UI stays
+buckets 1 against 2. Decision 6 is otherwise untouched: a review failure that does **not**
+escalate stays deterministic. ADR-0016 Decisions 3 and 4, where buckets 1 and 2 also gain a
+closed lever-naming field.
+
 ### 12. The scorer is not in the library, and the report is committed
 
 ADR-0012 Decision 2's discipline applies unchanged: **a measurement about the library is not

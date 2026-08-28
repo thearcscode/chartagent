@@ -221,6 +221,12 @@ subprocess need nothing extra"* is about **isolation tools**, not the charting s
 - **`os` and `vm` backends bake the same stack into the image.**
 - **Nothing goes on `[docker]`.**
 
+**Erratum — 2026-08-28 ([#55](https://github.com/thearcscode/chartagent/issues/55),
+ADR-0016).** The stack is **pandas, matplotlib, seaborn and numpy** — seaborn because
+ADR-0016 Decision 1 closes the rail on the `matplotlib.figure.Figure` return type rather than
+on an import name, and numpy because Decision 11 seeds it. Both are still **not** in the base
+wheel and still **not** on `[docker]`; the rule above is unchanged, only its list.
+
 ### 10. Artifacts come back as bytes; the runner is ours; the model never names a path
 
 ```python
@@ -246,6 +252,23 @@ Two locks:
 Runner v1 serialises `matplotlib.figure.Figure`. plotly and bokeh stay legal on this
 runtime; their serialisation is a runner widening owned by the custom-rail ticket — not a
 protocol change.
+
+**Erratum — 2026-08-28 ([#55](https://github.com/thearcscode/chartagent/issues/55),
+ADR-0016).** *"plotly and bokeh stay legal on this runtime"* is **withdrawn**. If the runner
+cannot serialise them, a chart written in them cannot come back, so "legal" was a hard
+constraint wearing a soft word. The **runtime** is still `python`; the **runner is
+`matplotlib.figure.Figure`-only**, which admits seaborn (its figures are matplotlib's) and
+excludes plotly and bokeh until a widening — a widening that needs a `figure_json` extraction
+per library, not an import-list edit. ADR-0016 Decision 1.
+
+**Second erratum, same date and ticket.** The implication that closing the library question
+settles `figure_json`'s **shape** is wrong: it settles its **owner**. Matplotlib ships no
+figure→JSON API and [MEP25](https://matplotlib.org/stable/devel/MEP/MEP25.html) — which would
+have added one — is **Status: Rejected**, *"this particular effort has stalled"*. So
+`figure_json` is ours to define, extraction is **per-artist**, and its coverage is per-artist
+type: ADR-0016 Decision 9 fixes the v1 set as `Line2D`, bar `Rectangle`s and
+`PathCollection`, with anything outside it reported as *not checked* rather than passed or
+failed.
 
 Writing declared artifacts into the deepagents VFS (PRD §7.6) stays true, but as the **agent
 layer's** job one level above this protocol. Putting it *in* the protocol was refused

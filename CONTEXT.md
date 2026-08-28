@@ -127,9 +127,21 @@ How strong a sandbox's wall is, as one of three values on a public `backend.boun
 _Avoid_: the four-tier ladder and tier numbers (bwrap-versus-docker is not a sound ordering), reading it as "has memory limits", a capability set, inferring it from `PATH`
 
 **Sandbox runner**:
-The harness *we* inject around generated code. It calls `make_chart(data)`, serialises what comes back, and returns `Mapping[Format, bytes]` — so the job **requests formats** and the model never declares or names an artifact. `figure_json` is how the data-truthfulness check reads numbers, so a reviewed chart always requests it. Returned bytes are capped.
+The harness *we* inject around generated code. It **owns the environment**: it applies the house palette through `rcParams` and seeds `random` and `numpy.random` to a named constant, both *before* the module is imported, then calls `make_chart(data)`, serialises what comes back, and returns `Mapping[Format, bytes]` — so the job **requests formats** and the model never declares or names an artifact. The pattern is ADR-0006's one layer down: we establish the environment rather than asking the model to remember it. `figure_json` is how the data-truthfulness check reads numbers, so a reviewed chart always requests it. Returned bytes are capped.
 _Avoid_: third-party backends reimplementing `Figure` serialisation, the model naming a path, artifacts crossing via the deepagents VFS, treating `plt.savefig` output as a returnable artifact
 
 **Runtime profile**:
 Which image a sandbox session runs — chosen at `__enter__`, because the image is chosen there. `python` is the one legal value today; `web` (Node + headless Chromium, for custom-rail D3/JS) is a **§9 P1 requirement in Fast follows**, and widens the `Literal` additively. A backend asked for a profile it lacks is *unsupported*, not a crash.
 _Avoid_: putting it on `ChartJob`, calling the web profile "phase P2" (phase P2 ships python only), conflating it with ADR-0003's rasterisation — that browser is trusted and runs our harness
+
+**Custom rail**:
+The path taken when a request cannot be served by the deterministic rail: an LLM writes a Python module defining `make_chart(data)`, which runs in the sandbox. At phase P2 it must return a **`matplotlib.figure.Figure`** — closed on the *return type*, not an import name, so seaborn is admitted and plotly and bokeh are not until a runner widening. Refresh re-calls it in the sandbox: zero inference cost, **not** zero infrastructure.
+_Avoid_: "the agent may choose any charting library" (closed at P2), calling the matplotlib rule a bias, treating a custom-rail refresh as free the way a `bind` refresh is
+
+**Escape reason**:
+Why a request left the deterministic rail — one of **four** buckets, each naming a different lever: *no chart type in the 48* (upstream, not ours), *the transform menu cannot express it* (grow the menu), *an expressible frame was escaped anyway* (planner quality), and *expressible, produced, failed review* (the gate's own numbers). The planner writes the first three at plan time; the **gate** writes the fourth at escalation. Buckets 1 and 2 carry one closed lever-naming field; 3 and 4 carry none. Where the value is *written* is still open, and carries the generated code with it.
+_Avoid_: three buckets, folding an escalation into *planner quality*, a free-text rationale, reading bucket 2's field as the menu-coverage signal (that is `raw_sql_used`), treating bucket 4 as a stress cell or a grammar-change button
+
+**figure_json**:
+The custom rail's second artifact, and the data-truthfulness check's input: a **closed per-artist extraction** from the returned figure, ours to define because matplotlib supplies no figure serialisation (MEP25 is Status *Rejected*). v1 covers `Line2D`, bar `Rectangle`s and `PathCollection`; extending is additive. An artist outside that set is reported **not checked** — never a silent pass, never a failure.
+_Avoid_: a generic figure dump, pickle as the artifact, treating unreadable values as a review failure, assuming closing the library settled its *shape* (it settled its *owner*)
