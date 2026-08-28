@@ -121,6 +121,8 @@ dependency.
   value the app was built against — a mismatched pin fails loudly instead of compiling
   against the wrong vocabulary. `flint-chart` may sit in `devDependencies` **for its
   TypeScript types only**, at the exact pinned version.
+> **Erratum — 2026-08-28 ([#57](https://github.com/thearcscode/chartagent/issues/57), [ADR-0017](docs/adr/0017-the-custom-rail-produces-an-interactive-web-document.md)).** This ADR has **no origin, iframe or CSP story**, because it never contemplated *generated* JavaScript — every byte it reasons about is pinned and first-party. The custom rail changes that, and ADR-0017 Decision 5 supplies the boundary this ADR lacks: generated documents run **only** in a sandboxed iframe at an **opaque origin** (`sandbox="allow-scripts"` **without** `allow-same-origin`), with a **CSP that cuts network** — the sandbox attribute does not — and a `postMessage` receiver that checks **`event.source`**, because an opaque origin serialises to the string `"null"` and cannot be told apart by `event.origin`. The pinning rule below is unchanged and is *extended* rather than excepted: custom-rail library bytes are resolved server-side through one pinned registry and content-addressed by sha256, and **the iframe never fetches**. The house-palette rule below holds for Flint and **does not reach the custom rail**, where only page chrome is guaranteed (ADR-0017 Decision 14).
+
 - **Renderers come from npm at exact versions**, lockfile committed, each behind a
   per-backend dynamic `import()` so a renderer is fetched the first time its backend is
   chosen. Flint declares them as optional peers with ranges (`echarts ^5||^6`,
