@@ -335,6 +335,20 @@ class Rasteriser(Protocol):
     def rasterise(self, envelope: Envelope, *, format: Literal["png"] = "png") -> bytes: ...
 ```
 
+**Erratum — 2026-08-28 ([#57](https://github.com/thearcscode/chartagent/issues/57),
+ADR-0017). Implementer-breaking.** The custom rail produces an interactive web document, which
+is not an `Envelope` and cannot be wrapped as one — the wire format is frozen at three keys and
+`flint_version`/`backend` are meaningless for it. So the protocol widens, and the parameter is
+renamed in the same break rather than carrying a name that has become a lie:
+
+```python
+def rasterise(self, target: Envelope | BoundDocument, *, format: Literal["png"] = "png") -> bytes: ...
+```
+
+The union member is **`BoundDocument`**, not `ChartDocument`: the stored triple has no rows, no
+theme and no library bytes, so it cannot paint, while `Envelope` is self-sufficient. Decision
+12's `__all__` widens accordingly — see ADR-0017 Decision 18.
+
 A `typing.Protocol`, not an ABC — ADR-0003 says the library never hard-depends on a
 rasteriser, and structural typing lets the app and CI implement it without importing a
 base class of ours. Two errors: `RasteriserUnavailableError`, which names the missing
@@ -499,6 +513,22 @@ the generated chartProperties models · everything in errors
 
 `chartagent.errors` is a promised import path too, because catching by module path is
 idiomatic. `DriftedField` needs no separate promise — it lives on `SchemaDriftError`.
+
+**Erratum — 2026-08-28 ([#57](https://github.com/thearcscode/chartagent/issues/57),
+ADR-0017 Decision 18).** The list above grows by seven, the largest single widening since this
+ADR — the custom rail's stored and paintable types, its one public builder, and its one error:
+
+```
+LibraryPin · ChartDocument · BoundDocument · build_shell
+DocumentAssemblyError · the JSON channel serialiser · build_shell's frozen Shell return
+```
+
+Two earlier claims are superseded by that list: **ADR-0015 Decision 18** already added the
+sandbox names (`SandboxBackend`, `SandboxSession`, `ChartJob`, `ChartRun`, `Boundary`,
+`Runtime`, `SandboxUnavailableError`, `SandboxExecutionError`), which now belong to the
+**python widening**; and **ADR-0016 Decision 16** — *"`__all__` is unchanged by this ADR"* —
+is **dead**. `build_shell` ships in the **base wheel**, not the raster extra, because Studio
+and the `Rasteriser` are two callers of one builder and what it emits is a security boundary.
 
 Private, underscore or not: `_bundle/` contents (reachable only through
 `flint_bundle()`), the façade generator (`extract.mjs`, `generate.py`, `check_bump.py` —

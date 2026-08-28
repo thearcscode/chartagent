@@ -196,6 +196,22 @@ ADR-0009 made with `chartType` as a generated `Literal` whose count is deliberat
 unfrozen. A python-only backend asked for `web` is **unsupported, not a crash** (the
 `Rasteriser` / Excel posture).
 
+> **Erratum — 2026-08-28 ([#57](https://github.com/thearcscode/chartagent/issues/57),
+> [ADR-0017](0017-the-custom-rail-produces-an-interactive-web-document.md)). The phase ordering
+> here is reversed.** The **web** profile is the phase-P2 custom rail, and **python** is the
+> later widening — not the other way round. The custom rail produces an interactive web
+> document, which runs in a sandboxed iframe (Studio) and in the `Rasteriser`'s browser
+> (review), so **phase P2 does not implement `SandboxBackend` at all**: no python extra, no
+> bwrap probe, no `[docker]` work.
+>
+> **This ADR remains Accepted, as the contract for the python widening.** Decision 1's rule —
+> the sandbox contains programs we did not write — is unchanged and now has **two
+> implementations**, of which only the client-side iframe is on the P2 path.
+>
+> **Decisions 9 and 10, and their errata below, are re-scoped**: they describe the **python
+> widening**, not phase P2. `[#6](https://github.com/thearcscode/chartagent/issues/6)` is not
+> reopened.
+
 ### 8. Rows cross as a `pyarrow.Table`; the runner hands `make_chart` an Arrow-backed DataFrame
 
 `ChartJob` carries a **`pyarrow.Table`** (pyarrow is already base, #19). Arrow IPC is how it

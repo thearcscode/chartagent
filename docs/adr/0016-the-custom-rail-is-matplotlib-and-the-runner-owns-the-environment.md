@@ -83,6 +83,32 @@ of magnitude — 1.8% incorrect code for Matplotlib against 22% for Plotly (Pand
 Closing on the **return type** rather than an import list is what makes seaborn free without
 enumerating it.
 
+> **Erratum — 2026-08-28 ([#57](https://github.com/thearcscode/chartagent/issues/57),
+> [ADR-0017](0017-the-custom-rail-produces-an-interactive-web-document.md)). This decision is
+> a product error and is withdrawn.**
+>
+> Closing the custom rail on a `matplotlib.figure.Figure` return makes the escape hatch produce
+> a **worse artifact than the rail it escapes from**: the deterministic rail gives the user an
+> interactive chart in the browser, and this decision would have answered the request Flint
+> *could not serve* with a static PNG. The reasoning above is not wrong about PandasPlotBench;
+> it is wrong about what the user receives, and that evidence concerns **Python** codegen and
+> does not reach a web rail at all.
+>
+> The custom rail produces an **interactive web document** (HTML/JS/CSS), run in Studio's
+> browser with the bound rows and rasterised for review. **Library choice is open, with no
+> allowlist.** Web is **phase P2**; python — matplotlib included — is a **later widening**.
+>
+> **Decisions 2, 5, 6, 7, 9, 10, 11 and 16 fall with this one** and are superseded by ADR-0017:
+> the prompt states a *contract* rather than a library (D17 there); house style is **not**
+> `rcParams` (D14); the payload is a JS module (D7); network is cut by **CSP**, not by a sandbox
+> tier (D5); `figure_json`-as-artists is replaced by a `getPlottedSeries()` declaration
+> (D13); the seeded runner is gone with the runner, and browser determinism is explicitly left
+> open; and `__all__` **grows** (D18).
+>
+> **Decisions 3, 4, 8, 13 and 15's idea stand unchanged** — the fourth escape bucket with its
+> two fences and lever-naming fields, the requirement that generated code be stored, the single
+> delimited-block renderer, and refresh re-running code we did not write.
+
 ### 2. The prompt states the constraint; it is not discovered by failing
 
 A generated chart in an unsupported library is a prompt defect, not a review finding.

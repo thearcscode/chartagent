@@ -158,7 +158,11 @@ per concurrent render, with Playwright recommending `--ipc=host` for Chromium �
 container isolation in a multi-tenant setting. Sizing, pooling, and whether the gate runs
 inline or queued are the app's decisions.
 
-**A hazard to carry into the gate's implementation.** A rasteriser that returns bytes without
+**A hazard to carry into the gate's implementation** *(closed for the custom rail by
+[ADR-0017](0017-the-custom-rail-produces-an-interactive-web-document.md) Decision 15 — the
+bootstrap reports a boolean paint signal on the channel, the rasteriser raises when it is
+false, and an empty-container PNG is never success. It stands as written for the Flint path,
+which has no symbol to call.)* A rasteriser that returns bytes without
 raising has not necessarily rendered anything: `vl-convert` produces a blank chart and no
 exception when a `data.url` is unreachable. Whatever the implementation, the gate must not treat
 "no exception" as "rendered". Flint inlines rows in 700 of 705 fixtures, so this is a narrow
@@ -227,6 +231,14 @@ PRD §7.3, and one that would leave every non-hosted caller with no gate at all.
 **A browser as a compile runtime.** Not rejected on cost — rejected on scope. Once a browser is
 present it is tempting to let it compile too, which would reverse ADR-0001's client-compile
 decision without arguing against it. The browser here runs the gate's harness and nothing else.
+
+**Erratum — 2026-08-28 ([#57](https://github.com/thearcscode/chartagent/issues/57),
+ADR-0017).** *"The gate's harness and nothing else"* was written to stop the review browser
+drifting onto the **compile** path, and that intent is intact. It now also loads the custom
+rail's generated document — **inside an inner sandboxed iframe** at an opaque origin, with our
+harness as the outer page. Playwright must **not** navigate to the generated HTML as the
+top-level page: that would hand the document the harness's own origin and make the review
+render a different thing from the user's. **No Flint IIFE is loaded on that path at all.**
 
 ## Related
 
