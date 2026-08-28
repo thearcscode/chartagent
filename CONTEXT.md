@@ -23,8 +23,8 @@ The library's last object. Its wire format is exactly three keys: `{ flint_versi
 _Avoid_: compiled ECharts option, Vega-Lite spec, PNG as the library return; widening the wire format
 
 **x_chartagent**:
-The one top-level sibling on the input frame that holds our grammar (`spec_version`, `transform`, `annotations`, `interactions`, `escape`, `source_schema`). Flint ignores it.
-_Avoid_: putting our grammar in `chartProperties`
+The one top-level sibling on the input frame that holds our grammar (`spec_version`, `transform`, `annotations`, `interactions`, `source_schema`). Flint ignores it. **Five keys, not six**: `escape` left the set with ADR-0018 — a custom-rail result is a **chart recipe**, not a frame with a flag — taking `spec_version` to **1.2**. Nothing was migrated, because canonical JSON omits nulls and `escape: null` was never in stored bytes.
+_Avoid_: putting our grammar in `chartProperties`, an `escape` key (retired), reading 1.2 as a promise anyone notices the grammar moved
 
 **Source schema baseline**:
 `x_chartagent.source_schema` — the types the spec was *planned against*, as a map of referenced source columns to coarse buckets (`number`, `string`, `boolean`, `date`, `timestamp`, `timestamptz`, `other`). It is what a retype is detected against, so it must not move when the data does. Distinct from Studio's `data_sources.schema_snapshot`, which records the **source's** schema at registration and changes whenever the source changes: the two agree on the day a chart is created and diverge immediately after. The library computes it (`Envelope.source_schema`, what *this bind* saw); the caller's save writes it into the frame.
@@ -51,7 +51,7 @@ What the library does: take a stored input frame plus a data source, run `x_char
 _Avoid_: render (retired — the library does not render), `chartagent.render`, calling bind a compile step
 
 **Bind cache**:
-Studio's, not the library's. The last *successful* transform output for a saved chart, written to object storage as `{ revision_id, rows }` JSON by a user-initiated bind, and pointed at by one `bind_caches` row. A Library load fetches it and compiles in the client instead of binding; a stale or missing pointer shows *Refresh to bind*. Rows only — never the envelope, the backend, or an advisory, because `theme_spec_ignored` is backend-dependent (ADR-0007).
+Studio's, not the library's. The last *successful* transform output for a saved chart, written to object storage as `{ revision_id, rows }` JSON by a user-initiated bind, and pointed at by one `bind_caches` row. A Library load fetches it instead of binding — the deterministic rail compiles it in the client, the custom rail renders it in the iframe — and a stale or missing pointer shows *Refresh to bind*. **Rail-independent**: nothing on the custom rail calls `assemble*`, so ADR-0016 D15's *Studio's P2 hole* is closed (ADR-0018). Rows only — never the envelope, the backend, or an advisory, because `theme_spec_ignored` is backend-dependent (ADR-0007).
 _Avoid_: thumbnail, stored render, caching the envelope; treating a cache read as a refresh, or a Library load as a reason to re-read the source
 
 **Advisory**:
@@ -67,8 +67,8 @@ Turning a compiled backend document into PNG or SVG bytes. A separate job from c
 _Avoid_: treating rasterise as what the library returns
 
 **Zero-LLM refresh**:
-Re-running `x_chartagent.transform` for new rows and compiling the same stored input frame, with no model call. On Excel, compile can still refuse when the new rows are empty or too few; `bind` succeeding is not that refusal.
-_Avoid_: storing compiled output, storing rows in the spec
+Re-running the stored `transform` for new rows with no model call — `bind` plus a compile on the deterministic rail, `bind_recipe` plus a re-render in the iframe on the custom rail. **The two rails have the same failure modes**, because `bind_recipe` never reads the code (ADR-0018); they diverge only at paint. Zero inference cost, **not** zero infrastructure on the custom rail — it needs a browser. On Excel, compile can still refuse when the new rows are empty or too few; `bind` succeeding is not that refusal.
+_Avoid_: storing compiled output, storing rows in the spec, treating the custom rail's refresh as free of infrastructure
 
 **Declared capability**:
 What the pin says a backend can draw: `(backend, chartType)` read off `vocab.json`, plus one named rule — Excel with a `column` or `row` channel. Pin-derived, data-free, decidable in CPython, and what `bind` raises `BackendCapabilityError` on. Exact for four of five backends; on Excel it is 146 of 340 refusals plus the facet rule's 102 (ADR-0012).
@@ -139,16 +139,20 @@ The path taken when a request cannot be served by the deterministic rail. The ag
 _Avoid_: `make_chart(data) -> Figure` and the matplotlib closure (ADR-0016 D1, withdrawn), a library allowlist or per-library catalogue, running the document on Studio's own origin, `python` as the phase-P2 profile (it is the later widening)
 
 **Escape reason**:
-Why a request left the deterministic rail — one of **four** buckets, each naming a different lever: *no chart type in the 48* (upstream, not ours), *the transform menu cannot express it* (grow the menu), *an expressible frame was escaped anyway* (planner quality), and *expressible, produced, failed review* (the gate's own numbers). The planner writes the first three at plan time; the **gate** writes the fourth at escalation. Buckets 1 and 2 carry one closed lever-naming field; 3 and 4 carry none. Where the value is *written* is still open, and carries the generated code with it.
-_Avoid_: three buckets, folding an escalation into *planner quality*, a free-text rationale, reading bucket 2's field as the menu-coverage signal (that is `raw_sql_used`), treating bucket 4 as a stress cell or a grammar-change button
+Why a request left the deterministic rail — one of **four** buckets, each naming a different lever: *no chart type in the 48* (upstream, not ours), *the transform menu cannot express it* (grow the menu), *an expressible frame was escaped anyway* (planner quality), and *expressible, produced, failed review* (the gate's own numbers). The planner writes the first three at plan time; the **gate** writes the fourth at escalation. Buckets 1 and 2 carry one closed lever-naming field; 3 and 4 carry none. **Where it is written is settled**: `ChartRecipe.escape_reason`, required on every recipe and carried forward by a patch that does not change why the chart escaped (ADR-0018). The histogram reads the corpus scorer's records, never `spec_revisions`.
+_Avoid_: three buckets, calling the field `reason` or `escape`, a field on `x_chartagent`, folding an escalation into *planner quality*, a free-text rationale, reading bucket 2's field as the menu-coverage signal (that is `raw_sql_used`), treating bucket 4 as a stress cell or a grammar-change button
 
 **Plotted-series declaration**:
 What `getPlottedSeries()` returns — the custom rail's data-truthfulness input, compared **outside the document** against transform output we already hold. A **declaration, not an extraction**: general extraction is impossible on a web rail because ECharts and Chart.js paint to `<canvas>` and D3's SVG is per-author. Its weakness is deliberate and recorded — **it catches an honest bug, not a determined lie** — so P0.8's guarantee is rail-dependent, and the Tier-2 VLM is the only thing that looks at the picture.
 _Avoid_: `figure_json` as matplotlib artists (retired with ADR-0016 D1), DOM extraction as a general answer, reading it as equal in strength to the deterministic rail's guarantee
 
+**Chart recipe**:
+The custom rail's stored artifact and the input frame's **sibling** — not a frame with a flag, because a frame must name a `chartType` Flint never draws. `ChartRecipe` is `spec_version` + `transform` + `source_schema` + `escape_reason` + `theme_spec` + a `ChartDocument`. `bind_recipe(recipe, data) -> BoundRecipe` runs the transform, drift-checks, and attaches rows — **it never reads `module`, `styles` or `libraries`**, so a refresh cannot fail on the code. **`BoundRecipe` cannot paint and `BoundDocument` can**: the bound recipe has rows but no theme and no library bytes, which are paint-time inputs Studio and the `Rasteriser` supply. It has no wire format, because nothing compiles it. Stored beside frames in `spec_revisions.content` under `kind = 'recipe'` (ADR-0018).
+_Avoid_: an escape field on `x_chartagent`, `ChartDocument` as the stored artifact, `bind_recipe` returning `BoundDocument`, a wire format for `BoundRecipe`, a sixth table, calling it a frame or a spec
+
 **Chart document**:
-What the custom rail **stores**: `module` + optional `styles` + a tuple of `LibraryPin`s (name, version, sha256, in **script load order**) + `contract_version`. It **cannot paint** — it has no rows, no theme and no library bytes. Its paintable counterpart is the **bound document** (`BoundDocument`), which adds all three, exactly as `Envelope` is a bound frame. `build_shell` turns a chart document plus verified bytes into the iframe shell.
-_Avoid_: unioning `ChartDocument` where a paintable type is required, putting bytes on a `LibraryPin`, calling the stored triple an HTML document, inlining libraries into the stored artifact
+What the custom rail **stores**: `module` + optional `styles` + a tuple of `LibraryPin`s (name, version, sha256, in **script load order**) + `contract_version`. It **cannot paint** — it has no rows, no theme and no library bytes. Its paintable counterpart is the **bound document** (`BoundDocument`), which adds all three, exactly as `Envelope` is a bound frame. `build_shell` turns a chart document plus verified bytes into the iframe shell. It is **never stored bare** — a **chart recipe** contains it (ADR-0018).
+_Avoid_: unioning `ChartDocument` where a paintable type is required, storing it as the whole custom-rail artifact (it has no `transform`, so refresh has no rows), putting bytes on a `LibraryPin`, calling the stored triple an HTML document, inlining libraries into the stored artifact
 
 **Shell**:
 The host-owned iframe page: HTML, CSP, container element, hashed `<script>` tags, and the `postMessage` bootstrap that calls the agent's two symbols. **The agent never writes it** — in particular never the `event.source` check, which is the one line whose omission lets any opaque iframe drive the chart. `build_shell` is public and in the base wheel because Studio and the `Rasteriser` are two callers of one builder. It is **rows-free and theme-free**, so the review picture is the thing the user sees.

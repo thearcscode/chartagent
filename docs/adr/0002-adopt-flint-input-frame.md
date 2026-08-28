@@ -85,6 +85,24 @@ Concretely:
    *closed* — what the façade does with an unknown key here — is deliberately still open;
    ADR-0010 Decision 6 closes `source_schema`'s **values** only.
 
+   **Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+   ADR-0018).** The key list is **five**, not six: **`escape` leaves the set.** ADR-0018 closes
+   the open question in *Related* below — a custom-rail result is a **`ChartRecipe`**, a sibling
+   result type, not a frame carrying a flag — because a frame for a chart Flint never draws must
+   still name a `chartType` from ADR-0009 Decision 1's closed generated `Literal`. A key that
+   would be `null` on every frame forever is a grammar promise maintained for nothing.
+
+   Same rule as `source_schema`'s arrival, in the opposite direction: **this amends the grammar,
+   not stored bytes.** Decision 9's canonical JSON omits nulls, so `escape: null` was never in a
+   stored frame and there is nothing to migrate. The removal is a MINOR bump under ADR-0008
+   Decision 13, taking `spec_version` to **1.2** — one line shared with `ChartRecipe`, whose
+   `transform` and `source_schema` are the same grammar objects, so recipes are **born at 1.2**
+   and 1.0/1.1 are frame-only history.
+
+   The *closed key set* question stays open and **gets its first live case here**: a stored 1.0
+   or 1.1 frame may legitimately name `escape`, a key the 1.2 grammar no longer declares.
+   ADR-0018 points at it and deliberately does not decide it.
+
 2. **CI invariant: deleting `x_chartagent` must leave a document that upstream Flint
    compiles, byte for byte identical to the same document without it.** This is the whole
    decision expressed as a test. The job that asserts it is ADR-0004's
@@ -329,8 +347,17 @@ storing output means re-planning to change target.
   vocabulary, and the five sites beyond `chartProperties` that carry the same silent-ignore
   failure. Amends Decisions 4, 5 and 7 above.
 - `design/README.md` — the state / data palette split the precedence rule above refers to.
-- Not yet decided: whether `escape` belongs inside `x_chartagent` as a field or is a sibling
-  result type. `chartspec-v1`'s README raises this and it is still open.
+- **Settled — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+  ADR-0018): `escape` is a sibling result type, and the key leaves `x_chartagent`.** Whether it
+  belonged inside the frame as a field was raised by `chartspec-v1`'s README and open until now.
+  Both payloads land on **`ChartRecipe`** — `escape_reason` and a `ChartDocument`, beside
+  `spec_version`, `transform`, `source_schema` and `theme_spec` — bound by a second verb,
+  `bind_recipe`, and stored beside frames in `spec_revisions.content` under a `kind`
+  discriminator. The original bullet and its 2026-08-28 note are kept below as the record of
+  what was open and why it stopped being a tidy-up.
+
+  Not yet decided *(closed by ADR-0018)*: whether `escape` belongs inside `x_chartagent` as a
+  field or is a sibling result type. `chartspec-v1`'s README raises this and it is still open.
 
   **Note — 2026-08-28 ([#55](https://github.com/thearcscode/chartagent/issues/55),
   ADR-0016 Decision 8).** This question carries **two payloads, not one**. Besides the escape

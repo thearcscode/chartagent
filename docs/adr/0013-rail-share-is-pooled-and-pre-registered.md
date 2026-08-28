@@ -233,6 +233,21 @@ vocabulary is a scoring input and is settled here.
 result type remains open on the map, and it does not change what the values are. When it
 lands it **reconciles to this list**; it does not mint a second vocabulary.
 
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018).** **Placement has landed, and it reconciles.** It is the sibling result type:
+`ChartRecipe.escape_reason`, not a field inside `x_chartagent` — the frame was
+*unconstructible*, since a frame for a chart Flint never draws must still name a `chartType`
+from ADR-0009 Decision 1's closed generated `Literal`. The vocabulary is exactly this list as
+widened by ADR-0016 Decision 3's fourth bucket; nothing was minted, and the promise above is
+discharged.
+
+Two things ADR-0018 fixes that this decision left implicit. The field is **required on every
+recipe** — a recipe exists *because* of an escape, and a bucket is always determinable — and a
+patch-mode edit **carries it forward**, because editing the module does not change why the
+chart escaped. And Decision 12's histogram reads the **corpus scorer's** records, never
+Studio's `spec_revisions`: the field's presence in the store is for the chart, not for the
+number.
+
 One consequence for the UI: `design/`'s screen `5c` shows a single *"proposed grammar
 change"* panel, and it is **two buttons, not one**. A missing chart type is an upstream
 request nobody here can schedule; a missing transform is our backlog item. Presenting them

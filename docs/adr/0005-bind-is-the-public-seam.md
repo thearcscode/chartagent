@@ -291,6 +291,22 @@ and the two drift silently, since both produce plausible JSON. Public as
 `InputFrame.canonical_json()`, re-exported as `chartagent.canonical_json(spec)`. It is
 also what a content-addressed spec id is hashed over.
 
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018).** `canonical_json` **takes a union**: `InputFrame | ChartRecipe`. Both types keep
+the method and the module-level accessor accepts either. ADR-0018 stores a custom-rail recipe
+beside a frame in one column addressed one way, and the argument above applies unchanged — the
+app must not learn two functions to hash two things it stores in one place, or the two drift
+silently.
+
+Two clarifications ride with it. **Nulls are omitted; empty collections are not.** ADR-0002
+Decision 9's rule is about nulls, and `libraries=[]` is a first-class outcome (ADR-0017
+Decision 4) — the from-scratch document saying so — which stays present and empty. And the
+content-address role above is unchanged, while the **diff** role does not reach a recipe: a
+canonical-JSON diff of one is a single changed line holding an entire JavaScript program, so
+`module` and `styles` diff as **text** and the rest as JSON. Which surface renders that is
+`5a`'s and the review gate's; ADR-0018 decides only that ADR-0007 Decision 2's sentence does
+not cover this case.
+
 **`vocabulary`.** [#27](https://github.com/thearcscode/chartagent/issues/27) wants a form
 generated from the per-chart-type properties. `model_json_schema()` under-serves it: a
 form needs `label`, `step`, the `options` list with its labels,
@@ -529,6 +545,17 @@ sandbox names (`SandboxBackend`, `SandboxSession`, `ChartJob`, `ChartRun`, `Boun
 **python widening**; and **ADR-0016 Decision 16** — *"`__all__` is unchanged by this ADR"* —
 is **dead**. `build_shell` ships in the **base wheel**, not the raster extra, because Studio
 and the `Rasteriser` are two callers of one builder and what it emits is a security boundary.
+
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018).** Three more, the custom rail's *stored recipe*, its bound counterpart and its verb:
+
+```
+ChartRecipe · BoundRecipe · bind_recipe
+```
+
+`EscapeReason` is a field type on `ChartRecipe` and is exported with it. `bind_recipe` does
+**not** widen `bind` — ADR-0005 Decision 1's signature, refusals and three-key wire are
+untouched — and `BoundRecipe` has **no serialised form**, because nothing compiles it.
 
 Private, underscore or not: `_bundle/` contents (reachable only through
 `flint_bundle()`), the façade generator (`extract.mjs`, `generate.py`, `check_bump.py` —

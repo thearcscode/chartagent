@@ -203,6 +203,16 @@ What changes is that entry's **standing**: it carries **two payloads**, not one;
 needs a runtime and a version story the reason does not; and it now **blocks P0.5 and
 ADR-0007's schema**. That is a fact for whoever reads the map next, not a ticket minted here.
 
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018). The requirement is met and the placement is decided.** A custom-rail result is a
+**sibling result type**, not a frame with a flag: `ChartRecipe` = `spec_version` + `transform`
++ `source_schema` + `escape_reason` + `theme_spec` + the `ChartDocument` that replaced this
+ADR's Python module (ADR-0017 Decision 8). Both payloads land together, exactly as this
+decision predicted. It is stored beside frames in `spec_revisions.content` under a `kind`
+discriminator, and bound by a second verb, `bind_recipe`, which **never reads the code** — so a
+refresh's failure modes match the deterministic rail's. **P0.5 and ADR-0007's schema are
+unblocked.**
+
 ### 9. `figure_json` is a closed per-artist extraction, and v1 names its set
 
 Not a generic dump — matplotlib's own MEP25 says the semantics are not recoverable from the
@@ -284,6 +294,22 @@ aspiration.
 ADR-0007 already caches rows for Flint cards, and that a custom-rail card cannot `assemble*`
 those rows is **Studio's P2 hole, not a library licence to skip the sandbox**. A real refresh
 has new rows and must re-run.
+
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018). The `assemble*` clause is withdrawn — the hole is closed.** Under ADR-0017 nothing
+on this rail calls `assemble*`: the paint path is `build_shell` plus the sandboxed iframe plus
+`postMessage`, and ADR-0007's cached `{revision_id, rows}` is exactly the channel's payload —
+backend-independent and already ISO-8601-normalised. A custom-rail card therefore participates
+in the Library on the same pointer-match rule as a Flint card, with the same guard key. It
+closed as a side effect of a correction aimed at something else, which is why both this ADR and
+the map still recorded it as open.
+
+**The other two clauses stand.** Refresh is zero inference cost and **not** zero
+infrastructure — ADR-0017 restates the boundary as a browser rather than a Python sandbox — and
+there is still no artifact caching on the refresh path, for the reason given above: unchanged
+rows are a Library load, and a real refresh has new rows. What ADR-0018 adds is that the
+Library load is **cheap, not free**, since `build_shell` is Python on Studio's server and its
+library blobs must be fetched to reach it.
 
 ### 16. `__all__` is unchanged by this ADR
 

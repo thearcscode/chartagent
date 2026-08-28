@@ -330,6 +330,21 @@ sandbox tokens).
 **ADR-0016 Decision 16 — *"`__all__` is unchanged by this ADR"* — is dead**, and ADR-0005
 Decision 12's contract widens accordingly.
 
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018).** Three more names, and they are what makes the seven above reachable from storage:
+**`ChartRecipe`**, **`BoundRecipe`** and **`bind_recipe`** (with `EscapeReason` as a field type
+exported alongside). ADR-0018 places the custom rail's stored artifact — this ADR's
+`ChartDocument` **contained** in a recipe that also carries `transform`, `source_schema`,
+`escape_reason` and `theme_spec` — and supplies the rows that Decision 8's `BoundDocument` had
+no producer for.
+
+`bind_recipe` does **not** return a `BoundDocument`: `theme` and library **bytes** are
+paint-time inputs, and forcing them into a verb that binds rows would make a refresh writing
+only a bind cache fetch a Plotly-sized blob to do it. `BoundRecipe` is rows-only, **cannot
+paint**, and has **no wire format** — nothing compiles it. Decision 16's `contract_unsupported`
+stays here at `build_shell`, because `bind_recipe` never reads `module`, `styles` or
+`libraries`.
+
 ## What this amends
 
 - **ADR-0016 Decision 1** — replaced by Decision 1 here. **Decisions 2, 5, 6, 7, 9, 10, 11 and

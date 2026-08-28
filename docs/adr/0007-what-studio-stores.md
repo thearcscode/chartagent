@@ -84,6 +84,28 @@ of a grammar the library already defines, and it drifts on the first pin bump.
 `CONTEXT.md` spends the word *compile* on a job the client does; a queryable projection of
 the frame is that mistake one layer down.
 
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018).** The column holds **a frame or a recipe**, and it is renamed to say so. ADR-0018
+places the custom rail's stored artifact — `ChartRecipe`: `spec_version`, `transform`,
+`source_schema`, `escape_reason`, `theme_spec` and a `ChartDocument` — **in this same column**,
+discriminated by a new `kind` (`'frame'` | `'recipe'`). The argument above is what decides it:
+*"a second copy of a grammar the library already defines"* applies word for word to shredding
+`module`, `styles` or library pins into columns, and it drifts on the first contract bump. A
+sixth table was rejected for buying queryability of parts nothing queries, at the cost of the
+one-place property below.
+
+`frame` becomes **`content`**, which pairs with the column already beside it —
+`content_hash = sha256(canonical_json(content))` is now one sentence. *`artifact`* was the
+runner-up and lost because this ADR already spends that word on the **row**: the stored
+artifact is the app-owned wrapper, and the jsonb is the thing inside it.
+
+**One clause here does not survive.** Canonical JSON stays the **content address** for both
+rails, and stays the diff unit for a *frame* — but a canonical-JSON diff of a recipe is one
+changed line holding an entire JavaScript program, and PRD §7.7 promises *"targeted code edits,
+not rewrite"* on exactly that rail. So a recipe's review diff is **text** over `module` and
+`styles` and JSON over the rest. What renders it is `5a`'s and the review gate's; ADR-0018
+decides only that this sentence does not reach that case.
+
 The frame lives **only** in `spec_revisions`. `charts.current_revision_id` is an FK to the
 live one. Storing a current copy on `charts` as well would create two rows that can
 disagree, and "the bytes on disk are byte-identical to what the diff is computed over"
@@ -123,6 +145,18 @@ autosaving editor over append-only history produces a revision list no one can r
 approving. Retention is unbounded — a frame is single-digit kilobytes, so a thousand
 revisions is a couple of megabytes — and a cap is revisited only if a chart ever gets a
 scripted editor.
+
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018).** The retention argument is **restated on the payload it now describes**. A recipe
+carries a JavaScript module and optional CSS and is realistically **10–20 KB**, not
+single-digit, so a thousand revisions is tens of megabytes rather than two. Retention stays
+unbounded at v0 and the conclusion is unchanged — but the sentence that justified it no longer
+describes what is stored, and the bound is restated rather than inherited.
+
+`spec_version` also moves: dropping `escape` from `x_chartagent` takes it to **1.2**
+(ADR-0002's erratum), and a `ChartRecipe` shares that one line rather than opening a second.
+Recipes are **born at 1.2**; 1.0 and 1.1 are frame-only history. Studio still never writes it,
+and `revision_number` is still the document counter.
 
 `design/`'s `5b` showed a drift remap as "spec version 1.0 → 1.1". That was a mockup
 label error, corrected on 2026-08-25 to show `revision 1 → 2` with `spec_version` holding
@@ -181,6 +215,34 @@ reason — they are already JSON — and is not locked in v0.
 **The card reconstructs the envelope locally**: `flint_version` from the **served** bundle
 (never `authored_flint_version`), `backend` from the current UI switch, the frame from the
 current revision, the rows from the cache.
+
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018).** Three corrections, all on this decision's reach rather than its rule.
+
+**The cache is rail-independent, and ADR-0016 Decision 15's *Studio's P2 hole* is closed.**
+That decision recorded that a custom-rail card *"cannot `assemble*` those rows"*; under
+ADR-0017 nothing on that rail calls `assemble*` at all — the paint path is `build_shell` plus a
+sandboxed iframe plus `postMessage`, and this decision's `{revision_id, rows}` object is
+exactly the channel's payload, backend-independent and already ISO-8601-normalised. So a
+custom-rail card participates in the Library on the same pointer-match rule, with the same
+guard key, for the same reason: a new revision means a new artifact, so pairing the previous
+recipe with new rows is a wrong chart rather than an early one.
+
+**The paragraph above does not apply to a recipe.** There is no envelope to reconstruct, no
+served `flint_version` in play, and **no backend switch** — so ADR-0018 records the switcher as
+absent on these cards, and Decision 7's `backend_switch` trigger, with its bind, its cache
+replacement and its run row, **never fires for them**.
+
+**And *"nothing on the server"* is literally false on that rail.** `build_shell` is Python in
+the base wheel (ADR-0017 Decision 11), so it runs on Studio's server, and it never fetches
+(ADR-0017 Decision 12), so the caller pulls every pin's bytes first — measured minified,
+ECharts ≈ 1,009 KB, Plotly ≈ 4,451 KB. `6e`'s six cards therefore move megabytes through the
+server that a Flint page moves none of. A custom-rail Library card is **cheap, not free**, and
+it is the first server work a Library load has ever done. v0's answer is an **in-process cache
+of library blobs keyed by sha256** — they are globally content-addressed and immutable
+(ADR-0017 Decision 10) and cards on one page overwhelmingly share pins. Caching the assembled
+shell is available and not required; client-side assembly is refused, because `build_shell`
+*is* the security boundary.
 
 **Source kind does not change the rule.** Uploads, HTTPS URLs and any later table cache
 the same thing, and a Library load never re-reads the source. Bytes changing behind a URL
@@ -430,6 +492,48 @@ CREATE INDEX        runs_chart_created_idx    ON runs          (chart_id, create
 the source's name — `"Bar chart · q3_revenue.csv"`, and for a URL the last path segment or
 the host if there is none — then freely editable. A nullable title means every surface
 that lists charts owns its own fallback string, and they will disagree.
+
+**Erratum — 2026-08-28 ([#60](https://github.com/thearcscode/chartagent/issues/60),
+ADR-0018).** The schema above takes a **four-item additive migration**, and the title rule
+gains a branch.
+
+```sql
+ALTER TABLE spec_revisions RENAME COLUMN frame TO content;
+
+ALTER TABLE spec_revisions
+  ADD COLUMN kind text NOT NULL DEFAULT 'frame'
+    CHECK (kind IN ('frame','recipe')),
+  ALTER COLUMN authored_flint_version DROP NOT NULL;
+
+ALTER TABLE runs ALTER COLUMN backend DROP NOT NULL;
+```
+
+- **`kind`** discriminates a frame from a `ChartRecipe` (Decision 2's erratum). `text` +
+  `CHECK` under Decision 13's rule, never a Postgres `ENUM`. The `DEFAULT` exists for the
+  migration; every insert writes the value.
+- **`content`** — Decision 2's erratum.
+- **`authored_flint_version` becomes nullable.** Decision 11 makes it a recorded fact about
+  *which pin authored a frame*; a recipe has no such fact. **No `contract_version` column is
+  added** — that value is already on the `ChartDocument` inside `content`, and a second copy is
+  a second thing to keep in step.
+- **`runs.backend` becomes nullable.** A custom-rail bind has no backend, for the same reason
+  the card has no backend switch (Decision 6's erratum). `runs.error_code` is unaffected:
+  binding a recipe raises the same typed transform and drift errors, since `bind_recipe` never
+  reads the code.
+
+**`bind_caches` is unchanged**, and so are Decisions 3, 5, 9, 10, 11, 12, 13 and 15.
+
+**A chart's history may mix `kind`s.** Escalation does not produce one — Decision 4's *"a
+revision is created by an explicit save and by nothing else"* means the expressible frame that
+failed review was never a revision — but PRD §7.7's *regenerate* does, in both directions.
+Forbidding it would make a rail change a **new chart**, losing the URL and the history
+Decision 3 exists to protect, with no principled place to site the ban. `current_revision_id`
+points at whichever, `revision_number` stays monotonic across both, and a rail change makes the
+cache pointer stale so the card says *Refresh to bind* — honestly.
+
+**So the title default branches**: a recipe has no chart type, and its default is
+**`"Custom · {source name}"`** with the same URL rule (last path segment, else host). The
+column stays `NOT NULL` and non-blank — the argument against a nullable title is untouched.
 
 ### 15. What #28 hands #42
 
