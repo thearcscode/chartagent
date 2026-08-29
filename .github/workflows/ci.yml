@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --frozen --all-groups
+      - run: uv run ruff check src tests
+      - run: uv run ruff format --check src tests
+      - run: uv run mypy --strict src tests
+
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, python: "3.11" }
+          - { os: ubuntu-latest, python: "3.12" }
+          - { os: ubuntu-latest, python: "3.13" }
+          - { os: ubuntu-latest, python: "3.14" }
+          - { os: macos-latest, python: "3.11" }
+          - { os: macos-latest, python: "3.14" }
+          - { os: windows-latest, python: "3.11" }
+          - { os: windows-latest, python: "3.14" }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: uv sync --frozen --all-groups
+      - run: uv run pytest
+
+  regen-and-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: uv sync --frozen --all-groups
+      - run: node tools/extract.mjs src/chartagent/_bundle/flint.iife.js src/chartagent/frame/vocab.json
+      - run: uv run python tools/generate.py src/chartagent/frame/vocab.json src/chartagent/frame/_generated.py
+      - run: git add -- src/chartagent/frame/vocab.json src/chartagent/frame/_generated.py
+      - run: git diff --cached --exit-code -- src/chartagent/frame/vocab.json src/chartagent/frame/_generated.py
+
+  fixtures-invariant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Fetch fixture corpus
+        run: bash tools/fetch-fixtures.sh
+      - name: Run the namespacing invariant
+        run: node tools/fixtures-invariant.mjs
