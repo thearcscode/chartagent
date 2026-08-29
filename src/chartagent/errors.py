@@ -70,4 +70,11 @@ class DataSourceError(ChartAgentError):
 
 
 class TransformError(ChartAgentError):
-    """The transform failed to execute, timed out, or hit a memory limit."""
+    """The transform failed to execute, timed out, or hit a memory limit.
+
+    ``path`` is the transform node being compiled when DuckDB raised.
+    """
+
+    def __init__(self, message: str, *, path: str | None = None) -> None:
+        super().__init__(message)
+        self.path = path

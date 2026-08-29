@@ -1,1 +1,1 @@
-"""Transform execution. Menu compilation lands in a later ticket."""
+"""Transform execution — the eight-slot menu compiled to DuckDB's relational API."""

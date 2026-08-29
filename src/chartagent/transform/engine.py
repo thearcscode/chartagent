@@ -1,4 +1,4 @@
-"""In-process DuckDB execution for ``bind`` — pass-through only."""
+"""In-process DuckDB execution for ``bind`` — connection, source, collect."""
 
 from __future__ import annotations
 
@@ -65,15 +65,15 @@ def pass_through(
 ) -> pa.Table:
     """Return every source column. Absent/empty transform is this path.
 
-    When ``limit`` is present, later tickets append every remaining output
-    column as a trailing ascending tiebreak (ADR-0008 D11). Pass-through
-    has no ``limit``, so the connection pins alone make this result stable.
+    Pass-through has no ``limit``, so the connection pins alone make this
+    result stable. The menu path appends output-column tiebreaks when
+    ``limit`` is present (ADR-0008 D11).
     """
-    relation = connection.sql("SELECT * FROM source")
-    return _collect(connection, relation, timeout)
+    relation = connection.table("source")
+    return collect(connection, relation, timeout)
 
 
-def _collect(
+def collect(
     connection: duckdb.DuckDBPyConnection,
     relation: duckdb.DuckDBPyRelation,
     timeout: float | None,
@@ -89,7 +89,7 @@ def _collect(
     except duckdb.OutOfMemoryException as exc:
         raise TransformError("transform exceeded the memory limit") from exc
     except duckdb.Error as exc:
-        raise TransformError("transform failed") from exc
+        raise TransformError("transform failed", path="transform") from exc
     finally:
         if timer is not None:
             timer.cancel()

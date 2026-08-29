@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from typing import Any
 
 import pyarrow as pa
@@ -62,6 +63,10 @@ def _is_temporal(reported: str) -> bool:
 def _serialise_value(value: object, reported: str) -> tuple[object, int]:
     if value is None:
         return None, 0
+    if isinstance(value, Decimal):
+        if value == value.to_integral_value():
+            return int(value), 0
+        return float(value), 0
     bucket = bucket_for(reported)
     if bucket == "date" and isinstance(value, date):
         return date(value.year, value.month, value.day).isoformat(), 0

@@ -24,9 +24,9 @@ from chartagent.frame.vocabulary import vocabulary
 from chartagent.transform.engine import (
     describe_source,
     open_connection,
-    pass_through,
     register_source,
 )
+from chartagent.transform.menu import run_transform
 from chartagent.transform.serialize import serialize_rows
 
 _BACKENDS = frozenset(get_args(Backend))
@@ -55,17 +55,23 @@ def bind(
     _check_backend_chart_type(frame, backend)
     _check_excel_facet(frame, backend)
     _check_chart_properties(frame, backend)
-    _reject_nonempty_transform(frame)
 
+    transform = None if frame.x_chartagent is None else frame.x_chartagent.transform
     connection = open_connection()
     started = time.perf_counter()
     try:
         register_source(connection, data)
         reported_types, source_schema = describe_source(connection)
-        table = pass_through(connection, timeout=timeout)
+        table, output_types = run_transform(
+            connection,
+            transform,
+            source_types=reported_types,
+            source_schema=source_schema,
+            timeout=timeout,
+        )
     finally:
         connection.close()
-    rows, advisories = serialize_rows(table, reported_types)
+    rows, advisories = serialize_rows(table, output_types)
     elapsed = time.perf_counter() - started
 
     dumped = frame.model_dump(mode="json", by_alias=True, exclude_none=True)
@@ -227,11 +233,3 @@ def _map_property_error(
             pin=FLINT_VERSION,
         )
     return SpecShapeError("chartProperties is malformed")
-
-
-def _reject_nonempty_transform(frame: InputFrame) -> None:
-    transform = None if frame.x_chartagent is None else frame.x_chartagent.transform
-    if not transform:
-        return
-    unknown = tuple(transform)
-    raise SpecShapeError(f"unrecognised transform slot(s): {unknown}")
