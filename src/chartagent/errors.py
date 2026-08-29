@@ -38,3 +38,11 @@ class SpecVocabularyError(ChartAgentError):
         self.chart_type = chart_type
         self.backend = backend
         self.pin = pin
+
+
+class DataSourceError(ChartAgentError):
+    """The source cannot be read."""
+
+
+class TransformError(ChartAgentError):
+    """The transform failed to execute, timed out, or hit a memory limit."""

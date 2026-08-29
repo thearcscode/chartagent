@@ -1,6 +1,8 @@
 """chartagent — embeddable agentic chart-creation library."""
 
 from chartagent._flint import FlintBundle, flint_bundle
+from chartagent.bind import DataSource, bind
+from chartagent.envelope import Advisory, Envelope
 from chartagent.errors import ChartAgentError
 from chartagent.frame import (
     Backend,
@@ -25,6 +27,10 @@ for _name in _GENERATED_ALL:
 del _name
 
 __all__ = [
+    "bind",
+    "Envelope",
+    "DataSource",
+    "Advisory",
     "flint_bundle",
     "FlintBundle",
     "ChartAgentError",
