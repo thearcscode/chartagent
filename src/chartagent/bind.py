@@ -10,7 +10,7 @@ from typing import Any, Protocol, TypeAlias, get_args
 from pydantic import ValidationError
 
 from chartagent._flint import flint_bundle
-from chartagent.envelope import Envelope
+from chartagent.envelope import Advisory, Envelope
 from chartagent.errors import (
     BackendCapabilityError,
     ChartAgentError,
@@ -47,6 +47,7 @@ def bind(
     *,
     backend: Backend,
     timeout: float | None = None,
+    memory_limit: str | None = None,
 ) -> Envelope:
     """Run an absent/empty transform as pass-through and return an envelope."""
     frame = _validate_frame(spec, backend=backend)
@@ -57,7 +58,7 @@ def bind(
     _check_chart_properties(frame, backend)
 
     transform = None if frame.x_chartagent is None else frame.x_chartagent.transform
-    connection = open_connection()
+    connection = open_connection(memory_limit=memory_limit)
     started = time.perf_counter()
     try:
         register_source(connection, data)
@@ -68,10 +69,19 @@ def bind(
             source_types=reported_types,
             source_schema=source_schema,
             timeout=timeout,
+            memory_limit=memory_limit,
         )
     finally:
         connection.close()
     rows, advisories = serialize_rows(table, output_types)
+    if transform is not None and "raw_sql" in transform:
+        advisories = (
+            Advisory(
+                code="raw_sql_used",
+                message="transform used the raw_sql escape hatch",
+            ),
+            *advisories,
+        )
     elapsed = time.perf_counter() - started
 
     dumped = frame.model_dump(mode="json", by_alias=True, exclude_none=True)

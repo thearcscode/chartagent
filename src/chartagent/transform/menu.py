@@ -17,6 +17,7 @@ from chartagent.errors import SpecShapeError
 from chartagent.frame.input import SourceBucket
 from chartagent.transform.engine import collect, pass_through
 from chartagent.transform.expr import compile_expr
+from chartagent.transform.raw_sql import run_raw_sql
 
 _SLOTS = frozenset(
     {"filter", "derive", "bin", "group_by", "aggregate", "having", "sort", "limit"}
@@ -30,10 +31,25 @@ def run_transform(
     source_types: Mapping[str, str],
     source_schema: Mapping[str, SourceBucket],
     timeout: float | None,
+    memory_limit: str | None = None,
 ) -> tuple[pa.Table, dict[str, str]]:
-    """Execute an absent/empty transform as pass-through, else the menu."""
+    """Execute an absent/empty transform as pass-through, else the menu or raw_sql."""
     if not transform:
         return pass_through(connection, timeout=timeout), dict(source_types)
+
+    if "raw_sql" in transform:
+        others = tuple(key for key in transform if key != "raw_sql")
+        menu = tuple(key for key in others if key in _SLOTS)
+        if menu:
+            raise SpecShapeError(f"raw_sql cannot mix with menu slots: {menu}")
+        if others:
+            raise SpecShapeError(f"unrecognised transform slot(s): {others}")
+        return run_raw_sql(
+            connection,
+            transform["raw_sql"],
+            timeout=timeout,
+            memory_limit=memory_limit,
+        )
 
     unknown = tuple(key for key in transform if key not in _SLOTS)
     if unknown:

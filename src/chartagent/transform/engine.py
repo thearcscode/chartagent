@@ -18,14 +18,22 @@ _REMOTE_PREFIXES = ("s3://", "https://")
 _PARQUET_SUFFIXES = (".parquet", ".pq")
 
 
-def open_connection() -> duckdb.DuckDBPyConnection:
+def open_connection(*, memory_limit: str | None = None) -> duckdb.DuckDBPyConnection:
     """Open an in-memory connection with the reproducibility pins."""
     connection = duckdb.connect(":memory:")
-    _load_extension(connection, "icu")
-    connection.execute("SET TimeZone = 'UTC'")
-    connection.execute("SET default_null_order = 'NULLS_LAST'")
-    connection.execute("SET default_order = 'ASCENDING'")
-    # DuckDB already sets memory_limit (host default). OOM is TransformError.
+    _pin_settings(connection, memory_limit=memory_limit)
+    return connection
+
+
+def open_locked_connection(
+    *, memory_limit: str | None = None
+) -> duckdb.DuckDBPyConnection:
+    """Open connection B: no external access, configuration locked."""
+    connection = duckdb.connect(
+        ":memory:", config={"enable_external_access": False}
+    )
+    _pin_settings(connection, memory_limit=memory_limit)
+    connection.execute("SET lock_configuration = true")
     return connection
 
 
@@ -149,6 +157,20 @@ def _as_path(data: object) -> str | None:
 
 def _is_remote(path: str) -> bool:
     return path.startswith(_REMOTE_PREFIXES)
+
+
+def _pin_settings(
+    connection: duckdb.DuckDBPyConnection, *, memory_limit: str | None
+) -> None:
+    _load_extension(connection, "icu")
+    connection.execute("SET TimeZone = 'UTC'")
+    connection.execute("SET default_null_order = 'NULLS_LAST'")
+    connection.execute("SET default_order = 'ASCENDING'")
+    if memory_limit is None:
+        row = connection.execute("SELECT current_setting('memory_limit')").fetchone()
+        memory_limit = str(row[0]) if row is not None else None
+    if memory_limit is not None:
+        connection.execute("SET memory_limit = ?", [memory_limit])
 
 
 def _load_extension(connection: duckdb.DuckDBPyConnection, name: str) -> None:

@@ -2,6 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
+RawSqlReason = Literal[
+    "multi_statement",
+    "not_read_only",
+    "unparseable",
+    "empty",
+    "non_file_source",
+    "foreign_relation",
+]
+
 
 class ChartAgentError(Exception):
     """Base class for every public chartagent error."""
@@ -78,3 +89,13 @@ class TransformError(ChartAgentError):
     def __init__(self, message: str, *, path: str | None = None) -> None:
         super().__init__(message)
         self.path = path
+
+
+class RawSqlRejectedError(TransformError):
+    """``raw_sql`` failed a lock. ``reason`` is a plain-string Literal."""
+
+    def __init__(
+        self, message: str, *, reason: RawSqlReason, path: str | None = None
+    ) -> None:
+        super().__init__(message, path=path)
+        self.reason = reason
