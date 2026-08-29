@@ -40,6 +40,31 @@ class SpecVocabularyError(ChartAgentError):
         self.pin = pin
 
 
+class BackendCapabilityError(ChartAgentError):
+    """This backend cannot carry the requested frame.
+
+    ``kind`` is one of ``chart_type``, ``property``, ``facet``.
+    ``keys`` names every offender of that kind.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        kind: str,
+        keys: tuple[str, ...],
+        chart_type: str | None = None,
+        backend: str | None = None,
+        pin: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.keys = keys
+        self.chart_type = chart_type
+        self.backend = backend
+        self.pin = pin
+
+
 class DataSourceError(ChartAgentError):
     """The source cannot be read."""
 
