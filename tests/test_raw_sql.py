@@ -92,13 +92,7 @@ def test_menu_slot_with_raw_sql_is_spec_shape_error_before_sql_is_examined() -> 
 
 def test_cte_wrapped_insert_is_not_read_only() -> None:
     with pytest.raises(RawSqlRejectedError) as caught:
-        _bind(
-            {
-                "raw_sql": (
-                    "WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x"
-                )
-            }
-        )
+        _bind({"raw_sql": ("WITH x AS (SELECT 1) INSERT INTO t SELECT * FROM x")})
     assert isinstance(caught.value, TransformError)
     assert caught.value.reason == "not_read_only"
 
@@ -129,13 +123,7 @@ def test_bare_file_path_is_a_foreign_relation() -> None:
 
 def test_read_csv_in_a_subquery_is_a_foreign_relation() -> None:
     with pytest.raises(RawSqlRejectedError) as caught:
-        _bind(
-            {
-                "raw_sql": (
-                    "SELECT (SELECT count(*) FROM read_csv('/etc/passwd'))"
-                )
-            }
-        )
+        _bind({"raw_sql": ("SELECT (SELECT count(*) FROM read_csv('/etc/passwd'))")})
     assert caught.value.reason == "foreign_relation"
 
 
@@ -199,9 +187,7 @@ def test_memory_limit_is_set_on_both_connections() -> None:
         locked_limit = locked.execute(
             "SELECT current_setting('memory_limit')"
         ).fetchone()
-        other_limit = other.execute(
-            "SELECT current_setting('memory_limit')"
-        ).fetchone()
+        other_limit = other.execute("SELECT current_setting('memory_limit')").fetchone()
         assert ordinary_limit == locked_limit
         assert ordinary_limit != other_limit
     finally:

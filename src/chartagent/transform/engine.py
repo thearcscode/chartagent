@@ -29,9 +29,7 @@ def open_locked_connection(
     *, memory_limit: str | None = None
 ) -> duckdb.DuckDBPyConnection:
     """Open connection B: no external access, configuration locked."""
-    connection = duckdb.connect(
-        ":memory:", config={"enable_external_access": False}
-    )
+    connection = duckdb.connect(":memory:", config={"enable_external_access": False})
     _pin_settings(connection, memory_limit=memory_limit)
     connection.execute("SET lock_configuration = true")
     return connection

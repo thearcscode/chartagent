@@ -173,9 +173,7 @@ def test_struct_to_blob_is_silent() -> None:
     planned = _bind(
         pa.table(
             {
-                "payload": pa.array(
-                    [{"a": 1}], type=pa.struct([("a", pa.int64())])
-                ),
+                "payload": pa.array([{"a": 1}], type=pa.struct([("a", pa.int64())])),
                 "n": [1],
             }
         ),
