@@ -1,0 +1,213 @@
+[
+  {
+    "name": "bar_table__07__many_rows_50_rollup_disabled",
+    "chartType": "Bar Table",
+    "chartProperties": {
+      "maxRows": 0
+    }
+  },
+  {
+    "name": "bar_table__16__faceted_launch_leaders_within_agency_type",
+    "chartType": "Bar Table",
+    "chartProperties": {
+      "showPercent": true
+    }
+  },
+  {
+    "name": "bar_table__17__wrapped_market_facets_7_panels",
+    "chartType": "Bar Table",
+    "chartProperties": {
+      "showPercent": true
+    }
+  },
+  {
+    "name": "bar_table__18__row_column_facets_region_era",
+    "chartType": "Bar Table",
+    "chartProperties": {
+      "showPercent": true
+    }
+  },
+  {
+    "name": "choropleth__00__us_states",
+    "chartType": "Choropleth",
+    "chartProperties": {
+      "region": "us"
+    }
+  },
+  {
+    "name": "choropleth__01__world_countries",
+    "chartType": "Choropleth",
+    "chartProperties": {
+      "region": "world"
+    }
+  },
+  {
+    "name": "gallery_kpi_card__00__kpi_single_tile_numeric",
+    "chartType": "KPI Card",
+    "chartProperties": {
+      "layout": "horizontal"
+    }
+  },
+  {
+    "name": "gallery_kpi_card__01__kpi_single_tile_pre_formatted_string",
+    "chartType": "KPI Card",
+    "chartProperties": {
+      "layout": "horizontal"
+    }
+  },
+  {
+    "name": "gallery_kpi_card__02__kpi_multi_tile_numeric_quantities",
+    "chartType": "KPI Card",
+    "chartProperties": {
+      "layout": "horizontal"
+    }
+  },
+  {
+    "name": "gallery_kpi_card__03__kpi_multi_tile_heterogeneous_pre_formatted",
+    "chartType": "KPI Card",
+    "chartProperties": {
+      "layout": "horizontal"
+    }
+  },
+  {
+    "name": "gallery_kpi_card__04__kpi_with_goal_progress_bar",
+    "chartType": "KPI Card",
+    "chartProperties": {
+      "layout": "horizontal"
+    }
+  },
+  {
+    "name": "gallery_kpi_card__05__kpi_with_goal_string_no_progress_bar",
+    "chartType": "KPI Card",
+    "chartProperties": {
+      "layout": "horizontal"
+    }
+  },
+  {
+    "name": "gallery_kpi_card__06__kpi_vertical_layout",
+    "chartType": "KPI Card",
+    "chartProperties": {
+      "layout": "vertical"
+    }
+  },
+  {
+    "name": "gallery_rose__00__flint_rose_mean_by_region",
+    "chartType": "Rose Chart",
+    "chartProperties": {
+      "alignment": "center"
+    }
+  },
+  {
+    "name": "map__00__us_metro_areas",
+    "chartType": "Map",
+    "chartProperties": {
+      "region": "us"
+    }
+  },
+  {
+    "name": "map__01__world_metro_areas",
+    "chartType": "Map",
+    "chartProperties": {
+      "region": "world"
+    }
+  },
+  {
+    "name": "omni_heatmap__00__phase_2_heatmap_net_newusers_by_game_month",
+    "chartType": "Heatmap",
+    "chartProperties": {
+      "colorScheme": "redblue"
+    }
+  },
+  {
+    "name": "radar_chart__02__product_comparison_unfilled",
+    "chartType": "Radar Chart",
+    "chartProperties": {
+      "filled": false
+    }
+  },
+  {
+    "name": "regression__05__logarithmic_regression_50_pts",
+    "chartType": "Regression",
+    "chartProperties": {
+      "regressionMethod": "log"
+    }
+  },
+  {
+    "name": "regression__06__quadratic_regression_60_pts",
+    "chartType": "Regression",
+    "chartProperties": {
+      "regressionMethod": "quad"
+    }
+  },
+  {
+    "name": "regression__07__poly_regression_3_groups_order_4",
+    "chartType": "Regression",
+    "chartProperties": {
+      "regressionMethod": "poly",
+      "polyOrder": 4
+    }
+  },
+  {
+    "name": "regression__08__exponential_regression_45_pts",
+    "chartType": "Regression",
+    "chartProperties": {
+      "regressionMethod": "exp"
+    }
+  },
+  {
+    "name": "regression__09__power_regression_color_2_groups",
+    "chartType": "Regression",
+    "chartProperties": {
+      "regressionMethod": "pow"
+    }
+  },
+  {
+    "name": "rose_chart__00__rose_basic_8_directions",
+    "chartType": "Rose Chart",
+    "chartProperties": {
+      "alignment": "center"
+    }
+  },
+  {
+    "name": "rose_chart__01__stacked_rose_8_dirs_4_seasons",
+    "chartType": "Rose Chart",
+    "chartProperties": {
+      "alignment": "center"
+    }
+  },
+  {
+    "name": "rose_chart__04__donut_rose_12_months_innerradius",
+    "chartType": "Rose Chart",
+    "chartProperties": {
+      "innerRadius": 40
+    }
+  },
+  {
+    "name": "rose_chart__05__rose_with_gap_padangle",
+    "chartType": "Rose Chart",
+    "chartProperties": {
+      "padAngle": 0.03
+    }
+  },
+  {
+    "name": "rose_chart__06__faceted_rose_column",
+    "chartType": "Rose Chart",
+    "chartProperties": {
+      "alignment": "center"
+    }
+  },
+  {
+    "name": "rose_chart__07__faceted_stacked_rose_column",
+    "chartType": "Rose Chart",
+    "chartProperties": {
+      "alignment": "center"
+    }
+  },
+  {
+    "name": "strip_plot__02__no_jitter_aligned_strip",
+    "chartType": "Strip Plot",
+    "chartProperties": {
+      "jitterWidth": 0
+    }
+  }
+]

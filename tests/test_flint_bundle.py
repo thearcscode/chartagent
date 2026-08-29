@@ -62,6 +62,21 @@ def test_fixture_commit_resolves_to_flint_version_tag() -> None:
 
 
 def test_public_all() -> None:
-    assert chartagent.__all__ == ["flint_bundle", "FlintBundle", "ChartAgentError"]
-    for name in ("bind", "Envelope", "InputFrame", "vocabulary"):
-        assert not hasattr(chartagent, name)
+    names = set(chartagent.__all__)
+    assert {
+        "flint_bundle",
+        "FlintBundle",
+        "ChartAgentError",
+        "canonical_json",
+        "vocabulary",
+        "ChartVocabulary",
+        "PropertyDef",
+        "EncodingActionDef",
+        "InputFrame",
+        "Backend",
+    } <= names
+    assert sum(1 for name in names if name.endswith("Properties")) == 151
+    assert "bind" not in names
+    assert "SpecShapeError" not in names
+    assert "SpecVocabularyError" not in names
+    assert not hasattr(chartagent, "bind")

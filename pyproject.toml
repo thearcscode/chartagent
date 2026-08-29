@@ -52,7 +52,12 @@ include = [
 [tool.ruff]
 target-version = "py311"
 src = ["src", "tests"]
-extend-exclude = ["prototypes", "design", "explainers"]
+extend-exclude = [
+    "prototypes",
+    "design",
+    "explainers",
+    "src/chartagent/frame/_generated.py",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

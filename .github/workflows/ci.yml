@@ -43,3 +43,19 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: uv sync --frozen --all-groups
       - run: uv run pytest
+
+  regen-and-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: uv sync --frozen --all-groups
+      - run: node tools/extract.mjs src/chartagent/_bundle/flint.iife.js src/chartagent/frame/vocab.json
+      - run: uv run python tools/generate.py src/chartagent/frame/vocab.json src/chartagent/frame/_generated.py
+      - run: git add -- src/chartagent/frame/vocab.json src/chartagent/frame/_generated.py
+      - run: git diff --cached --exit-code -- src/chartagent/frame/vocab.json src/chartagent/frame/_generated.py
