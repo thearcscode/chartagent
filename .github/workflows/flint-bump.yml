@@ -1,0 +1,53 @@
+name: Flint bump
+
+on:
+  pull_request:
+    paths:
+      - "prototypes/flint-embed/FLINT_VERSION"
+      - "prototypes/flint-embed/FIXTURE_COMMIT"
+
+jobs:
+  flint-bump:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --frozen --all-groups
+      - name: Fetch fixture corpus
+        run: bash tools/fetch-fixtures.sh
+      - name: Old pin from the PR base
+        id: old
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git cat-file -e "${BASE_SHA}:src/chartagent/_bundle/flint.iife.js"; then
+            git show "${BASE_SHA}:src/chartagent/_bundle/flint.iife.js" > build/old-flint.iife.js
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "initial pin, no differential"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Compile differential
+        if: steps.old.outputs.exists == 'true'
+        run: >
+          node tools/flint-bump.mjs
+          build/old-flint.iife.js
+          src/chartagent/_bundle/flint.iife.js
+          build/fixtures
+          tools/flint-bump-manifest.json
+      - name: Narrowing gate
+        if: steps.old.outputs.exists == 'true'
+        run: |
+          node tools/extract.mjs build/old-flint.iife.js build/old-vocab.json
+          node tools/extract.mjs src/chartagent/_bundle/flint.iife.js build/new-vocab.json
+          uv run python tools/check_bump.py build/old-vocab.json build/new-vocab.json
+      - name: Negative test — a real 0.2.1 removal must fail
+        run: bash tools/check_bump_negative.sh

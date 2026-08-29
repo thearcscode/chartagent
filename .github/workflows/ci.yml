@@ -59,3 +59,16 @@ jobs:
       - run: uv run python tools/generate.py src/chartagent/frame/vocab.json src/chartagent/frame/_generated.py
       - run: git add -- src/chartagent/frame/vocab.json src/chartagent/frame/_generated.py
       - run: git diff --cached --exit-code -- src/chartagent/frame/vocab.json src/chartagent/frame/_generated.py
+
+  fixtures-invariant:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Fetch fixture corpus
+        run: bash tools/fetch-fixtures.sh
+      - name: Run the namespacing invariant
+        run: node tools/fixtures-invariant.mjs
