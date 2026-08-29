@@ -34,7 +34,7 @@ class Envelope(BaseModel):
     row_count: int = Field(exclude=True)
     elapsed: float = Field(exclude=True)
     warnings: tuple[Advisory, ...] = Field(exclude=True)
-    source_schema: dict[str, SourceBucket] = Field(exclude=True)
+    source_schema: dict[str, SourceBucket] | None = Field(exclude=True)
 
     def to_dict(self) -> dict[str, Any]:
         return self.model_dump()

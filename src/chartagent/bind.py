@@ -21,13 +21,23 @@ from chartagent.frame import _generated
 from chartagent.frame._generated import FLINT_VERSION, GeneratedProperties
 from chartagent.frame.input import Backend, InputFrame, _omit_nulls
 from chartagent.frame.vocabulary import vocabulary
+from chartagent.transform.drift import (
+    check_output_stage,
+    check_source_stage,
+    output_references,
+    referenced_source_columns,
+    unchecked_source_columns,
+)
 from chartagent.transform.engine import (
     describe_source,
     open_connection,
     register_source,
 )
 from chartagent.transform.menu import run_transform
+from chartagent.transform.raw_sql import sql_source_refs, validate_raw_sql
 from chartagent.transform.serialize import serialize_rows
+
+_THEME_IGNORED = frozenset({"echarts", "chartjs"})
 
 _BACKENDS = frozenset(get_args(Backend))
 
@@ -58,11 +68,19 @@ def bind(
     _check_chart_properties(frame, backend)
 
     transform = None if frame.x_chartagent is None else frame.x_chartagent.transform
+    baseline = None if frame.x_chartagent is None else frame.x_chartagent.source_schema
     connection = open_connection(memory_limit=memory_limit)
     started = time.perf_counter()
     try:
         register_source(connection, data)
         reported_types, source_schema = describe_source(connection)
+        refs, star = _source_refs(connection, transform)
+        if star:
+            seen_schema = None
+        else:
+            seen_schema = check_source_stage(
+                refs, source_schema, reported_types, baseline
+            )
         table, output_types = run_transform(
             connection,
             transform,
@@ -73,15 +91,23 @@ def bind(
         )
     finally:
         connection.close()
+    needed = output_references(
+        frame.chart_spec.encodings, frame.semantic_types, transform
+    )
+    check_output_stage(needed, set(table.column_names))
     rows, advisories = serialize_rows(table, output_types)
-    if transform is not None and "raw_sql" in transform:
-        advisories = (
-            Advisory(
-                code="raw_sql_used",
-                message="transform used the raw_sql escape hatch",
-            ),
-            *advisories,
-        )
+    warnings = _advisories(
+        frame=frame,
+        backend=backend,
+        transform=transform,
+        refs=refs,
+        star=star,
+        baseline=baseline,
+        output_columns=set(table.column_names),
+        needed=needed,
+        rows=rows,
+        serialize=advisories,
+    )
     elapsed = time.perf_counter() - started
 
     dumped = frame.model_dump(mode="json", by_alias=True, exclude_none=True)
@@ -96,9 +122,94 @@ def bind(
         input=payload,
         row_count=len(rows),
         elapsed=elapsed,
-        warnings=advisories,
-        source_schema=source_schema,
+        warnings=warnings,
+        source_schema=seen_schema,
     )
+
+
+def _source_refs(
+    connection: Any,
+    transform: dict[str, Any] | None,
+) -> tuple[frozenset[str], bool]:
+    if transform is not None and "raw_sql" in transform:
+        if any(key != "raw_sql" for key in transform):
+            return frozenset(), False
+        sql = transform["raw_sql"]
+        if not isinstance(sql, str):
+            return frozenset(), False
+        validate_raw_sql(connection, sql)
+        parsed = sql_source_refs(connection, sql)
+        if parsed is None:
+            return frozenset(), True
+        return parsed, False
+    return referenced_source_columns(transform), False
+
+
+def _advisories(
+    *,
+    frame: InputFrame,
+    backend: Backend,
+    transform: dict[str, Any] | None,
+    refs: frozenset[str],
+    star: bool,
+    baseline: dict[str, Any] | None,
+    output_columns: set[str],
+    needed: frozenset[str],
+    rows: list[dict[str, Any]],
+    serialize: tuple[Advisory, ...],
+) -> tuple[Advisory, ...]:
+    items: list[Advisory] = []
+    if frame.theme_spec is not None and backend in _THEME_IGNORED:
+        items.append(
+            Advisory(
+                code="theme_spec_ignored",
+                message=f"theme_spec is set and {backend} discards it",
+            )
+        )
+    if star:
+        items.append(
+            Advisory(
+                code="retype_unchecked",
+                message=("raw_sql uses STAR; referenced source columns are indefinite"),
+            )
+        )
+    else:
+        missing = unchecked_source_columns(refs, baseline)
+        if missing:
+            reason = (
+                "source_schema baseline is absent"
+                if baseline is None
+                else "source_schema baseline is missing entries"
+            )
+            items.append(
+                Advisory(
+                    code="retype_unchecked",
+                    message=f"{reason}; columns unchecked: {', '.join(missing)}",
+                )
+            )
+    if transform is not None and "raw_sql" in transform:
+        items.append(
+            Advisory(
+                code="raw_sql_used",
+                message="transform used the raw_sql escape hatch",
+            )
+        )
+    if not rows:
+        items.append(
+            Advisory(code="empty_result", message="transform returned zero rows")
+        )
+    items.extend(serialize)
+    extra = sorted(name for name in output_columns if name not in needed)
+    if extra:
+        items.append(
+            Advisory(
+                code="additive_drift_ignored",
+                message=(
+                    "transform produced unreferenced column(s): " + ", ".join(extra)
+                ),
+            )
+        )
+    return tuple(items)
 
 
 def _chart_type_of(spec: InputFrame | dict[str, Any]) -> str | None:

@@ -49,6 +49,70 @@ def validate_raw_sql(connection: duckdb.DuckDBPyConnection, sql: str) -> None:
     _lock_relations(connection, sql)
 
 
+def sql_source_refs(
+    connection: duckdb.DuckDBPyConnection, sql: str
+) -> frozenset[str] | None:
+    """Referenced source columns, or ``None`` when the tree reports STAR."""
+    tree = _sql_tree(connection, sql)
+    columns: set[str] = set()
+    star = _walk_source_refs(tree, in_source_select=False, columns=columns)
+    if star:
+        return None
+    return frozenset(columns)
+
+
+def _sql_tree(connection: duckdb.DuckDBPyConnection, sql: str) -> dict[str, Any]:
+    try:
+        row = connection.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()
+    except duckdb.Error as exc:
+        raise RawSqlRejectedError(
+            "raw_sql could not be parsed", reason="unparseable"
+        ) from exc
+    if row is None:
+        raise RawSqlRejectedError("raw_sql could not be parsed", reason="unparseable")
+    tree = json.loads(row[0])
+    if not isinstance(tree, dict) or tree.get("error"):
+        raise RawSqlRejectedError("raw_sql could not be parsed", reason="unparseable")
+    return tree
+
+
+def _walk_source_refs(node: Any, *, in_source_select: bool, columns: set[str]) -> bool:
+    if isinstance(node, list):
+        return any(
+            _walk_source_refs(item, in_source_select=in_source_select, columns=columns)
+            for item in node
+        )
+    if not isinstance(node, dict):
+        return False
+    if node.get("type") == "SELECT_NODE":
+        reads = _from_includes_source(node.get("from_table"))
+        return any(
+            _walk_source_refs(value, in_source_select=reads, columns=columns)
+            for value in node.values()
+        )
+    if in_source_select and node.get("type") == "STAR":
+        return True
+    if in_source_select and node.get("type") == "COLUMN_REF":
+        names = node.get("column_names")
+        if isinstance(names, list) and names and isinstance(names[-1], str):
+            columns.add(names[-1])
+        return False
+    return any(
+        _walk_source_refs(value, in_source_select=in_source_select, columns=columns)
+        for value in node.values()
+    )
+
+
+def _from_includes_source(node: Any) -> bool:
+    if isinstance(node, list):
+        return any(_from_includes_source(item) for item in node)
+    if not isinstance(node, dict):
+        return False
+    if node.get("type") == "BASE_TABLE" and node.get("table_name") == "source":
+        return True
+    return any(_from_includes_source(value) for value in node.values())
+
+
 def _lock_statements(connection: duckdb.DuckDBPyConnection, sql: str) -> None:
     try:
         statements = connection.extract_statements(sql)
@@ -69,21 +133,7 @@ def _lock_statements(connection: duckdb.DuckDBPyConnection, sql: str) -> None:
 
 
 def _lock_relations(connection: duckdb.DuckDBPyConnection, sql: str) -> None:
-    try:
-        row = connection.execute("SELECT json_serialize_sql(?)", [sql]).fetchone()
-    except duckdb.Error as exc:
-        raise RawSqlRejectedError(
-            "raw_sql could not be parsed", reason="unparseable"
-        ) from exc
-    if row is None:
-        raise RawSqlRejectedError(
-            "raw_sql could not be parsed", reason="unparseable"
-        )
-    tree = json.loads(row[0])
-    if not isinstance(tree, dict) or tree.get("error"):
-        raise RawSqlRejectedError(
-            "raw_sql could not be parsed", reason="unparseable"
-        )
+    tree = _sql_tree(connection, sql)
     allowed_tf = _table_functions(connection)
     if _has_foreign_relation(tree, allowed_ctes=set(), allowed_tf=allowed_tf):
         raise RawSqlRejectedError(
@@ -95,8 +145,7 @@ def _table_functions(connection: duckdb.DuckDBPyConnection) -> frozenset[str]:
     global _TABLE_FUNCTIONS
     if _TABLE_FUNCTIONS is None:
         rows = connection.execute(
-            "SELECT function_name FROM duckdb_functions() "
-            "WHERE function_type = 'table'"
+            "SELECT function_name FROM duckdb_functions() WHERE function_type = 'table'"
         ).fetchall()
         _TABLE_FUNCTIONS = frozenset(str(row[0]).lower() for row in rows)
     return _TABLE_FUNCTIONS

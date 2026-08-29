@@ -10,7 +10,7 @@ import pytest
 from chartagent import bind
 from chartagent.bind import DataSource
 from chartagent.envelope import Envelope
-from chartagent.errors import SpecShapeError
+from chartagent.errors import SchemaDriftError, SpecShapeError
 
 _ROWS = [
     {"quarter": "Q1", "revenue": 100},
@@ -142,6 +142,7 @@ def test_group_by_without_aggregate_is_distinct() -> None:
             {"quarter": "Q1", "revenue": 150},
             {"quarter": "Q2", "revenue": 200},
         ],
+        encodings={"x": {"field": "quarter"}, "y": {"field": "quarter"}},
     )
     values = envelope.input["data"]["values"]
     assert sorted(row["quarter"] for row in values) == ["Q1", "Q2"]
@@ -151,7 +152,7 @@ def test_group_by_without_aggregate_is_distinct() -> None:
 def test_aggregate_without_group_by_is_one_row() -> None:
     envelope = _bind(
         {"aggregate": [{"name": "revenue_sum", "op": "sum", "field": "revenue"}]},
-        encodings={"x": {"field": "quarter"}, "y": {"field": "revenue_sum"}},
+        encodings={"x": {"field": "revenue_sum"}, "y": {"field": "revenue_sum"}},
     )
     assert envelope.input["data"]["values"] == [{"revenue_sum": 300}]
 
@@ -536,7 +537,7 @@ def test_date_literal_must_be_iso8601() -> None:
 
 def test_quoted_identifier_cannot_bind_via_escaping() -> None:
     rows = [{"evil": "hit", "other": "safe", "revenue": 1, "quarter": "Q1"}]
-    with pytest.raises(SpecShapeError, match="unknown column"):
+    with pytest.raises(SchemaDriftError) as caught:
         _bind(
             {
                 "filter": {
@@ -549,6 +550,9 @@ def test_quoted_identifier_cannot_bind_via_escaping() -> None:
             },
             rows,
         )
+    assert caught.value.stage == "source"
+    assert caught.value.drifted[0].kind == "dropped"
+    assert caught.value.drifted[0].name == 'ev"il'
 
 
 def test_duplicate_output_name_is_a_spec_shape_error() -> None:

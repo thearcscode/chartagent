@@ -318,8 +318,10 @@ def _apply_sort_limit(
             if not isinstance(item, dict):
                 raise SpecShapeError(f"{path} must be an object")
             field = item.get("field")
-            if not isinstance(field, str) or field not in scope:
+            if not isinstance(field, str):
                 raise SpecShapeError(f"{path}.field must be an output column")
+            if field not in scope:
+                continue
             direction = item.get("dir", "asc")
             nulls = item.get("nulls", "last")
             if direction not in {"asc", "desc"}:

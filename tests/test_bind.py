@@ -49,7 +49,7 @@ def test_wire_format_is_exactly_three_keys() -> None:
     assert envelope.row_count == 2
     assert envelope.elapsed >= 0.0
     assert envelope.warnings == ()
-    assert envelope.source_schema == {"quarter": "string", "revenue": "number"}
+    assert envelope.source_schema == {}
 
 
 def test_inline_data_is_a_spec_shape_error() -> None:

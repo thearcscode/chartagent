@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Literal
 
 RawSqlReason = Literal[
@@ -99,3 +100,36 @@ class RawSqlRejectedError(TransformError):
     ) -> None:
         super().__init__(message, path=path)
         self.reason = reason
+
+
+DriftStage = Literal["source", "transform_output"]
+DriftKind = Literal["renamed", "dropped", "retyped"]
+
+
+@dataclass(frozen=True)
+class DriftedField:
+    """One drifted column. ``expected`` / ``found`` are kind-polymorphic."""
+
+    name: str
+    kind: DriftKind
+    expected: str | None
+    found: str | None
+
+
+class SchemaDriftError(ChartAgentError):
+    """A referenced column was dropped or retyped.
+
+    ``kind="renamed"`` is in the Literal with no detector — a missing
+    referenced column is ``dropped``.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        stage: DriftStage,
+        drifted: tuple[DriftedField, ...],
+    ) -> None:
+        super().__init__(message)
+        self.stage = stage
+        self.drifted = drifted
