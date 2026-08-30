@@ -1,7 +1,7 @@
 # 7. What Studio stores
 
-- **Status:** Accepted (amended 2026-08-27)
-- **Date:** 2026-08-25; Decision 8 amended 2026-08-27 (ADR-0010) — one exception to the byte-identical cache test
+- **Status:** Accepted (amended 2026-08-27, 2026-08-30)
+- **Date:** 2026-08-25; Decision 8 amended 2026-08-27 (ADR-0010) — one exception to the byte-identical cache test; Decisions 3 and 7 amended 2026-08-30 ([#81](https://github.com/thearcscode/chartagent/issues/81))
 - **Settled on:** [#28](https://github.com/thearcscode/chartagent/issues/28)
 - **Builds on:** ADR-0002 (the input frame *is* the spec; canonical JSON is the diff
   unit), ADR-0005 (`canonical_json` is public precisely so this schema does not write its
@@ -10,8 +10,10 @@
   *"Separate services added later"* meant *not inside the web image*, not *after v0*.
 - **Governs code that lives elsewhere.** Studio is
   [`thearcscode/chartagent-studio`](https://github.com/thearcscode/chartagent-studio) —
-  private, and still empty. The ADR lands in the library repo for ADR-0006's reason: the
-  sequence should not fork before the second repo holds a file.
+  private. The ADR landed in the library repo for ADR-0006's reason: the sequence should
+  not fork before the second repo held a file. **New Studio ADRs, `CONTEXT.md`, and
+  tickets land in the Studio repo** as of 2026-08-30. This ADR stays here as the decision
+  record.
 - **Leaves open:** where the *spec's* planning baseline for retype drift lives —
   [#42](https://github.com/thearcscode/chartagent/issues/42), which this ADR deliberately
   does not pre-empt (Decision 13). The host and object-store vendors stay unchosen, as
@@ -131,6 +133,23 @@ constraint is `DEFERRABLE INITIALLY DEFERRED` and a chart's first save writes bo
 one transaction with app-generated ids, checked at commit. Deriving *current* as
 `max(revision_number)` is rejected: it is only accidentally right, and it forecloses
 revert-to-revision.
+
+**Erratum — 2026-08-30 ([#81](https://github.com/thearcscode/chartagent/issues/81)).**
+Two completions of the pointer this decision already required.
+
+**Revert is a pointer move.** It repoints `charts.current_revision_id`. It writes **no**
+new `spec_revisions` row. A copy collides with `UNIQUE (chart_id, content_hash)` — the same
+constraint that makes an unchanged save a no-op — so a copy-based revert would need an
+exception to the dedup. Every revision stays in place; a revert is itself revertible. The
+bind cache pointer goes stale (*Refresh to bind*). A revert writes no run: runs are bind
+attempts, and a revert binds nothing.
+
+**The diff is server-side, structural, over `canonical_json` output.** One implementation,
+sitting next to the hash it must agree with. Hunks are added, removed and changed paths —
+not a text diff of pretty-printed JSON, because canonical JSON has no formatting to
+diff. Identical revisions diff to zero hunks. A diff whose only change is
+`x_chartagent.source_schema` is labelled as such (Decision 8's erratum is why that shape
+is ordinary).
 
 ### 4. The app owns a revision integer; `spec_version` stays a compatibility field
 
@@ -276,6 +295,13 @@ decorative.
 `trigger_kind` is `refresh` · `open` · `backend_switch` · `save`. The `save` value is
 Decision 8's reuse path. The column is `trigger_kind` and not `trigger` because `TRIGGER`
 is reserved in SQL and would need quoting forever.
+
+**Erratum — 2026-08-30 ([#81](https://github.com/thearcscode/chartagent/issues/81)).**
+The four values stay the closed set through Studio's P1 history-and-recovery work. A
+generate run will need a fifth; its name is
+[#79](https://github.com/thearcscode/chartagent/issues/79)'s. Widening the `CHECK` now
+would guess a verb the planner output contract has not named. The column is `text` +
+`CHECK` so that widening later is one drop-and-add.
 
 So: **runs are the history of user-initiated bind attempts plus that save path; the cache
 is the last successful transform.** They are not the same set, and neither is derivable
@@ -625,5 +651,7 @@ rows describing page loads, none of them a refresh.
   Decision 11 routes an unrenderable historical revision into.
 - [#42](https://github.com/thearcscode/chartagent/issues/42) — the retype baseline;
   Decision 15 is the offer, not the answer.
+- [#81](https://github.com/thearcscode/chartagent/issues/81) — Studio P1 history, diff,
+  revert and drift recovery; Decisions 3 and 7's 2026-08-30 errata.
 - `design/README.md` — screen index; `5b`'s version labels were corrected on 2026-08-25 to
   match Decision 4.

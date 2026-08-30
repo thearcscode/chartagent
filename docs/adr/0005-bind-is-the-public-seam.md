@@ -1,7 +1,7 @@
 # 5. `bind` is the public seam
 
-- **Status:** Accepted (amended 2026-08-26, 2026-08-27)
-- **Date:** 2026-08-23; Decisions 1, 7, 10 and 11 amended 2026-08-26 (ADR-0008); Decisions 3, 8, 10 and 12 amended 2026-08-26 (ADR-0009); Decisions 5, 7 and 11 amended 2026-08-27 (ADR-0010) — **Decision 7's retype deferral is closed**
+- **Status:** Accepted (amended 2026-08-26, 2026-08-27, 2026-08-30)
+- **Date:** 2026-08-23; Decisions 1, 7, 10 and 11 amended 2026-08-26 (ADR-0008); Decisions 3, 8, 10 and 12 amended 2026-08-26 (ADR-0009); Decisions 5, 7 and 11 amended 2026-08-27 (ADR-0010) — **Decision 7's retype deferral is closed**; Decision 1 amended 2026-08-30 ([#80](https://github.com/thearcscode/chartagent/issues/80))
 - **Settled on:** [#25](https://github.com/thearcscode/chartagent/issues/25)
 - **Builds on:** ADR-0001 (pin Flint; compile in the client), ADR-0002 (the input frame
   *is* the spec), ADR-0003 (rasterise in a browser — this ADR supplies the `Rasteriser`
@@ -99,6 +99,15 @@ P1. Playwright ships a sync API, so the reference rasteriser costs nothing; a sy
 protocol wraps into a threadpool trivially, whereas an async one poisons every caller
 that is not already async. P1 adds `abind` and `arasterise` as siblings — not a
 redesign.
+
+**Erratum — 2026-08-30 ([#80](https://github.com/thearcscode/chartagent/issues/80)).**
+The siblings are **not phase P1.** The sentence above read PRD §9's "P1" as the phase.
+It is the **fast-follow** priority label — the same reading this decision already used for
+`result.refresh()` and P0.11. Phase P1's exit criteria name P0.1–P0.4, P0.9, P0.11 and
+P0.12 and no async requirement. **`bind` stays the only bind verb in this phase.**
+`abind` and `arasterise` remain siblings-when-they-land, not a redesign; they are not in
+[#80](https://github.com/thearcscode/chartagent/issues/80)'s build. Studio's request
+handling (ADR-0006 Decision 3) keeps sync `def` plus the threadpool.
 
 ### 2. The backend is an argument, not a field on the spec
 
@@ -657,5 +666,7 @@ Phase 0, and requiring it would make the sandbox a dependency of the spec editor
   [#27](https://github.com/thearcscode/chartagent/issues/27),
   [#28](https://github.com/thearcscode/chartagent/issues/28) — the app tickets this surface
   was dogfooded against.
+- [#80](https://github.com/thearcscode/chartagent/issues/80) — phase P1 library
+  prerequisites; Decision 1's 2026-08-30 erratum keeps `abind` out of that build.
 - `prototypes/facade-codegen/` — the 151 generated models, the two-array vocabulary, and
   `check_bump.py`.

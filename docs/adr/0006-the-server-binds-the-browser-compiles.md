@@ -1,16 +1,17 @@
 # 6. The server binds, the browser compiles
 
-- **Status:** Accepted
-- **Date:** 2026-08-24
+- **Status:** Accepted (amended 2026-08-30)
+- **Date:** 2026-08-24; Decision 3 amended 2026-08-30 ([#80](https://github.com/thearcscode/chartagent/issues/80))
 - **Settled on:** [#26](https://github.com/thearcscode/chartagent/issues/26)
 - **Builds on:** ADR-0001 (compile in the client), ADR-0002 (the input frame *is* the
   spec), ADR-0003 (rasterise in a browser — deferred out of v0 here), ADR-0005 (`bind` is
   the seam this app consumes)
 - **Governs code that lives elsewhere.** Studio is
   [`thearcscode/chartagent-studio`](https://github.com/thearcscode/chartagent-studio) —
-  private, and empty as of this date. The ADR lands in the library repo because the
-  wayfinder map carries both tracks and the ADR sequence should not fork before the second
-  repo holds a single file. Studio adopts this ADR by reference when it starts.
+  private. The ADR landed in the library repo because the wayfinder map carries both tracks
+  and the sequence should not fork before the second repo held a file. Studio adopts this
+  ADR by reference. **New Studio ADRs, `CONTEXT.md`, and tickets land in the Studio repo**
+  as of 2026-08-30. This ADR stays here as the decision record.
 - **Decides nothing about:** the host vendor, the object-store vendor, the storage schema
   ([#28](https://github.com/thearcscode/chartagent/issues/28)), or the editor surface
   ([#27](https://github.com/thearcscode/chartagent/issues/27)).
@@ -95,6 +96,11 @@ worker is unchanged and remains P2. The host vendor remains unchosen.
 Sync `def` endpoints for routes that call `bind`, so Starlette runs them in its threadpool
 and DuckDB never blocks the event loop; `async def` for pure I/O. `abind` arrives at P1
 (ADR-0005), and this decision is what changes when it does.
+
+**Erratum — 2026-08-30 ([#80](https://github.com/thearcscode/chartagent/issues/80),
+ADR-0005).** `abind` does **not** arrive at phase P1. ADR-0005 Decision 1's erratum of
+the same date is the call. This decision's threadpool stays; nothing here changes when
+the async siblings land later.
 
 ### 4. Vite + React + TypeScript, styled with plain CSS custom properties
 
@@ -367,5 +373,7 @@ someone else's wifi.
   backend-switching as an affordance, and styles from `design/tokens.css`.
 - [#28](https://github.com/thearcscode/chartagent/issues/28) — storage; unblocked by
   Decision 11, and bound by it to `owner_id` from the first schema.
+- [#80](https://github.com/thearcscode/chartagent/issues/80) — phase P1 library
+  prerequisites; Decision 3's 2026-08-30 erratum keeps the threadpool.
 - `design/README.md` — the design system's reasoning; `design/tokens.css` is now the
   artifact that crosses.
