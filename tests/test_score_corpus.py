@@ -238,6 +238,20 @@ def test_harness_is_not_on_the_public_surface() -> None:
         __import__("chartagent.score_corpus")
 
 
+def test_crlf_checkout_still_matches_the_tag(tmp_path: Path) -> None:
+    lf = _PREREG.read_bytes().replace(b"\r\n", b"\n")
+    crlf = lf.replace(b"\n", b"\r\n")
+    assert crlf != lf
+    path = tmp_path / "pre-registration.json"
+    path.write_bytes(crlf)
+    outputs = _write_outputs(
+        _outputs(miss_ids=set(_CELL1) | set(_TRIP_EXTRA_MISSES)),
+        tmp_path,
+    )
+    result = _run(outputs, tmp_path, prereg=path)
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
 def test_mismatched_hash_exits_nonzero(tmp_path: Path) -> None:
     blob = bytearray(_PREREG.read_bytes())
     blob[0] ^= 0x01

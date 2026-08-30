@@ -63,8 +63,13 @@ def wilson_interval(k: int, n: int, z: float = WILSON_Z) -> dict[str, float]:
     return {"lower": centre - margin, "upper": centre + margin}
 
 
+def _canonical(data: bytes) -> bytes:
+    """Hash the tagged JSON as LF. A Windows CRLF checkout is the same freeze."""
+    return data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+
+
 def _digest(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+    return hashlib.sha256(_canonical(data)).hexdigest()
 
 
 def tagged_digest(repo: Path) -> str:
