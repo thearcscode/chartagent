@@ -110,6 +110,12 @@ def backend_forced(vocab: Mapping[str, Any]) -> dict[str, int]:
 
 
 def read_escape_reason(record: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Read the escape reason from any home the recorder used.
+
+    Issue #86 / ADR-0014 D16: the scorer must not depend on where the
+    value is written. ChartRecipe.escape_reason is the settled home
+    (ADR-0018); the other candidates are recorded-output shims.
+    """
     recipe = record.get("recipe")
     xc = record.get("x_chartagent")
     candidates = (
@@ -184,7 +190,7 @@ def _load_json(path: Path) -> tuple[Any | None, str | None]:
         return None, f"PARSE              {exc}"
 
 
-def _kn(k: int, n: int, *, interval: bool) -> dict[str, Any]:
+def _share_row(k: int, n: int, *, interval: bool) -> dict[str, Any]:
     row: dict[str, Any] = {"k": k, "n": n}
     if interval:
         row["wilson_95"] = wilson_interval(k, n)
@@ -315,6 +321,7 @@ def score(
                     "reported_outcome": reported_outcome,
                     "reported_bucket": reported_bucket,
                     "surprise_hit": surprise_hit,
+                    "facade_invalid": facade_invalid,
                 }
             )
     finally:
@@ -328,7 +335,7 @@ def score(
     def _stratum(name: str) -> dict[str, Any]:
         subset = [row for row in rows if row["stratum"] == name]
         k = sum(row["rail_hit"] for row in subset)
-        return _kn(k, len(subset), interval=True)
+        return _share_row(k, len(subset), interval=True)
 
     cells: dict[str, dict[str, int]] = {}
     for cell in range(5):
@@ -345,7 +352,7 @@ def score(
             if row["rail_hit"] and (name is None or row["stratum"] == name)
         ]
         k = sum(row["raw_sql_used"] for row in subset)
-        return _kn(k, len(subset), interval=name is not None)
+        return _share_row(k, len(subset), interval=name is not None)
 
     delivery_subset = [row for row in rows if row["in_delivery_denominator"]]
     delivery_k = sum(row["delivered"] for row in delivery_subset)
@@ -407,7 +414,7 @@ def score(
             "adversarial": _raw_sql("adversarial"),
         },
         "delivery_rate": {
-            **_kn(delivery_k, len(delivery_subset), interval=True),
+            **_share_row(delivery_k, len(delivery_subset), interval=True),
             "excluded": excluded,
         },
         "strata": {
@@ -421,6 +428,7 @@ def score(
         },
         "cell_moves": cell_moves,
         "genuine_bucket2_ids": genuine_bucket2,
+        "facade_invalid_ids": [row["id"] for row in rows if row["facade_invalid"]],
         "bucket_confusion": confusion,
         "requests": rows,
     }
@@ -476,6 +484,9 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         "",
         "## Per-cell rail counts (k of n; no rates, no intervals)",
         "",
+        "Counts are against the tagged snapshot. Cell moves on the scoring "
+        "pin are listed below and do not rewrite the tag.",
+        "",
     ]
     for cell in range(5):
         row = cells[str(cell)]
@@ -529,6 +540,30 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         lines.append(f"Surprise hit on a cell-1 request: {ids}.")
     else:
         lines.append("No surprise hit on a cell-1 request.")
+    mismatches = [
+        row
+        for row in report["requests"]
+        if row["expected_outcome"] != row["reported_outcome"]
+    ]
+    lines.append("")
+    if not mismatches:
+        lines.append("Every request's reported outcome matches the expected outcome.")
+    else:
+        for row in mismatches:
+            lines.append(
+                f"- {row['id']}: expected {row['expected_outcome']}, "
+                f"reported {row['reported_outcome']}"
+            )
+    invalid = report.get("facade_invalid_ids") or []
+    if invalid:
+        lines.extend(
+            [
+                "",
+                "Non-null frames that failed the scoring façade: "
+                + ", ".join(invalid)
+                + ".",
+            ]
+        )
     lines.extend(["", "## Bucket confusion (among actual misses)", ""])
     confusion = report.get("bucket_confusion") or {}
     if not confusion:
@@ -560,6 +595,13 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _fail(issues: list[str]) -> int:
+    for line in issues:
+        print(line)
+    print(f"\nFAIL — {len(issues)} check(s) failed.")
+    return 1
 
 
 def _check_outputs(outputs: Mapping[str, Any], request_ids: list[str]) -> list[str]:
@@ -651,10 +693,7 @@ def main(argv: list[str] | None = None) -> int:
         if err:
             issues.append(err)
     if issues:
-        for line in issues:
-            print(line)
-        print(f"\nFAIL — {len(issues)} check(s) failed.")
-        return 1
+        return _fail(issues)
     assert isinstance(prereg_doc, dict)
     assert isinstance(outputs_doc, dict)
     assert isinstance(vocab_doc, dict)
@@ -663,10 +702,7 @@ def main(argv: list[str] | None = None) -> int:
     ]
     issues.extend(_check_outputs(outputs_doc, request_ids))
     if issues:
-        for line in issues:
-            print(line)
-        print(f"\nFAIL — {len(issues)} check(s) failed.")
-        return 1
+        return _fail(issues)
 
     scored_at = ns.date or date.today().isoformat()
     report = score(

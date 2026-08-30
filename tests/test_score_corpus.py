@@ -453,6 +453,8 @@ def test_expected_versus_reported_includes_a_surprise_cell1_hit(
     md = _markdown(tmp_path)
     assert "surprise" in md.lower()
     assert "bucket confusion" in md.lower()
+    assert "r31: expected miss, reported hit" in md
+    assert "r01: expected hit, reported miss" in md
 
 
 def test_pin_bump_moves_cell1_when_union_gains_venn(tmp_path: Path) -> None:
@@ -483,6 +485,52 @@ def test_pin_bump_moves_cell1_when_union_gains_venn(tmp_path: Path) -> None:
     md = _markdown(tmp_path)
     assert "r31" in md
     assert "moved" in md.lower()
+
+
+def test_narrowing_bump_reports_frames_the_facade_rejects(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    from chartagent.errors import ChartAgentError
+
+    module = _tool()
+    original = module.InputFrame.model_validate
+
+    def reject_bullet(data: object) -> object:
+        frame = data if isinstance(data, dict) else {}
+        spec = frame.get("chart_spec")
+        chart = spec.get("chartType") if isinstance(spec, dict) else None
+        if chart == "Bullet Chart":
+            raise ChartAgentError("scoring pin no longer admits Bullet Chart")
+        return original(data)
+
+    monkeypatch.setattr(module.InputFrame, "model_validate", reject_bullet)
+    outputs = _write_outputs(
+        _outputs(miss_ids=set(_CELL1) | set(_TRIP_EXTRA_MISSES)),
+        tmp_path,
+    )
+    out_json = tmp_path / "score.json"
+    out_md = tmp_path / "score.md"
+    code = module.main(
+        [
+            str(outputs),
+            "--json",
+            str(out_json),
+            "--md",
+            str(out_md),
+            "--date",
+            "2026-08-30",
+        ]
+    )
+    assert code == 0
+    report = json.loads(out_json.read_text(encoding="utf-8"))
+    assert "r22" in report["facade_invalid_ids"]
+    by_id = {row["id"]: row for row in report["requests"]}
+    assert by_id["r22"]["facade_invalid"] is True
+    assert by_id["r22"]["expected_outcome"] == "miss"
+    md = out_md.read_text(encoding="utf-8")
+    assert "r22" in md
+    assert "façade" in md.lower() or "facade" in md.lower()
 
 
 def test_escape_reason_is_read_from_any_home(tmp_path: Path) -> None:
