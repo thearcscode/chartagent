@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 import pytest
@@ -17,6 +19,7 @@ from chartagent.profile.models import (
     ALL_MODELS,
     SATURATION_CAP,
     BooleanColumn,
+    Column,
     NumberColumn,
     OtherColumn,
     Profile,
@@ -24,9 +27,45 @@ from chartagent.profile.models import (
     StringStats,
     TemporalColumn,
     TopValue,
+    Truncation,
 )
 
 _FIXTURES = Path(__file__).with_name("data")
+_BUDGET_BYTES = 10_240
+_RUNGS_1_3 = ["reported_type_head", "sample_rows", "top_values"]
+_RUNGS_1_5 = [
+    "reported_type_head",
+    "sample_rows",
+    "top_values",
+    "percentiles",
+    "columns",
+]
+
+
+def _artifact_bytes(profile: Profile) -> int:
+    return len(json.dumps(profile.model_dump(exclude_none=True), default=str).encode())
+
+
+def _wide_parquet(path: Path, n_cols: int, n_rows: int = 20_000) -> Path:
+    """Same generator the ladder was measured on (ADR-0011 Decision 5)."""
+    cols = ", ".join(
+        (
+            f"('cat_' || (i % {7 + c}))::VARCHAR AS c{c}"
+            if c % 3
+            else f"(i * {c + 1})::BIGINT AS c{c}"
+        )
+        for c in range(n_cols)
+    )
+    quoted = str(path).replace("'", "''")
+    connection = duckdb.connect()
+    try:
+        connection.execute(
+            f"COPY (SELECT {cols} FROM range({n_rows}) t(i)) "
+            f"TO '{quoted}' (FORMAT PARQUET)"
+        )
+    finally:
+        connection.close()
+    return path
 
 
 def test_profile_source_is_not_on_the_public_surface() -> None:
@@ -357,3 +396,120 @@ def test_named_taint_memberships() -> None:
     assert any("sample_rows" in path for path in paths)
     assert any(path.endswith(".name") for path in paths)
     assert any("top[].value" in path for path in paths)
+
+
+@pytest.mark.parametrize(
+    ("n_cols", "rungs", "omitted_count"),
+    [
+        (9, None, None),
+        (40, _RUNGS_1_3, None),
+        (120, _RUNGS_1_5, 36),
+        (400, _RUNGS_1_5, 316),
+    ],
+)
+def test_wide_source_holds_the_budget(
+    tmp_path: Path,
+    n_cols: int,
+    rungs: list[str] | None,
+    omitted_count: int | None,
+) -> None:
+    path = _wide_parquet(tmp_path / f"wide_{n_cols}.parquet", n_cols)
+    profile = profile_source(path)
+    assert _artifact_bytes(profile) <= _BUDGET_BYTES
+    if rungs is None:
+        assert profile.truncation is None
+        dumped = profile.model_dump()
+        assert "truncation" not in dumped
+        return
+    assert profile.truncation is not None
+    assert profile.truncation.rungs == rungs
+    assert profile.truncation.omitted_count == omitted_count
+    if omitted_count is not None:
+        assert len(profile.columns) + omitted_count == n_cols
+
+
+def test_rungs_fire_for_the_whole_profile(tmp_path: Path) -> None:
+    profile = profile_source(_wide_parquet(tmp_path / "wide_40.parquet", 40))
+    assert profile.truncation is not None
+    assert profile.truncation.rungs == _RUNGS_1_3
+    tops = [
+        column.top
+        for column in profile.columns
+        if isinstance(column, (StringColumn, BooleanColumn))
+    ]
+    assert tops
+    assert all(top is None for top in tops) or all(top is not None for top in tops)
+    stats = [
+        column.stats
+        for column in profile.columns
+        if isinstance(column, (NumberColumn, StringColumn))
+    ]
+    assert stats
+    assert all(item is not None for item in stats)
+
+
+def test_rung_five_keeps_describe_order(tmp_path: Path) -> None:
+    profile = profile_source(_wide_parquet(tmp_path / "wide_120.parquet", 120))
+    assert profile.truncation is not None
+    assert profile.truncation.omitted_count == 36
+    assert [column.name for column in profile.columns] == [
+        f"c{i}" for i in range(len(profile.columns))
+    ]
+    assert set(Truncation.model_fields) == {"rungs", "omitted_count"}
+
+
+def test_stats_null_is_emptiness_or_a_named_rung(
+    tmp_path: Path,
+) -> None:
+    empty = profile_source(pa.table({"n": pa.array([None, None], type=pa.int32())}))
+    column = empty.columns[0]
+    assert isinstance(column, NumberColumn)
+    assert column.stats is None
+    assert column.null_rate == 1.0
+    assert empty.truncation is None
+
+    wide = profile_source(_wide_parquet(tmp_path / "wide_120.parquet", 120))
+    assert wide.truncation is not None
+    assert "percentiles" in wide.truncation.rungs
+    for column in wide.columns:
+        if isinstance(column, (NumberColumn, StringColumn, TemporalColumn)):
+            assert column.stats is None
+            assert column.null_rate != 1.0
+            assert wide.row_count != 0
+
+
+def test_four_hundred_name_and_bucket_stubs_miss_the_budget() -> None:
+    stubs: list[Column] = [
+        OtherColumn(name=f"c{i}", reported_type="BLOB") for i in range(400)
+    ]
+    profile = Profile(row_count=1, columns=stubs, sample_rows=[])
+    assert _artifact_bytes(profile) > _BUDGET_BYTES
+
+
+def test_rung_one_truncates_reported_type_to_the_head(tmp_path: Path) -> None:
+    fields = ", ".join(f"f{i} INTEGER" for i in range(30))
+    struct = "{" + ", ".join(f"'f{i}': i" for i in range(30)) + "}"
+    extras = ", ".join(
+        (
+            f"('cat_' || (i % {7 + c}))::VARCHAR AS c{c}"
+            if c % 3
+            else f"(i * {c + 1})::BIGINT AS c{c}"
+        )
+        for c in range(40)
+    )
+    path = tmp_path / "long_type.parquet"
+    quoted = str(path).replace("'", "''")
+    connection = duckdb.connect()
+    try:
+        connection.execute(
+            f"COPY (SELECT {struct}::STRUCT({fields}) AS payload, {extras} "
+            f"FROM range(500) t(i)) TO '{quoted}' (FORMAT PARQUET)"
+        )
+    finally:
+        connection.close()
+    profile = profile_source(path)
+    payload = next(column for column in profile.columns if column.name == "payload")
+    assert profile.truncation is not None
+    assert "reported_type_head" in profile.truncation.rungs
+    assert "(" not in payload.reported_type
+    assert len(payload.reported_type) <= 120

@@ -65,6 +65,9 @@ select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "large: 10 GB-class source; excluded from the default run",
+]
 
 [tool.mypy]
 strict = true
