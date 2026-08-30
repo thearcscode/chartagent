@@ -1,0 +1,20 @@
+This directory carries mixed licences. It is a NOTICE, not a relicensing.
+
+nvBench 1.0 query text (source nvbench1)
+  Copyright the nvBench authors (TsinghuaDatabaseGroup/nvBench).
+  Licence: MIT, asserted in that repository's README.
+
+Tables extracted from nvBench 1.0 databases
+  Those tables descend from Spider (Yale / Yale-LILY).
+  Licence: CC BY-SA 4.0 (https://yale-lily.github.io/spider).
+  Share-alike and attribution apply to those files, not to the rest of
+  this Apache-2.0 repository.
+
+Authored requests (source authored)
+  Copyright the chartagent authors.
+  Licence: Apache-2.0, as the rest of this repository.
+
+Quda is not used. NLV Corpus is a register reference only and is not
+vendored. nvBench 2.0 is not vendored: HKUSTDial/nvBench-2.0 does not
+assert a commercially usable licence in the artefact itself, so the
+three cell-4(ii) sentences were authored to the frozen degrees.

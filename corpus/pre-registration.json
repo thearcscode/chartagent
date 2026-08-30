@@ -1,0 +1,2015 @@
+{
+  "flint_version": "0.5.1",
+  "fixture_commit": "34ef451",
+  "requests": [
+    {
+      "id": "r01",
+      "source": "nvbench1",
+      "source_id": "156@2",
+      "query_original": "How many players enter hall of fame each year. Show the tendency.",
+      "query_rewritten": "How many players enter the hall of fame each year? Show the tendency.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "corpus/data/r01.parquet",
+      "dataset_sha256": "d971576a0bd5877a2a80c1af1efeb6a999cba1279c08a60471e0e220e4f2067c",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "yearid",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "yearid"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r02",
+      "source": "nvbench1",
+      "source_id": "108@0",
+      "query_original": "How many mills of 'Grondzeiler' type are built in each year? Give me the trend.",
+      "query_rewritten": "How many mills of Grondzeiler type were built in each year? Give me the trend.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "corpus/data/r02.parquet",
+      "dataset_sha256": "0dc2dc30fccce6b72939d02b053bd4639122812ec7d98dde71d391b3e5149c80",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "built_year",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "filter": {
+              "kind": "eq",
+              "args": [
+                {
+                  "kind": "col",
+                  "name": "type"
+                },
+                {
+                  "kind": "lit",
+                  "value": "Grondzeiler"
+                }
+              ]
+            },
+            "group_by": [
+              "built_year"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r03",
+      "source": "nvbench1",
+      "source_id": "171@3",
+      "query_original": "For each year, return the year and the average number of attendance at home games.",
+      "query_rewritten": "For each year, return the year and the average number of attendance at home games.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r03.parquet",
+      "dataset_sha256": "bc925da074b9c17306964cb49042fab44b8b85929a891f746b13781eb5f14796",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "year",
+            "y": "avg_attendance"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "year"
+            ],
+            "aggregate": [
+              {
+                "name": "avg_attendance",
+                "op": "mean",
+                "field": "attendance"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r04",
+      "source": "nvbench1",
+      "source_id": "5@2",
+      "query_original": "how many students are advised by each rank of faculty? List the rank and the number of students.",
+      "query_rewritten": "How many students are advised by each rank of faculty? List the rank and the number of students.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "corpus/data/r04.parquet",
+      "dataset_sha256": "ffac123fec676bee7fc13d7a8b8d78dbf363ebe8fb3d85b5b7588df05ce04be7",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "Rank",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Rank"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r05",
+      "source": "nvbench1",
+      "source_id": "74@5",
+      "query_original": "How many bookings does each booking status have? List the booking status code and the number of corresponding bookings.",
+      "query_rewritten": "How many bookings does each booking status have? List the booking status code and the number of bookings.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "flow or transition between states",
+      "shape": "long",
+      "dataset_path": "corpus/data/r05.parquet",
+      "dataset_sha256": "9f6cc37ea19a1decd96eb70a2baa0c76f2709fd6a7d8805cb5e1f99ff920f5d8",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Funnel Chart",
+          "encodings": {
+            "y": "booking_status_code",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "booking_status_code"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r06",
+      "source": "nvbench1",
+      "source_id": "432@3",
+      "query_original": "what is the maximum accelerate for all the different cylinders?",
+      "query_rewritten": "What is the maximum accelerate for all the different cylinders?",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r06.parquet",
+      "dataset_sha256": "1f46500a898ae37df764fc5fc9f137c11a64caa6a53b0f692323b1fec1e62071",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "Cylinders",
+            "y": "max_accelerate"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Cylinders"
+            ],
+            "aggregate": [
+              {
+                "name": "max_accelerate",
+                "op": "max",
+                "field": "Accelerate"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r07",
+      "source": "nvbench1",
+      "source_id": "411@1",
+      "query_original": "what are the countries having at least one car maker? List name and id.",
+      "query_rewritten": "What are the countries that have at least one car maker? List name and id.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "corpus/data/r07.parquet",
+      "dataset_sha256": "83017f8f8081d265dcd4ee5ac801c55b1115955ad02403604d26571d17f9e8c7",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "CountryName",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "CountryName"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r08",
+      "source": "nvbench1",
+      "source_id": "696@2",
+      "query_original": "Show the average of age from each country",
+      "query_rewritten": "Show the average age from each country.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r08.parquet",
+      "dataset_sha256": "ed40387093f5acb0de8f1efd62f07e70c68b5f3c5a1c4ee518d31e43438e8760",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "Country",
+            "y": "avg_age"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Country"
+            ],
+            "aggregate": [
+              {
+                "name": "avg_age",
+                "op": "mean",
+                "field": "Age"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r09",
+      "source": "nvbench1",
+      "source_id": "62@2",
+      "query_original": "how old is each student and how many students are each age?",
+      "query_rewritten": "How old is each student, and how many students are each age?",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "distribution of one measure",
+      "shape": "long",
+      "dataset_path": "corpus/data/r09.parquet",
+      "dataset_sha256": "429b584d1ed81e158487679744159e10b3448d8dece4e332dd6045fb42032a46",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Histogram",
+          "encodings": {
+            "x": "Age"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r10",
+      "source": "nvbench1",
+      "source_id": "390@3",
+      "query_original": "What is the relationship between  Height and  Weight ?",
+      "query_rewritten": "What is the relationship between Height and Weight?",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "correlation between measures",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r10.parquet",
+      "dataset_sha256": "01dffeacbe401c9767de0b6fbe5ba1c3cd2c46cc190d800b3217a5aad3ad08a8",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Scatter Plot",
+          "encodings": {
+            "x": "Height",
+            "y": "Weight"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r11",
+      "source": "nvbench1",
+      "source_id": "353@2",
+      "query_original": "What is the relationship between  Clean_Jerk and  Total ?",
+      "query_rewritten": "What is the relationship between Clean_Jerk and Total?",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "correlation between measures",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r11.parquet",
+      "dataset_sha256": "adce9ad46ee20eafc0b9c04a8ad835fc4ca330198c47126d7162cdb6aeaee8eb",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Scatter Plot",
+          "encodings": {
+            "x": "Clean_Jerk",
+            "y": "Total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r12",
+      "source": "nvbench1",
+      "source_id": "20@2",
+      "query_original": "I want to know the proportion of faculty members for each sex.",
+      "query_rewritten": "I want to know the proportion of faculty members for each sex.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "part-to-whole",
+      "shape": "long",
+      "dataset_path": "corpus/data/r12.parquet",
+      "dataset_sha256": "887eeede6b160cdcbd9a3644a3f9bde2df107a96d0658e1d5ad7ad83093a09bc",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "Sex",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Sex"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r13",
+      "source": "nvbench1",
+      "source_id": "19@2",
+      "query_original": "I want to know the proportion of faculty members for each rank.",
+      "query_rewritten": "I want to know the proportion of faculty members for each rank.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "part-to-whole",
+      "shape": "long",
+      "dataset_path": "corpus/data/r13.parquet",
+      "dataset_sha256": "887eeede6b160cdcbd9a3644a3f9bde2df107a96d0658e1d5ad7ad83093a09bc",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "Rank",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Rank"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r14",
+      "source": "nvbench1",
+      "source_id": "689@1",
+      "query_original": "Show all countries and the number of singers in each country. Show the proportion.",
+      "query_rewritten": "Show all countries and the number of singers in each country. Show the proportion.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "part-to-whole",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r14.parquet",
+      "dataset_sha256": "b67fc016f9e61090c00a098b28c20cb522037d175f90c14e3f60ff81e412be52",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "Country",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Country"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r15",
+      "source": "nvbench1",
+      "source_id": "310@0",
+      "query_original": "Find the ids and names of stations from which at least 200 trips started.",
+      "query_rewritten": "Find the ids and names of stations from which at least 200 trips started.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "ranking / top-N",
+      "shape": "long",
+      "dataset_path": "corpus/data/r15.parquet",
+      "dataset_sha256": "3aa296b3b9461b9289a247d84a68b36461f14ce4eec4d778ccf636f57a46200a",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Lollipop Chart",
+          "encodings": {
+            "x": "start_station_name",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "start_station_name"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ],
+            "having": {
+              "kind": "gte",
+              "args": [
+                {
+                  "kind": "col",
+                  "name": "n"
+                },
+                {
+                  "kind": "lit",
+                  "value": 200
+                }
+              ]
+            },
+            "sort": [
+              {
+                "field": "n",
+                "dir": "desc",
+                "nulls": "last"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r16",
+      "source": "nvbench1",
+      "source_id": "113@1",
+      "query_original": "What are the ids and names of the architects who built at least 3 bridges . Show the proportion.",
+      "query_rewritten": "What are the ids and names of the architects who built at least 3 bridges? Show the proportion.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "ranking / top-N",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r16.parquet",
+      "dataset_sha256": "a3fb3a0210d81afd974032f419c3865acffa399485949008d8b307f111e1ebdd",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "name",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "name"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ],
+            "having": {
+              "kind": "gte",
+              "args": [
+                {
+                  "kind": "col",
+                  "name": "n"
+                },
+                {
+                  "kind": "lit",
+                  "value": 3
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r17",
+      "source": "nvbench1",
+      "source_id": "1244@2",
+      "query_original": "For each customer status code, how many customers are classified that way. Show the proportion.",
+      "query_rewritten": "For each customer status code, how many customers are classified that way? Show the proportion.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "part-to-whole",
+      "shape": "long",
+      "dataset_path": "corpus/data/r17.parquet",
+      "dataset_sha256": "64a958008b00bf5f313cafafbcd65fb230141677cfd7b0147ce1ecb967a18fdf",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "customer_status_code",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "customer_status_code"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r18",
+      "source": "nvbench1",
+      "source_id": "485@2",
+      "query_original": "How many climbers are from each country.",
+      "query_rewritten": "How many climbers are from each country?",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "geographic distribution",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r18.parquet",
+      "dataset_sha256": "aeb96f606bdb13c1be3d6b1b702f2f22e16d6a4a54d3c8b49548f0b168c0e7d3",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Choropleth",
+          "encodings": {
+            "id": "Country",
+            "color": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Country"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r19",
+      "source": "nvbench1",
+      "source_id": "307@2",
+      "query_original": "Show maximal lat from each city",
+      "query_rewritten": "Show the maximal lat from each city.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r19.parquet",
+      "dataset_sha256": "b19927d7dbb8a335f2aba0ad2a2dd000c48e41b4b65eddd95be9248ae754d12e",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "city",
+            "y": "lat_max"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "city"
+            ],
+            "aggregate": [
+              {
+                "name": "lat_max",
+                "op": "max",
+                "field": "lat"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r20",
+      "source": "nvbench1",
+      "source_id": "59@4",
+      "query_original": "How many students live in each city.",
+      "query_rewritten": "How many students live in each city?",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r20.parquet",
+      "dataset_sha256": "b08834ea6fcb308dfbc7ee76cecae85536e9c3f5c41459f19557c76a6925b872",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "city_code",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "city_code"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r21",
+      "source": "nvbench1",
+      "source_id": "9@2",
+      "query_original": "Show how many rank from each rank",
+      "query_rewritten": "Show how many rank from each rank.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r21.parquet",
+      "dataset_sha256": "12591f3036e58145f998e1e90233d0cccdea9cb18251ee6fe8d13636a6374662",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "Rank",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Rank"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r22",
+      "source": "nvbench1",
+      "source_id": "97@1",
+      "query_original": "Return the apartment number and the number of rooms for each apartment.",
+      "query_rewritten": "Return the apartment number and the number of rooms for each apartment.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "single value against a target",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r22.parquet",
+      "dataset_sha256": "ac664ed31532320b79f7fb0965477de7d4bb28a952e0adf62548b134b679625e",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bullet Chart",
+          "encodings": {
+            "y": "apt_number",
+            "x": "room_count",
+            "goal": "bedroom_count"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r23",
+      "source": "nvbench1",
+      "source_id": "14@0",
+      "query_original": "Show the proportion of the number of ranks for each rank.",
+      "query_rewritten": "Show the proportion of the number of ranks for each rank.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "part-to-whole",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r23.parquet",
+      "dataset_sha256": "2cfdd9ebee1adaf7a491dc5bd2d1dd2fcd105a5818f01ff4976eda51dc7afc19",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "rank",
+            "size": "faculty_count"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT rank, faculty_count FROM source UNPIVOT (faculty_count FOR rank IN (Professor, AsstProf, AssocProf, Instructor))"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r24",
+      "source": "nvbench1",
+      "source_id": "80@1",
+      "query_original": "Return the number of the date of birth for all the guests with gender code \"Male\".",
+      "query_rewritten": "Return the number of the date of birth for all the guests with gender code Male.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r24.parquet",
+      "dataset_sha256": "2bed2fec69a860271305b9f669f7179beb3d8d11902fdb440aa064df1dd2470a",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "year_label",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT year_label, n FROM source UNPIVOT (n FOR year_label IN (y_1983, y_1995, y_2015))"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r25",
+      "source": "nvbench1",
+      "source_id": "157@1",
+      "query_original": "I want to see trend of the number of yearid by yearid",
+      "query_rewritten": "I want to see the trend of the number of yearid by yearid.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r25.parquet",
+      "dataset_sha256": "45dd0059ca2ce24669ecd87e5596f3b7620c71f1d48bd9fb404f15c09c9b5865",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "year_label",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT year_label, n FROM source UNPIVOT (n FOR year_label IN (y_1936, y_1937, y_1938, y_1939, y_1942, y_1944, y_1945, y_1946, y_1947, y_1948, y_1949, y_1950, y_1951, y_1952, y_1953, y_1954, y_1955, y_1956, y_1957, y_1958, y_1959, y_1960, y_1961, y_1962, y_1963, y_1964, y_1965, y_1966, y_1967, y_1968, y_1969, y_1970, y_1971, y_1972, y_1973, y_1974, y_1975, y_1976, y_1977, y_1978, y_1979, y_1980, y_1981, y_1982, y_1983, y_1984, y_1985, y_1986, y_1987, y_1988, y_1989, y_1990, y_1991, y_1992, y_1993, y_1994, y_1995, y_1996, y_1997, y_1998, y_1999, y_2000, y_2001, y_2002, y_2003, y_2004, y_2005, y_2006, y_2007, y_2008, y_2009, y_2010, y_2011, y_2012, y_2013, y_2014, y_2015, y_2016))"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r26",
+      "source": "nvbench1",
+      "source_id": "21@1",
+      "query_original": "Show the number of male and female assistant professors.",
+      "query_rewritten": "Show the number of male and female assistant professors.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "part-to-whole",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r26.parquet",
+      "dataset_sha256": "d11307de78fe5bb0c84c072bce94eec69945e735acccd202a232cd887ef3acde",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "sex",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT sex, n FROM source UNPIVOT (n FOR sex IN (F, M))"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r27",
+      "source": "nvbench1",
+      "source_id": "169@0",
+      "query_original": "Show the trend about the number of attendance at home games change over the years, bin year into year interval.",
+      "query_rewritten": "Show the trend of how the number of attendance at home games changes over the years; bin year into a year interval.",
+      "stratum": "common_path",
+      "cell": 3,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r27.parquet",
+      "dataset_sha256": "bc925da074b9c17306964cb49042fab44b8b85929a891f746b13781eb5f14796",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "year",
+            "y": "attendance_sum"
+          },
+          "baseSize": {
+            "width": 180,
+            "height": 90
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "year"
+            ],
+            "aggregate": [
+              {
+                "name": "attendance_sum",
+                "op": "sum",
+                "field": "attendance"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "discrete_overflow"
+    },
+    {
+      "id": "r28",
+      "source": "nvbench1",
+      "source_id": "314@3",
+      "query_original": "Give me the number of the dates when the max temperature was higher than 85.",
+      "query_rewritten": "Give me the number of the dates when the max temperature was higher than 85.",
+      "stratum": "common_path",
+      "cell": 3,
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "corpus/data/r28.parquet",
+      "dataset_sha256": "74737fb1a0462762d3e123781d74ad17fdd7bc8ba40e1e252a4d82c999977005",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "date",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 180,
+            "height": 90
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "filter": {
+              "kind": "gt",
+              "args": [
+                {
+                  "kind": "col",
+                  "name": "max_temperature_f"
+                },
+                {
+                  "kind": "lit",
+                  "value": 85
+                }
+              ]
+            },
+            "group_by": [
+              "date"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "discrete_overflow"
+    },
+    {
+      "id": "r29",
+      "source": "authored",
+      "source_id": "authored-ii-a",
+      "query_original": "show faculty numbers",
+      "query_rewritten": "Show faculty numbers.",
+      "stratum": "common_path",
+      "cell": 4,
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "corpus/data/r29.parquet",
+      "dataset_sha256": "887eeede6b160cdcbd9a3644a3f9bde2df107a96d0658e1d5ad7ad83093a09bc",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "Rank",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Rank"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "ii",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "r30",
+      "source": "authored",
+      "source_id": "authored-ii-b",
+      "query_original": "how is attendance doing",
+      "query_rewritten": "How is attendance doing?",
+      "stratum": "common_path",
+      "cell": 4,
+      "intent": "trend over time",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r30.parquet",
+      "dataset_sha256": "dd77c99990fe9fd45e3e3aef96f34c6ec6f5ce81b91a7e7e8ca02e92065ac2ab",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "year",
+            "y": "attendance_sum"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "year"
+            ],
+            "aggregate": [
+              {
+                "name": "attendance_sum",
+                "op": "sum",
+                "field": "attendance"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "ii",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "r31",
+      "source": "authored",
+      "source_id": "authored-overlap-3",
+      "query_original": "which customers are in both campaigns but not the app",
+      "query_rewritten": "Which customers appear in both campaigns but not the app?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "set overlap / intersection structure",
+      "shape": "long",
+      "dataset_path": "corpus/data/r31.parquet",
+      "dataset_sha256": "c051c535f1066dbe8dacddc981c00066c3bd983262de331dd821e80582eebb5a",
+      "reference_frame": null,
+      "expected_outcome": "miss",
+      "expressible_if": [
+        "Venn",
+        "Euler",
+        "UpSet"
+      ],
+      "expected_bucket": 1
+    },
+    {
+      "id": "r32",
+      "source": "authored",
+      "source_id": "authored-overlap-12",
+      "query_original": "which of the twelve segments overlap on more than two products",
+      "query_rewritten": "Which of the twelve segments overlap on more than two products?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "set overlap / intersection structure",
+      "shape": "long",
+      "dataset_path": "corpus/data/r32.parquet",
+      "dataset_sha256": "402660b2a409719e5e0f27ff1e1bf1827737bc1ff6b32d9269062b723c1458e0",
+      "reference_frame": null,
+      "expected_outcome": "miss",
+      "expressible_if": [
+        "Venn",
+        "Euler",
+        "UpSet"
+      ],
+      "expected_bucket": 1
+    },
+    {
+      "id": "r33",
+      "source": "authored",
+      "source_id": "authored-simplex",
+      "query_original": "how the three ingredients mix in every blend",
+      "query_rewritten": "How do the three ingredients mix in every blend?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "compositional simplex",
+      "shape": "long",
+      "dataset_path": "corpus/data/r33.parquet",
+      "dataset_sha256": "39b2518e047dcd1ec1b457152c445c6233673b66588a082bd210ddb0429ba4e1",
+      "reference_frame": null,
+      "expected_outcome": "miss",
+      "expressible_if": [
+        "Ternary"
+      ],
+      "expected_bucket": 1
+    },
+    {
+      "id": "r34",
+      "source": "authored",
+      "source_id": "authored-od-flow",
+      "query_original": "commute flows between the five boroughs",
+      "query_rewritten": "What are the commute flows between the five boroughs?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "origin–destination flow on a geography",
+      "shape": "long",
+      "dataset_path": "corpus/data/r34.parquet",
+      "dataset_sha256": "4dc69ee8eb81e2d8c10d8c538a958c5d1cf150e1afcbf493a15920beaef705f1",
+      "reference_frame": null,
+      "expected_outcome": "miss",
+      "expressible_if": [
+        "Flow Map"
+      ],
+      "expected_bucket": 1
+    },
+    {
+      "id": "r35",
+      "source": "authored",
+      "source_id": "authored-unpivot",
+      "query_original": "show quarterly revenue for each region",
+      "query_rewritten": "Show quarterly revenue for each region.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r35.parquet",
+      "dataset_sha256": "dd45964fc4a765fc1cc1af6a28ea962a526bf6f92d44d3861cf95230cd774fc1",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue",
+            "color": "region"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT region, 'q1' AS quarter, q1 AS revenue FROM source UNION ALL SELECT region, 'q2', q2 FROM source UNION ALL SELECT region, 'q3', q3 FROM source UNION ALL SELECT region, 'q4', q4 FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r36",
+      "source": "authored",
+      "source_id": "authored-union",
+      "query_original": "compare the four quarters of revenue across regions",
+      "query_rewritten": "Compare the four quarters of revenue across regions.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r36.parquet",
+      "dataset_sha256": "dd45964fc4a765fc1cc1af6a28ea962a526bf6f92d44d3861cf95230cd774fc1",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Grouped Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue",
+            "group": "region"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT region, 'q1' AS quarter, q1 AS revenue FROM source UNION ALL SELECT region, 'q2', q2 FROM source UNION ALL SELECT region, 'q3', q3 FROM source UNION ALL SELECT region, 'q4', q4 FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r37",
+      "source": "authored",
+      "source_id": "authored-strptime",
+      "query_original": "plot bookings by month for these month labels",
+      "query_rewritten": "Plot bookings by month for these month labels.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r37.parquet",
+      "dataset_sha256": "7256037f6967779ad50a65a70c8a93ab9b0321b7cc4ece6c7b07b19ee9e0c483",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "month",
+            "y": "bookings"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT strptime(period, '%b %Y') AS month, bookings FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r38",
+      "source": "authored",
+      "source_id": "authored-window",
+      "query_original": "show a running total of hall of fame entries by year",
+      "query_rewritten": "Show a running total of hall of fame entries by year.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "trend over time",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r38.parquet",
+      "dataset_sha256": "e29303385e4121174e5848dd0b29341728cda928a71b0e6400eb7c6b51008d5b",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Area Chart",
+          "encodings": {
+            "x": "yearid",
+            "y": "running"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT yearid, n, SUM(n) OVER (ORDER BY yearid) AS running FROM (SELECT yearid, count(*) AS n FROM source GROUP BY yearid)"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r39",
+      "source": "authored",
+      "source_id": "authored-pivot",
+      "query_original": "count faculty by rank with men and women as columns",
+      "query_rewritten": "Count faculty by rank, with men and women as columns.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r39.parquet",
+      "dataset_sha256": "4461be737aeb69ff0b45597f6349042a9abf93898fe7d44cfd221d97a38e7bb6",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "Rank",
+            "y": "M"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "PIVOT source ON Sex IN ('M', 'F') USING count(*) GROUP BY Rank"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r40",
+      "source": "authored",
+      "source_id": "authored-conditional",
+      "query_original": "count men and women in each faculty rank",
+      "query_rewritten": "Count men and women in each faculty rank.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r40.parquet",
+      "dataset_sha256": "4461be737aeb69ff0b45597f6349042a9abf93898fe7d44cfd221d97a38e7bb6",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "Rank",
+            "y": "men"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT Rank, count(*) FILTER (WHERE Sex = 'M') AS men, count(*) FILTER (WHERE Sex = 'F') AS women FROM source GROUP BY Rank"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r41",
+      "source": "authored",
+      "source_id": "authored-empty-filter",
+      "query_original": "show revenue for the west region only",
+      "query_rewritten": "Show revenue for the west region only.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "comparison across categories",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r41.parquet",
+      "dataset_sha256": "c8ff3c30dda9d6fc0b94cf0f34a009e4311755e815c5fd081293b6e151cb1865",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "region",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "filter": {
+              "kind": "eq",
+              "args": [
+                {
+                  "kind": "col",
+                  "name": "region"
+                },
+                {
+                  "kind": "lit",
+                  "value": "west"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "excel_empty_after_filter"
+    },
+    {
+      "id": "r42",
+      "source": "authored",
+      "source_id": "authored-pyramid",
+      "query_original": "show headcount in each age band",
+      "query_rewritten": "Show headcount in each age band.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "ranking / top-N",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r42.parquet",
+      "dataset_sha256": "a83ad76a97cc6a2dfbb8e16561435937d573ef90e3d11810efbdaaa4fccd62e7",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pyramid Chart",
+          "encodings": {
+            "x": "band",
+            "y": "people",
+            "color": "sex"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "excel_pyramid_two_groups"
+    },
+    {
+      "id": "r43",
+      "source": "authored",
+      "source_id": "authored-candlestick",
+      "query_original": "show the session open high low and close",
+      "query_rewritten": "Show the session open, high, low, and close.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r43.parquet",
+      "dataset_sha256": "4cf12b88366d018dba068b1ada334b95d3dca1709b16e330a7a3d6c1f74860ad",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Candlestick Chart",
+          "encodings": {
+            "x": "session",
+            "open": "open",
+            "high": "high",
+            "low": "low",
+            "close": "close"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "excel_candlestick_order"
+    },
+    {
+      "id": "r44",
+      "source": "authored",
+      "source_id": "authored-boxplot",
+      "query_original": "compare the score spread across the three cohorts",
+      "query_rewritten": "Compare the score spread across the three cohorts.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "distribution of one measure",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r44.parquet",
+      "dataset_sha256": "48679611278c33a21c38daf6f5492c6e427bff546eb6be5fafcf04279339ca0d",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Boxplot",
+          "encodings": {
+            "x": "cohort",
+            "y": "score"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "echarts_boxplot"
+    },
+    {
+      "id": "r45",
+      "source": "authored",
+      "source_id": "authored-wordcloud",
+      "query_original": "show a word cloud of support mentions",
+      "query_rewritten": "Show a word cloud of support mentions.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "ranking / top-N",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r45.parquet",
+      "dataset_sha256": "8cc990243e5d95e6bd29c730a90d167264d29487c9c991bcba15fa7d09506542",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "term",
+            "y": "mentions"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "sort": [
+              {
+                "field": "mentions",
+                "dir": "desc",
+                "nulls": "last"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "i"
+    },
+    {
+      "id": "r46",
+      "source": "authored",
+      "source_id": "authored-marimekko",
+      "query_original": "draw a Marimekko of category share by region",
+      "query_rewritten": "Draw a Marimekko of category share by region.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "part-to-whole",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r46.parquet",
+      "dataset_sha256": "9b2b9b4e03dd4b6e9a017876641356b6a0a9fd0716aed8013673b36fac8c42a3",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Stacked Bar Chart",
+          "encodings": {
+            "x": "category",
+            "y": "share",
+            "color": "region"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "i"
+    },
+    {
+      "id": "r47",
+      "source": "authored",
+      "source_id": "authored-waffle",
+      "query_original": "make a waffle of match outcomes",
+      "query_rewritten": "Make a waffle of match outcomes.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "part-to-whole",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r47.parquet",
+      "dataset_sha256": "5f8b2d8739c2895c81e39d5066835c069a5ce4c650ee607f02d5ee741c19a25e",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "category",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "i"
+    },
+    {
+      "id": "r48",
+      "source": "authored",
+      "source_id": "authored-ii-c",
+      "query_original": "show performance",
+      "query_rewritten": "Show performance.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r48.parquet",
+      "dataset_sha256": "8af38ad16bf0e7cdab2ca3092bcc35a893b883c25f84a34a77fe87bea32b8b2e",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "team",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "ii",
+      "ambiguity_degree": 4
+    },
+    {
+      "id": "r49",
+      "source": "authored",
+      "source_id": "authored-compound",
+      "query_original": "how did revenue move and what happened to churn",
+      "query_rewritten": "How did revenue move, and what happened to churn?",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "trend over time",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r49.parquet",
+      "dataset_sha256": "50ac01a0a6451657153452bb3afaf0014928640a2dd10d937f5178d69bcefad7",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "month",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "iii"
+    },
+    {
+      "id": "r50",
+      "source": "authored",
+      "source_id": "authored-hostile",
+      "query_original": "chart the amount by the date column",
+      "query_rewritten": "Chart the amount by the date column.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r50.parquet",
+      "dataset_sha256": "987fee2dadbd0ddedb4172b6898e64130b89b33219354a652b65292e7df53ef5",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "date",
+            "y": "amount"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "iv"
+    }
+  ],
+  "reserves": [
+    {
+      "id": "s01",
+      "source": "nvbench1",
+      "source_id": "1383@3",
+      "query_original": "I want to know the proportion of the average population for each status.",
+      "query_rewritten": "I want to know the proportion of the average population for each status.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "part-to-whole",
+      "shape": "long",
+      "dataset_path": "corpus/data/s01.parquet",
+      "dataset_sha256": "5b7b380afe22f1e09254fd3d9a75e2d79e530b52be04e6d62d9c5b2e2c9e062e",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "Status",
+            "size": "avg_pop"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Status"
+            ],
+            "aggregate": [
+              {
+                "name": "avg_pop",
+                "op": "mean",
+                "field": "Population"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "replaces": {
+        "cell": 0,
+        "stratum": "common_path"
+      },
+      "draw_order": 1
+    },
+    {
+      "id": "s02",
+      "source": "authored",
+      "source_id": "authored-reserve-unpivot",
+      "query_original": "show each region's quarterly revenue as a series",
+      "query_rewritten": "Show each region's quarterly revenue as a series.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/s02.parquet",
+      "dataset_sha256": "dd45964fc4a765fc1cc1af6a28ea962a526bf6f92d44d3861cf95230cd774fc1",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT region, 'q1' AS quarter, q1 AS revenue FROM source UNION ALL SELECT region, 'q2', q2 FROM source UNION ALL SELECT region, 'q3', q3 FROM source UNION ALL SELECT region, 'q4', q4 FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "replaces": {
+        "cell": 2,
+        "stratum": "common_path"
+      },
+      "draw_order": 2
+    },
+    {
+      "id": "s03",
+      "source": "authored",
+      "source_id": "authored-reserve-overlap",
+      "query_original": "which customers sit in spring and fall but not the app",
+      "query_rewritten": "Which customers sit in spring and fall but not the app?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "set overlap / intersection structure",
+      "shape": "long",
+      "dataset_path": "corpus/data/s03.parquet",
+      "dataset_sha256": "c051c535f1066dbe8dacddc981c00066c3bd983262de331dd821e80582eebb5a",
+      "reference_frame": null,
+      "expected_outcome": "miss",
+      "expressible_if": [
+        "Venn",
+        "Euler",
+        "UpSet"
+      ],
+      "expected_bucket": 1,
+      "replaces": {
+        "cell": 1,
+        "stratum": "adversarial"
+      },
+      "draw_order": 3
+    },
+    {
+      "id": "s04",
+      "source": "authored",
+      "source_id": "authored-reserve-empty",
+      "query_original": "show revenue after keeping only the missing region",
+      "query_rewritten": "Show revenue after keeping only the missing region.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "corpus/data/s04.parquet",
+      "dataset_sha256": "aac30212eb8ba001d214b1cd375822c013a44305c86ed222b1485f7c00da4d8b",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "region",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "filter": {
+              "kind": "eq",
+              "args": [
+                {
+                  "kind": "col",
+                  "name": "region"
+                },
+                {
+                  "kind": "lit",
+                  "value": "missing"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "excel_empty_after_filter",
+      "replaces": {
+        "cell": 3,
+        "stratum": "adversarial"
+      },
+      "draw_order": 4
+    },
+    {
+      "id": "s05",
+      "source": "authored",
+      "source_id": "authored-reserve-ii",
+      "query_original": "what does the scorecard look like",
+      "query_rewritten": "What does the scorecard look like?",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/s05.parquet",
+      "dataset_sha256": "8af38ad16bf0e7cdab2ca3092bcc35a893b883c25f84a34a77fe87bea32b8b2e",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "team",
+            "y": "nps"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "ii",
+      "ambiguity_degree": 4,
+      "replaces": {
+        "cell": 4,
+        "stratum": "adversarial"
+      },
+      "draw_order": 5
+    }
+  ]
+}

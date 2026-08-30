@@ -17,6 +17,7 @@ _REPO = Path(__file__).resolve().parents[1]
 _CHECK = _REPO / "tools" / "check_prereg.py"
 _LEGAL_PATH = Path(__file__).with_name("data") / "prereg" / "legal.json"
 _EMPTY_PATH = Path(__file__).with_name("data") / "prereg" / "empty.json"
+_PRODUCTION = _REPO / "corpus" / "pre-registration.json"
 
 _CARRYABLE = (
     "trend over time",
@@ -304,6 +305,23 @@ def test_legal_fixture_exits_zero() -> None:
     result = _run_file(_LEGAL_PATH)
     assert result.returncode == 0
     assert "OK" in result.stdout
+
+
+def test_production_prereg_exits_zero() -> None:
+    assert _PRODUCTION.is_file()
+    result = _run_file(_PRODUCTION)
+    assert result.returncode == 0
+    assert "OK" in result.stdout
+    doc = json.loads(_PRODUCTION.read_text(encoding="utf-8"))
+    shape_by_digest: dict[str, str] = {}
+    for item in (*doc["requests"], *doc["reserves"]):
+        path = _REPO / item["dataset_path"]
+        assert path.is_file(), item["dataset_path"]
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        assert digest == item["dataset_sha256"], item["id"]
+        prior = shape_by_digest.get(digest)
+        assert prior in (None, item["shape"]), item["id"]
+        shape_by_digest[digest] = item["shape"]
 
 
 def test_empty_fixture_is_rejected() -> None:
