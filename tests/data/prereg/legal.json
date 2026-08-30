@@ -1,0 +1,1676 @@
+{
+  "flint_version": "0.5.1",
+  "fixture_commit": "34ef451",
+  "requests": [
+    {
+      "id": "r01",
+      "source": "nvbench1",
+      "source_id": "nv-r01",
+      "query_original": "sales by quarter for r01",
+      "query_rewritten": "Show sales by quarter for r01.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "corpus/data/r01.parquet",
+      "dataset_sha256": "38fe6d60b7233b1fdef27f02a3ee0a95a3adb40454924911f20483413d0633d8",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r02",
+      "source": "nvbench1",
+      "source_id": "nv-r02",
+      "query_original": "sales by quarter for r02",
+      "query_rewritten": "Show sales by quarter for r02.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "corpus/data/r02.parquet",
+      "dataset_sha256": "c9bab32f858e18b1645d11cbadedea777dead3a6f78a59acecdf3a751dc092e3",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r03",
+      "source": "nvbench1",
+      "source_id": "nv-r03",
+      "query_original": "sales by quarter for r03",
+      "query_rewritten": "Show sales by quarter for r03.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "distribution of one measure",
+      "shape": "long",
+      "dataset_path": "corpus/data/r03.parquet",
+      "dataset_sha256": "443a6a88c57c51b0e7043c32ebdcc9860ee4f5e054818c53a17ba541c7dff74d",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r04",
+      "source": "nvbench1",
+      "source_id": "nv-r04",
+      "query_original": "sales by quarter for r04",
+      "query_rewritten": "Show sales by quarter for r04.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "correlation between measures",
+      "shape": "long",
+      "dataset_path": "corpus/data/r04.parquet",
+      "dataset_sha256": "1f9f119198fd79153c356d9b4413896b32a16853380651b0bf36c754a82345a7",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r05",
+      "source": "nvbench1",
+      "source_id": "nv-r05",
+      "query_original": "sales by quarter for r05",
+      "query_rewritten": "Show sales by quarter for r05.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "part-to-whole",
+      "shape": "long",
+      "dataset_path": "corpus/data/r05.parquet",
+      "dataset_sha256": "7ce1cb925edf94c5244adcb68baceb4a04824b342f13e5dd3b4c6a2e2372b892",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r06",
+      "source": "nvbench1",
+      "source_id": "nv-r06",
+      "query_original": "sales by quarter for r06",
+      "query_rewritten": "Show sales by quarter for r06.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "ranking / top-N",
+      "shape": "long",
+      "dataset_path": "corpus/data/r06.parquet",
+      "dataset_sha256": "b20e9b1e86b75cd2f1429f430d518395ed02d3d45fbf1ecbd9427c095de141ba",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r07",
+      "source": "nvbench1",
+      "source_id": "nv-r07",
+      "query_original": "sales by quarter for r07",
+      "query_rewritten": "Show sales by quarter for r07.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "flow or transition between states",
+      "shape": "long",
+      "dataset_path": "corpus/data/r07.parquet",
+      "dataset_sha256": "5cf29baf4424202f81a286d71232ae62430105f74c6930a8a1a30e8ce50be213",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r08",
+      "source": "nvbench1",
+      "source_id": "nv-r08",
+      "query_original": "sales by quarter for r08",
+      "query_rewritten": "Show sales by quarter for r08.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "geographic distribution",
+      "shape": "long",
+      "dataset_path": "corpus/data/r08.parquet",
+      "dataset_sha256": "a3d8239109b3327351bba454787998b3a1784de0fdd9551c339dfb7b8d33d635",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r09",
+      "source": "nvbench1",
+      "source_id": "nv-r09",
+      "query_original": "sales by quarter for r09",
+      "query_rewritten": "Show sales by quarter for r09.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "single value against a target",
+      "shape": "long",
+      "dataset_path": "corpus/data/r09.parquet",
+      "dataset_sha256": "d25905e25abab20e3bcffd3a77ca3f25d7c1d8f7f60d60e27e242aa25c9ee5fd",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r10",
+      "source": "nvbench1",
+      "source_id": "nv-r10",
+      "query_original": "sales by quarter for r10",
+      "query_rewritten": "Show sales by quarter for r10.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "corpus/data/r10.parquet",
+      "dataset_sha256": "25e33bf8a5fb556a14d7b883a433b2ad340d32f991e17ba775cd7db520d25560",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r11",
+      "source": "nvbench1",
+      "source_id": "nv-r11",
+      "query_original": "sales by quarter for r11",
+      "query_rewritten": "Show sales by quarter for r11.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "corpus/data/r11.parquet",
+      "dataset_sha256": "4f2ea318c182bb84ebce960feb9bab4b283b3cca19c278b546a2c995970d850a",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r12",
+      "source": "nvbench1",
+      "source_id": "nv-r12",
+      "query_original": "sales by quarter for r12",
+      "query_rewritten": "Show sales by quarter for r12.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "distribution of one measure",
+      "shape": "long",
+      "dataset_path": "corpus/data/r12.parquet",
+      "dataset_sha256": "2d7f51e7cfdc27b49297e677584825db04d06cc1a5b7ed358014264d1c2b23ce",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r13",
+      "source": "nvbench1",
+      "source_id": "nv-r13",
+      "query_original": "sales by quarter for r13",
+      "query_rewritten": "Show sales by quarter for r13.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "correlation between measures",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r13.parquet",
+      "dataset_sha256": "fb01727c5080ba6ebc3d8007fd0905009eb0e846afa202dcf6f0fc21d466cdf2",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r14",
+      "source": "nvbench1",
+      "source_id": "nv-r14",
+      "query_original": "sales by quarter for r14",
+      "query_rewritten": "Show sales by quarter for r14.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "part-to-whole",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r14.parquet",
+      "dataset_sha256": "a7375701335e65d18be8152ad57d241f208f9bedd4a408210a5141bdc7c73ce5",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r15",
+      "source": "nvbench1",
+      "source_id": "nv-r15",
+      "query_original": "sales by quarter for r15",
+      "query_rewritten": "Show sales by quarter for r15.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "ranking / top-N",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r15.parquet",
+      "dataset_sha256": "50783c4a613d6ebeaa527e5afbe7432dc53763ede397bb9bba5a4e9782b633b4",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r16",
+      "source": "nvbench1",
+      "source_id": "nv-r16",
+      "query_original": "sales by quarter for r16",
+      "query_rewritten": "Show sales by quarter for r16.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "flow or transition between states",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r16.parquet",
+      "dataset_sha256": "21e7400b4e0f51d4aab0f876ea336763e36951029c0ea2c9b6d15f4b4cc43934",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r17",
+      "source": "nvbench1",
+      "source_id": "nv-r17",
+      "query_original": "sales by quarter for r17",
+      "query_rewritten": "Show sales by quarter for r17.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "geographic distribution",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r17.parquet",
+      "dataset_sha256": "db522a3881be3c489d30d24a43be11ed5cb65c114971b0b5c5ac220a40100323",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r18",
+      "source": "nvbench1",
+      "source_id": "nv-r18",
+      "query_original": "sales by quarter for r18",
+      "query_rewritten": "Show sales by quarter for r18.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "single value against a target",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r18.parquet",
+      "dataset_sha256": "c53d8e591f064af58e694c9c110f7ab7643b89f836a856b9b4500874d8c0500f",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r19",
+      "source": "nvbench1",
+      "source_id": "nv-r19",
+      "query_original": "sales by quarter for r19",
+      "query_rewritten": "Show sales by quarter for r19.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r19.parquet",
+      "dataset_sha256": "4265362daeef37d01e3c2563c476c3f528b1e732998a19122a85be897bc675d0",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r20",
+      "source": "nvbench1",
+      "source_id": "nv-r20",
+      "query_original": "sales by quarter for r20",
+      "query_rewritten": "Show sales by quarter for r20.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r20.parquet",
+      "dataset_sha256": "ac2d9751f39c6222193606698201a65ea3481de7ae651c3b81a710cc36f7791c",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r21",
+      "source": "nvbench1",
+      "source_id": "nv-r21",
+      "query_original": "sales by quarter for r21",
+      "query_rewritten": "Show sales by quarter for r21.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "distribution of one measure",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r21.parquet",
+      "dataset_sha256": "27700b8c80e5134e0f4537df02010e6c28352882bb3a66e6fe940bfa8fa213ae",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r22",
+      "source": "nvbench1",
+      "source_id": "nv-r22",
+      "query_original": "sales by quarter for r22",
+      "query_rewritten": "Show sales by quarter for r22.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "correlation between measures",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r22.parquet",
+      "dataset_sha256": "8b0ef4bd5ac27b36ae30b53c7ed6896c0add5908953ec292aec529a31019c154",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r23",
+      "source": "nvbench1",
+      "source_id": "nv-r23",
+      "query_original": "sales by quarter for r23",
+      "query_rewritten": "Show sales by quarter for r23.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "part-to-whole",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r23.parquet",
+      "dataset_sha256": "d71804eae59f1ac0f58203d520f2fb44da9ee251c38222877e59a30611d1ea65",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r24",
+      "source": "nvbench1",
+      "source_id": "nv-r24",
+      "query_original": "sales by quarter for r24",
+      "query_rewritten": "Show sales by quarter for r24.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "ranking / top-N",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r24.parquet",
+      "dataset_sha256": "34d9c1615add33e4e9ad3272f97265729c05034a9ec87cdc9a448df2e76fa341",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r25",
+      "source": "nvbench1",
+      "source_id": "nv-r25",
+      "query_original": "sales by quarter for r25",
+      "query_rewritten": "Show sales by quarter for r25.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "flow or transition between states",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r25.parquet",
+      "dataset_sha256": "0dc4b516a112b9bf1bd41fb4f2a5e1a4a43e505ae3b630a94aa27a191e9e3474",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r26",
+      "source": "nvbench1",
+      "source_id": "nv-r26",
+      "query_original": "sales by quarter for r26",
+      "query_rewritten": "Show sales by quarter for r26.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "geographic distribution",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r26.parquet",
+      "dataset_sha256": "e695bb4b7568c3a390fd86be332d6958cab93910b8ff3c9754555668d9ba9409",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r27",
+      "source": "nvbench1",
+      "source_id": "nv-r27",
+      "query_original": "sales by quarter for r27",
+      "query_rewritten": "Show sales by quarter for r27.",
+      "stratum": "common_path",
+      "cell": 3,
+      "intent": "single value against a target",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r27.parquet",
+      "dataset_sha256": "2ba74c9de75431968143b5d38a237466680c6bfa3a37384144cc2b646e4e3e4b",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "discrete_overflow"
+    },
+    {
+      "id": "r28",
+      "source": "nvbench1",
+      "source_id": "nv-r28",
+      "query_original": "sales by quarter for r28",
+      "query_rewritten": "Show sales by quarter for r28.",
+      "stratum": "common_path",
+      "cell": 3,
+      "intent": "trend over time",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r28.parquet",
+      "dataset_sha256": "b3071851c1ba9d47d0169e2b9aa85d98793160a974e4b88e1ae57004105bbee9",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "discrete_overflow"
+    },
+    {
+      "id": "r29",
+      "source": "nvbench1",
+      "source_id": "nv-r29",
+      "query_original": "sales by quarter for r29",
+      "query_rewritten": "Show sales by quarter for r29.",
+      "stratum": "common_path",
+      "cell": 4,
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r29.parquet",
+      "dataset_sha256": "53c2d911d06991be86cfd8861b48c3d07a6107a17716c06bf113b0ee17395bbf",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "ii",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "r30",
+      "source": "nvbench1",
+      "source_id": "nv-r30",
+      "query_original": "sales by quarter for r30",
+      "query_rewritten": "Show sales by quarter for r30.",
+      "stratum": "common_path",
+      "cell": 4,
+      "intent": "distribution of one measure",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r30.parquet",
+      "dataset_sha256": "5d5f162f95765b4f31aff1ef29f4298ab08f6f8e6b1ba2894ca5a9f7e765c6db",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "ii",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "r31",
+      "source": "authored",
+      "source_id": "nv-r31",
+      "query_original": "which customers are in both campaigns but not the app",
+      "query_rewritten": "Which customers appear in both campaigns but not the app?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "set overlap / intersection structure",
+      "shape": "long",
+      "dataset_path": "corpus/data/r31.parquet",
+      "dataset_sha256": "8e5344f16c1790595f8a08917de6bba8116d135addad0ba43c7effae640e3c2d",
+      "reference_frame": null,
+      "expected_outcome": "miss",
+      "expressible_if": [
+        "Venn",
+        "Euler",
+        "UpSet"
+      ],
+      "expected_bucket": 1
+    },
+    {
+      "id": "r32",
+      "source": "authored",
+      "source_id": "nv-r32",
+      "query_original": "which of the twelve segments overlap on more than two products",
+      "query_rewritten": "Which of the twelve segments overlap on more than two products?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "set overlap / intersection structure",
+      "shape": "long",
+      "dataset_path": "corpus/data/r32.parquet",
+      "dataset_sha256": "b899a596c6e0b8530a74e073f4b8c95532a52b5c2f57da7c4e0f9c56461d02be",
+      "reference_frame": null,
+      "expected_outcome": "miss",
+      "expressible_if": [
+        "Venn",
+        "Euler",
+        "UpSet"
+      ],
+      "expected_bucket": 1
+    },
+    {
+      "id": "r33",
+      "source": "authored",
+      "source_id": "nv-r33",
+      "query_original": "how the three ingredients mix in every blend",
+      "query_rewritten": "How do the three ingredients mix in every blend?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "compositional simplex",
+      "shape": "long",
+      "dataset_path": "corpus/data/r33.parquet",
+      "dataset_sha256": "14608a7308a0807ff90bbc4e77edf6fa2bc566ef0370d067885c1da8954b11b1",
+      "reference_frame": null,
+      "expected_outcome": "miss",
+      "expressible_if": [
+        "Ternary"
+      ],
+      "expected_bucket": 1
+    },
+    {
+      "id": "r34",
+      "source": "authored",
+      "source_id": "nv-r34",
+      "query_original": "commute flows between the five boroughs",
+      "query_rewritten": "What are the commute flows between the five boroughs?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "origin\u2013destination flow on a geography",
+      "shape": "long",
+      "dataset_path": "corpus/data/r34.parquet",
+      "dataset_sha256": "8a50f733962ed5a998ceefef951dca4baaf94d33541013b483f3779eafc0dc92",
+      "reference_frame": null,
+      "expected_outcome": "miss",
+      "expressible_if": [
+        "Flow Map"
+      ],
+      "expected_bucket": 1
+    },
+    {
+      "id": "r35",
+      "source": "nvbench1",
+      "source_id": "nv-r35",
+      "query_original": "sales by quarter for r35",
+      "query_rewritten": "Show sales by quarter for r35.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "part-to-whole",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r35.parquet",
+      "dataset_sha256": "f8191fb8473b02830069ad9e367d2dab13ff739a2709238d3ab077571953b055",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r36",
+      "source": "nvbench1",
+      "source_id": "nv-r36",
+      "query_original": "sales by quarter for r36",
+      "query_rewritten": "Show sales by quarter for r36.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "ranking / top-N",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r36.parquet",
+      "dataset_sha256": "ef2aa33f01b395c6685e5a08d830cf5629838e24841d34f74654029963796b90",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r37",
+      "source": "nvbench1",
+      "source_id": "nv-r37",
+      "query_original": "sales by quarter for r37",
+      "query_rewritten": "Show sales by quarter for r37.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "flow or transition between states",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r37.parquet",
+      "dataset_sha256": "4155d3caf3b393aec76b7ebaf501f74337e1bee8dd801b53221f08d25c42d9b6",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r38",
+      "source": "nvbench1",
+      "source_id": "nv-r38",
+      "query_original": "sales by quarter for r38",
+      "query_rewritten": "Show sales by quarter for r38.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "geographic distribution",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r38.parquet",
+      "dataset_sha256": "6babbd4fe1b70ae358592d9a8f41d4aa7ab04a29e75dc7f2bd2e0a5b68a0fe52",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r39",
+      "source": "nvbench1",
+      "source_id": "nv-r39",
+      "query_original": "sales by quarter for r39",
+      "query_rewritten": "Show sales by quarter for r39.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "single value against a target",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r39.parquet",
+      "dataset_sha256": "ea8d6521deae4f45d4c8b5d3250239cfbc94fdd57c106cc09fc319d5ab4ac239",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r40",
+      "source": "nvbench1",
+      "source_id": "nv-r40",
+      "query_original": "sales by quarter for r40",
+      "query_rewritten": "Show sales by quarter for r40.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "corpus/data/r40.parquet",
+      "dataset_sha256": "058a44365b97f83449c0f475f9196f6c1a07fe7e3ab7678fa1fab326c9c3a67d",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "r41",
+      "source": "nvbench1",
+      "source_id": "nv-r41",
+      "query_original": "sales by quarter for r41",
+      "query_rewritten": "Show sales by quarter for r41.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "comparison across categories",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r41.parquet",
+      "dataset_sha256": "b8eaf681d4ade2c915029cd1386e5d710ec59df28cbac29041aaaaef5819bbea",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "excel_empty_after_filter"
+    },
+    {
+      "id": "r42",
+      "source": "nvbench1",
+      "source_id": "nv-r42",
+      "query_original": "sales by quarter for r42",
+      "query_rewritten": "Show sales by quarter for r42.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "distribution of one measure",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r42.parquet",
+      "dataset_sha256": "8ef7ff52ebd8bbc18db1c5cbbeb07fdd5c7415c20b9b7de3396ed8d6d204e0dd",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "excel_pyramid_two_groups"
+    },
+    {
+      "id": "r43",
+      "source": "nvbench1",
+      "source_id": "nv-r43",
+      "query_original": "sales by quarter for r43",
+      "query_rewritten": "Show sales by quarter for r43.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "correlation between measures",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r43.parquet",
+      "dataset_sha256": "a348c649d43ab9925178aafa3c56338b40c8a3d799147245025a28bd7f76c11f",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "excel_candlestick_order"
+    },
+    {
+      "id": "r44",
+      "source": "nvbench1",
+      "source_id": "nv-r44",
+      "query_original": "sales by quarter for r44",
+      "query_rewritten": "Show sales by quarter for r44.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "part-to-whole",
+      "shape": "nested",
+      "dataset_path": "corpus/data/r44.parquet",
+      "dataset_sha256": "e15bd980306c26fe650aadeef499035aed59cb06abccbfbd5f8e5833bf190e82",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "echarts_boxplot"
+    },
+    {
+      "id": "r45",
+      "source": "nvbench1",
+      "source_id": "nv-r45",
+      "query_original": "show word cloud of category share for r45",
+      "query_rewritten": "Show a word cloud of category share for r45.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "ranking / top-N",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r45.parquet",
+      "dataset_sha256": "4055a8dab22f8f25da63915bd19192925092980f824609a81f94927ce24a3eb2",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "i"
+    },
+    {
+      "id": "r46",
+      "source": "nvbench1",
+      "source_id": "nv-r46",
+      "query_original": "show Marimekko of category share for r46",
+      "query_rewritten": "Show a Marimekko of category share for r46.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "flow or transition between states",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r46.parquet",
+      "dataset_sha256": "e942c1e05551d771afb99e514b2e7cc75874ee1f5a15bd7b493b78c8b52b5201",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "i"
+    },
+    {
+      "id": "r47",
+      "source": "nvbench1",
+      "source_id": "nv-r47",
+      "query_original": "show waffle of category share for r47",
+      "query_rewritten": "Show a waffle of category share for r47.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "geographic distribution",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r47.parquet",
+      "dataset_sha256": "ede1fc209aea99f516101406dee1bc39f0456325b2272c2c736010a849801f09",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "i"
+    },
+    {
+      "id": "r48",
+      "source": "authored",
+      "source_id": "nv-r48",
+      "query_original": "sales by quarter for r48",
+      "query_rewritten": "Show sales by quarter for r48.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "single value against a target",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r48.parquet",
+      "dataset_sha256": "6284153bf1b6266fc6b9c186ae9a175fc4c4ed4a0ff54e2c48663a74c83f54ce",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "ii",
+      "ambiguity_degree": 4
+    },
+    {
+      "id": "r49",
+      "source": "nvbench1",
+      "source_id": "nv-r49",
+      "query_original": "sales by quarter for r49",
+      "query_rewritten": "Show sales by quarter for r49.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "trend over time",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r49.parquet",
+      "dataset_sha256": "d9d02404c178d5d6fbcd9c8aae4c64271f11011072fe5a834ce5307c2112dc59",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "iii"
+    },
+    {
+      "id": "r50",
+      "source": "nvbench1",
+      "source_id": "nv-r50",
+      "query_original": "sales by quarter for r50",
+      "query_rewritten": "Show sales by quarter for r50.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "corpus/data/r50.parquet",
+      "dataset_sha256": "53b23bd1d9b2f0fdae6580fc5c8e92713d6baeaf0aadeb0d46f0bbbd112bbc12",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "cell_family": "iv"
+    }
+  ],
+  "reserves": [
+    {
+      "id": "s01",
+      "source": "authored",
+      "source_id": "res-s01",
+      "query_original": "sales by quarter for s01",
+      "query_rewritten": "Show sales by quarter for s01.",
+      "stratum": "common_path",
+      "cell": 0,
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "corpus/data/s01.parquet",
+      "dataset_sha256": "fb173a948cf4a99ace8aa40268ff7087a975aaca133ef2ed0012ee64feeb5dd7",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "replaces": {
+        "cell": 0,
+        "stratum": "common_path"
+      },
+      "draw_order": 1,
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "s02",
+      "source": "authored",
+      "source_id": "res-s02",
+      "query_original": "sales by quarter for s02",
+      "query_rewritten": "Show sales by quarter for s02.",
+      "stratum": "common_path",
+      "cell": 2,
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "corpus/data/s02.parquet",
+      "dataset_sha256": "d2d6ee88baf619af69fe34f3bb7bed4f482e20b61c068923fc3324bf289ccb46",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT quarter, revenue FROM source"
+          }
+        }
+      },
+      "replaces": {
+        "cell": 2,
+        "stratum": "common_path"
+      },
+      "draw_order": 2,
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "s03",
+      "source": "authored",
+      "source_id": "res-s03",
+      "query_original": "which customers are in both campaigns but not the app",
+      "query_rewritten": "Which customers appear in both campaigns but not the app?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "intent": "set overlap / intersection structure",
+      "shape": "long",
+      "dataset_path": "corpus/data/s03.parquet",
+      "dataset_sha256": "a52ba8b1e0bd26a9a9292be45e1653663828573d6e8b629cde0351a21afd2945",
+      "reference_frame": null,
+      "replaces": {
+        "cell": 1,
+        "stratum": "adversarial"
+      },
+      "draw_order": 3,
+      "expressible_if": [
+        "Venn",
+        "Euler",
+        "UpSet"
+      ],
+      "expected_outcome": "miss",
+      "expected_bucket": 1
+    },
+    {
+      "id": "s04",
+      "source": "authored",
+      "source_id": "res-s04",
+      "query_original": "sales by quarter for s04",
+      "query_rewritten": "Show sales by quarter for s04.",
+      "stratum": "adversarial",
+      "cell": 3,
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "corpus/data/s04.parquet",
+      "dataset_sha256": "d31f5b3c363e589dcc39dfa32c1882834ce65782778f46f8cbb9deb038ea8335",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "replaces": {
+        "cell": 3,
+        "stratum": "adversarial"
+      },
+      "draw_order": 4,
+      "expected_outcome": "hit",
+      "cell_family": "excel_empty_after_filter"
+    },
+    {
+      "id": "s05",
+      "source": "authored",
+      "source_id": "res-s05",
+      "query_original": "sales by quarter for s05",
+      "query_rewritten": "Show sales by quarter for s05.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "corpus/data/s05.parquet",
+      "dataset_sha256": "5e4f150aea3a7369c8b05af8d1dbc5f71d8c534691710e5af3c402418960053f",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "quarter",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "replaces": {
+        "cell": 4,
+        "stratum": "adversarial"
+      },
+      "draw_order": 5,
+      "expected_outcome": "hit",
+      "cell_family": "ii",
+      "ambiguity_degree": 4
+    }
+  ]
+}
