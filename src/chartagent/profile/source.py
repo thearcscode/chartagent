@@ -1,10 +1,8 @@
-"""``profile_source`` — one artifact describing a small source (ADR-0011)."""
+"""``profile_source`` — one artifact describing the source (ADR-0011)."""
 
 from __future__ import annotations
 
 import math
-import random
-from collections import Counter
 from collections.abc import Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -15,6 +13,7 @@ import duckdb
 from chartagent.bind import DataSource
 from chartagent.errors import DataSourceError
 from chartagent.frame.input import SourceBucket
+from chartagent.profile.ladder import apply_ladder
 from chartagent.profile.models import (
     SAMPLE_ROWS,
     SATURATION_CAP,
@@ -64,75 +63,28 @@ def _profile_relation(connection: duckdb.DuckDBPyConnection) -> Profile:
         for name, reported in reported_types.items()
     ]
     scanned = [item for item in described if item[2] != "other"]
-    stats_by_name = {name: _ColumnStats(bucket) for name, _reported, bucket in scanned}
-    sample_rows: list[dict[str, Any]] = []
-    if scanned:
-        sample_rows = _scan(
-            connection,
-            scanned=scanned,
-            accs=stats_by_name,
-            row_count=row_count,
-        )
-
     columns: list[Column] = []
     for name, reported, bucket in described:
         if bucket == "other":
             columns.append(OtherColumn(name=name, reported_type=reported))
             continue
-        columns.append(
-            _column_from_acc(
-                name=name,
-                reported=reported,
-                bucket=bucket,
-                acc=stats_by_name[name],
-                row_count=row_count,
-                sample_rows=sample_rows,
-            )
-        )
-    return Profile(row_count=row_count, columns=columns, sample_rows=sample_rows)
+        columns.append(_profile_column(connection, name, reported, bucket, row_count))
+    sample_rows = _sample_rows(connection, scanned, row_count)
+    columns = _attach_iso8601(columns, sample_rows)
+    return apply_ladder(
+        Profile(row_count=row_count, columns=columns, sample_rows=sample_rows)
+    )
 
 
-def _scan(
+def _profile_column(
     connection: duckdb.DuckDBPyConnection,
-    *,
-    scanned: list[tuple[str, str, SourceBucket]],
-    accs: Mapping[str, _ColumnStats],
-    row_count: int,
-) -> list[dict[str, Any]]:
-    if row_count == 0:
-        return []
-    names = [name for name, _reported, _bucket in scanned]
-    reported = {name: rtype for name, rtype, _bucket in scanned}
-    projection = ", ".join(_quote(name) for name in names)
-    reader = connection.sql(f"SELECT {projection} FROM source").to_arrow_reader(1024)
-    reservoir: list[dict[str, Any]] = []
-    seen = 0
-    for batch in reader:
-        for raw in batch.to_pylist():
-            record = {name: raw[name] for name in names}
-            seen += 1
-            if seen <= SAMPLE_ROWS:
-                reservoir.append(record)
-            else:
-                slot = random.randrange(seen)
-                if slot < SAMPLE_ROWS:
-                    reservoir[slot] = record
-            for name, acc in accs.items():
-                acc.observe(record[name])
-    return [_plain_row(row, reported) for row in reservoir]
-
-
-def _column_from_acc(
-    *,
     name: str,
     reported: str,
     bucket: SourceBucket,
-    acc: _ColumnStats,
     row_count: int,
-    sample_rows: list[dict[str, Any]],
 ) -> NumberColumn | TemporalColumn | StringColumn | BooleanColumn:
-    null_rate = 0.0 if row_count == 0 else acc.nulls / row_count
-    distinct = SATURATION_CAP if acc.saturated else len(acc.distinct)
+    null_rate = _null_rate(connection, name, row_count)
+    distinct, saturated = _distinct_cap(connection, name)
     empty = row_count == 0 or null_rate == 1.0
     if bucket == "number":
         return NumberColumn(
@@ -140,8 +92,8 @@ def _column_from_acc(
             reported_type=reported,
             null_rate=null_rate,
             distinct=distinct,
-            saturated=acc.saturated,
-            stats=None if empty else _number_stats(acc),
+            saturated=saturated,
+            stats=None if empty else _number_stats(connection, name),
         )
     if bucket in _TEMPORAL:
         temporal: Literal["date", "timestamp", "timestamptz"]
@@ -157,8 +109,8 @@ def _column_from_acc(
             bucket=temporal,
             null_rate=null_rate,
             distinct=distinct,
-            saturated=acc.saturated,
-            stats=None if empty else _temporal_stats(acc, temporal),
+            saturated=saturated,
+            stats=None if empty else _temporal_stats(connection, name, temporal),
         )
     if bucket == "boolean":
         return BooleanColumn(
@@ -166,93 +118,203 @@ def _column_from_acc(
             reported_type=reported,
             null_rate=null_rate,
             distinct=distinct,
-            saturated=acc.saturated,
-            top=None if row_count == 0 else _boolean_top(acc),
+            saturated=saturated,
+            top=None if row_count == 0 else _boolean_top(connection, name),
         )
-    top = None if empty else _string_top(acc)
+    top = None if empty else _string_top(connection, name)
     return StringColumn(
         name=name,
         reported_type=reported,
         null_rate=null_rate,
         distinct=distinct,
-        saturated=acc.saturated,
+        saturated=saturated,
         top=top,
-        stats=(
-            None
-            if empty
-            else _string_stats(
-                acc,
-                reported=reported,
-                top=top or [],
-                sample_rows=sample_rows,
-                name=name,
-            )
-        ),
+        stats=None if empty else _string_stats(connection, name, reported, top or []),
     )
 
 
-def _number_stats(acc: _ColumnStats) -> NumberStats:
-    values = sorted(_as_float(v) for v in acc.values)
-    lo, hi = values[0], values[-1]
-    qs = [_quantile(values, p) for p in _PERCENTILES]
+def _sample_rows(
+    connection: duckdb.DuckDBPyConnection,
+    scanned: list[tuple[str, str, SourceBucket]],
+    row_count: int,
+) -> list[dict[str, Any]]:
+    if row_count == 0 or not scanned:
+        return []
+    names = [name for name, _reported, _bucket in scanned]
+    reported = {name: rtype for name, rtype, _bucket in scanned}
+    projection = ", ".join(_quote(name) for name in names)
+    table = connection.sql(
+        f"SELECT {projection} FROM source ORDER BY random() LIMIT {SAMPLE_ROWS}"
+    ).to_arrow_table()
+    return [_plain_row(raw, reported) for raw in table.to_pylist()]
+
+
+def _null_rate(
+    connection: duckdb.DuckDBPyConnection, name: str, row_count: int
+) -> float:
+    if row_count == 0:
+        return 0.0
+    col = _quote(name)
+    row = connection.execute(
+        f"SELECT count(*) FILTER (WHERE {col} IS NULL)::DOUBLE / count(*) FROM source"
+    ).fetchone()
+    if row is None or row[0] is None:
+        return 0.0
+    return float(row[0])
+
+
+def _distinct_cap(connection: duckdb.DuckDBPyConnection, name: str) -> tuple[int, bool]:
+    col = _quote(name)
+    row = connection.execute(
+        f"SELECT count(*) FROM ("
+        f"SELECT DISTINCT {col} FROM source WHERE {col} IS NOT NULL "
+        f"LIMIT {SATURATION_CAP})"
+    ).fetchone()
+    count = int(row[0]) if row is not None else 0
+    saturated = count >= SATURATION_CAP
+    return (SATURATION_CAP if saturated else count), saturated
+
+
+def _number_stats(
+    connection: duckdb.DuckDBPyConnection, name: str
+) -> NumberStats | None:
+    extrema = _footer_extrema(connection, name, as_epoch=False)
+    quantiles = _approx_quantiles(connection, name, as_epoch=False)
+    if extrema is None or quantiles is None:
+        return None
+    lo, hi = extrema
     return NumberStats(
-        min=lo,
-        max=hi,
-        p01=qs[0],
-        p25=qs[1],
-        p50=qs[2],
-        p75=qs[3],
-        p99=qs[4],
+        min=_as_float(lo),
+        max=_as_float(hi),
+        p01=_as_float(quantiles[0]),
+        p25=_as_float(quantiles[1]),
+        p50=_as_float(quantiles[2]),
+        p75=_as_float(quantiles[3]),
+        p99=_as_float(quantiles[4]),
     )
 
 
-def _temporal_stats(acc: _ColumnStats, bucket: str) -> TemporalStats:
-    numeric = sorted(_temporal_numeric(v, bucket) for v in acc.values)
-    qs = [_from_temporal_numeric(_quantile(numeric, p), bucket) for p in _PERCENTILES]
+def _temporal_stats(
+    connection: duckdb.DuckDBPyConnection, name: str, bucket: str
+) -> TemporalStats | None:
+    extrema = _footer_extrema(connection, name, as_epoch=True)
+    quantiles = _approx_quantiles(connection, name, as_epoch=True)
+    if extrema is None or quantiles is None:
+        return None
+    lo, hi = extrema
     return TemporalStats(
-        min=_format_temporal(acc.min, bucket),
-        max=_format_temporal(acc.max, bucket),
-        p01=qs[0],
-        p25=qs[1],
-        p50=qs[2],
-        p75=qs[3],
-        p99=qs[4],
+        min=_from_epoch_us(lo, bucket),
+        max=_from_epoch_us(hi, bucket),
+        p01=_from_epoch_us(quantiles[0], bucket),
+        p25=_from_epoch_us(quantiles[1], bucket),
+        p50=_from_epoch_us(quantiles[2], bucket),
+        p75=_from_epoch_us(quantiles[3], bucket),
+        p99=_from_epoch_us(quantiles[4], bucket),
     )
 
 
-def _string_top(acc: _ColumnStats) -> list[TopValue]:
-    items = sorted(acc.counts.items(), key=lambda item: (-item[1], _tie_key(item[0])))
+def _footer_extrema(
+    connection: duckdb.DuckDBPyConnection, name: str, *, as_epoch: bool
+) -> tuple[object, object] | None:
+    col = _quote(name)
+    if as_epoch:
+        expr = f"epoch_us(min({col})), epoch_us(max({col}))"
+    else:
+        expr = f"min({col}), max({col})"
+    row = connection.execute(f"SELECT {expr} FROM source").fetchone()
+    if row is None or row[0] is None or row[1] is None:
+        return None
+    return row[0], row[1]
+
+
+def _approx_quantiles(
+    connection: duckdb.DuckDBPyConnection, name: str, *, as_epoch: bool
+) -> tuple[object, ...] | None:
+    col = _quote(name)
+    if as_epoch:
+        parts = [f"epoch_us(approx_quantile({col}, {p}))" for p in _PERCENTILES]
+    else:
+        parts = [f"approx_quantile({col}, {p})" for p in _PERCENTILES]
+    row = connection.execute(f"SELECT {', '.join(parts)} FROM source").fetchone()
+    if row is None or any(value is None for value in row):
+        return None
+    return row
+
+
+def _from_epoch_us(value: object, bucket: str) -> str:
+    instant = datetime.fromtimestamp(_as_float(value) / 1_000_000, tz=UTC)
+    if bucket == "date":
+        return instant.date().isoformat()
+    if bucket == "timestamp":
+        return instant.replace(tzinfo=None).isoformat()
+    return instant.replace(tzinfo=None).isoformat() + "Z"
+
+
+def _string_top(connection: duckdb.DuckDBPyConnection, name: str) -> list[TopValue]:
+    col = _quote(name)
+    rows = connection.execute(
+        f"SELECT {col}, count(*) FROM source WHERE {col} IS NOT NULL "
+        f"GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT {TOP_K}"
+    ).fetchall()
     return [
-        TopValue(value=_plain_copied(value), count=count)
-        for value, count in items[:TOP_K]
+        TopValue(value=_plain_copied(value), count=int(count)) for value, count in rows
     ]
 
 
-def _boolean_top(acc: _ColumnStats) -> list[TopValue]:
-    items = sorted(acc.counts.items(), key=lambda item: -item[1])
-    return [TopValue(value=_plain_copied(value), count=count) for value, count in items]
+def _boolean_top(connection: duckdb.DuckDBPyConnection, name: str) -> list[TopValue]:
+    col = _quote(name)
+    rows = connection.execute(
+        f"SELECT {col}, count(*) FROM source GROUP BY 1 ORDER BY 2 DESC"
+    ).fetchall()
+    return [
+        TopValue(value=_plain_copied(value), count=int(count)) for value, count in rows
+    ]
 
 
 def _string_stats(
-    acc: _ColumnStats,
-    *,
+    connection: duckdb.DuckDBPyConnection,
+    name: str,
     reported: str,
     top: list[TopValue],
-    sample_rows: list[dict[str, Any]],
-    name: str,
 ) -> StringStats:
-    non_null = acc.n
+    col = _quote(name)
+    extrema = connection.execute(
+        f"SELECT min({col}), max({col}) FROM source"
+    ).fetchone()
+    lo = "" if extrema is None or extrema[0] is None else str(extrema[0])
+    hi = "" if extrema is None or extrema[1] is None else str(extrema[1])
+    counted = connection.execute(
+        f"SELECT count(*) FROM source WHERE {col} IS NOT NULL"
+    ).fetchone()
+    non_null = int(counted[0]) if counted is not None else 0
     coverage = (sum(item.count for item in top) / non_null) if non_null else 0.0
-    rate: float | None = None
-    if _is_varchar(reported):
-        sampled = [row[name] for row in sample_rows if row.get(name) is not None]
-        rate = _iso8601_rate(sampled)
     return StringStats(
-        min=str(acc.min),
-        max=str(acc.max),
+        min=lo,
+        max=hi,
         top_k_coverage=coverage,
-        iso8601_parse_rate=rate,
+        iso8601_parse_rate=None if not _is_varchar(reported) else 0.0,
     )
+
+
+def _attach_iso8601(
+    columns: list[Column], sample_rows: list[dict[str, Any]]
+) -> list[Column]:
+    attached: list[Column] = []
+    for column in columns:
+        if not isinstance(column, StringColumn) or column.stats is None:
+            attached.append(column)
+            continue
+        if not _is_varchar(column.reported_type):
+            attached.append(column)
+            continue
+        sampled = [
+            row[column.name] for row in sample_rows if row.get(column.name) is not None
+        ]
+        stats = column.stats.model_copy(
+            update={"iso8601_parse_rate": _iso8601_rate(sampled)}
+        )
+        attached.append(column.model_copy(update={"stats": stats}))
+    return attached
 
 
 def _iso8601_rate(values: list[object]) -> float:
@@ -283,18 +345,6 @@ def _is_varchar(reported: str) -> bool:
     return reported.split("(", 1)[0].strip().upper() == "VARCHAR"
 
 
-def _quantile(sorted_vals: list[float], p: float) -> float:
-    if len(sorted_vals) == 1:
-        return sorted_vals[0]
-    rank = (len(sorted_vals) - 1) * p
-    lo = int(math.floor(rank))
-    hi = int(math.ceil(rank))
-    if lo == hi:
-        return sorted_vals[lo]
-    weight = rank - lo
-    return sorted_vals[lo] * (1.0 - weight) + sorted_vals[hi] * weight
-
-
 def _as_float(value: object) -> float:
     if isinstance(value, Decimal):
         return float(value)
@@ -303,31 +353,6 @@ def _as_float(value: object) -> float:
     if isinstance(value, (int, float)):
         return float(value)
     return float(value)  # type: ignore[arg-type]
-
-
-def _temporal_numeric(value: object, bucket: str) -> float:
-    if bucket == "date":
-        if isinstance(value, datetime):
-            value = value.date()
-        if isinstance(value, date):
-            return float(value.toordinal())
-        return 0.0
-    if isinstance(value, datetime):
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=UTC)
-        return value.timestamp()
-    if isinstance(value, date):
-        return datetime(value.year, value.month, value.day, tzinfo=UTC).timestamp()
-    return 0.0
-
-
-def _from_temporal_numeric(value: float, bucket: str) -> str:
-    if bucket == "date":
-        return date.fromordinal(int(round(value))).isoformat()
-    instant = datetime.fromtimestamp(value, tz=UTC)
-    if bucket == "timestamp":
-        return instant.replace(tzinfo=None).isoformat()
-    return instant.replace(tzinfo=None).isoformat() + "Z"
 
 
 def _format_temporal(value: object, bucket: str) -> str:
@@ -398,67 +423,5 @@ def _plain_copied(value: object) -> object:
     return value
 
 
-def _tie_key(value: object) -> str:
-    return "" if value is None else str(value)
-
-
 def _quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
-
-
-def _distinct_key(value: object) -> object:
-    if isinstance(value, float) and math.isnan(value):
-        return ("nan",)
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, date):
-        return value.isoformat()
-    if isinstance(value, Decimal):
-        return float(value)
-    try:
-        hash(value)
-    except TypeError:
-        return str(value)
-    return value
-
-
-class _ColumnStats:
-    def __init__(self, bucket: SourceBucket) -> None:
-        self.bucket = bucket
-        self.nulls = 0
-        self.n = 0
-        self.distinct: set[object] = set()
-        self.saturated = False
-        self.min: object | None = None
-        self.max: object | None = None
-        self.values: list[object] = []
-        self.counts: Counter[object] = Counter()
-
-    def observe(self, value: object) -> None:
-        if value is None:
-            self.nulls += 1
-            if self.bucket == "boolean":
-                self.counts[None] += 1
-            return
-        self.n += 1
-        if not self.saturated:
-            self.distinct.add(_distinct_key(value))
-            if len(self.distinct) >= SATURATION_CAP:
-                self.saturated = True
-                self.distinct.clear()
-        if self.bucket in {"number", *_TEMPORAL, "string"}:
-            if self.min is None or _less(value, self.min):
-                self.min = value
-            if self.max is None or _less(self.max, value):
-                self.max = value
-        if self.bucket in {"number", *_TEMPORAL}:
-            self.values.append(value)
-        if self.bucket in {"string", "boolean"}:
-            self.counts[value] += 1
-
-
-def _less(left: object, right: object) -> bool:
-    try:
-        return bool(left < right)  # type: ignore[operator]
-    except TypeError:
-        return str(left) < str(right)

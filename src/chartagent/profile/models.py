@@ -15,6 +15,8 @@ from pydantic import (
 SAMPLE_ROWS = 10
 SATURATION_CAP = 1001
 TOP_K = 10
+REPORTED_TYPE_BUDGET = 120
+BUDGET_BYTES = 10 * 1024
 
 Rung = Literal[
     "reported_type_head", "sample_rows", "top_values", "percentiles", "columns"
