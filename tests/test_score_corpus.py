@@ -583,6 +583,120 @@ def test_inflated_temperature_is_refused(tmp_path: Path) -> None:
     assert "DECODING" in result.stdout or "DECODING" in result.stderr
 
 
+def test_planner_failure_miss_has_no_bucket_and_is_counted_separately(
+    tmp_path: Path,
+) -> None:
+    outputs = _write_outputs(
+        _outputs(
+            miss_ids=set(_CELL1) | set(_TRIP_EXTRA_MISSES),
+            miss_reasons={"r01": {}},
+            miss_extras={"r01": {"miss_kind": "planner_failure"}},
+        ),
+        tmp_path,
+    )
+    result = _run(outputs, tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = _report(tmp_path)
+    by_id = {row["id"]: row for row in report["requests"]}
+    assert by_id["r01"]["reported_bucket"] is None
+    assert by_id["r01"]["reported_miss_kind"] == "planner_failure"
+    assert by_id["r01"]["rail_hit"] is False
+    assert report["planner_failure_ids"] == ["r01"]
+    assert report["planner_failure_misses"] == 1
+    assert report["unattributed_misses"] == 0
+    assert report["unattributed_ids"] == []
+    hist = report["escape_reason_histogram"]
+    assert hist["1"] == 13
+    assert sum(hist.values()) == 13
+    recon = report["reconciliation"]
+    assert recon["hits"] == 36
+    assert recon["buckets"] == 13
+    assert recon["planner_failure"] == 1
+    assert recon["unattributed"] == 0
+    assert recon["n"] == 50
+    total = (
+        recon["hits"]
+        + recon["buckets"]
+        + recon["planner_failure"]
+        + recon["unattributed"]
+    )
+    assert total == recon["n"]
+    assert recon["total"] == total
+    md = _markdown(tmp_path)
+    assert "planner-failure" in md.lower()
+    assert "unattributed" in md.lower()
+
+
+def test_unattributed_row_is_flagged_in_the_score(tmp_path: Path) -> None:
+    module = _tool()
+    prereg = _prereg()
+    vocab = json.loads(_VOCAB.read_text(encoding="utf-8"))
+    outputs = _outputs(
+        miss_ids=set(_CELL1) | set(_TRIP_EXTRA_MISSES),
+        miss_reasons={"r01": {}},
+    )
+    report = module.score(
+        prereg,
+        outputs,
+        vocab,
+        scored_at="2026-08-30",
+        prereg_sha256="ignored",
+    )
+    by_id = {row["id"]: row for row in report["requests"]}
+    assert by_id["r01"]["reported_bucket"] is None
+    assert by_id["r01"]["reported_miss_kind"] is None
+    assert report["unattributed_ids"] == ["r01"]
+    assert report["unattributed_misses"] == 1
+    assert report["planner_failure_misses"] == 0
+    recon = report["reconciliation"]
+    total = (
+        recon["hits"]
+        + recon["buckets"]
+        + recon["planner_failure"]
+        + recon["unattributed"]
+    )
+    assert total == recon["n"]
+    assert recon["total"] == total
+
+
+def test_unattributed_miss_is_a_named_check_failure_at_the_cli(tmp_path: Path) -> None:
+    outputs = _write_outputs(
+        _outputs(
+            miss_ids=set(_CELL1) | set(_TRIP_EXTRA_MISSES),
+            miss_reasons={"r01": {}},
+        ),
+        tmp_path,
+    )
+    result = _run(outputs, tmp_path)
+    assert result.returncode == 1
+    assert "UNATTRIBUTED" in result.stdout or "UNATTRIBUTED" in result.stderr
+    assert "r01" in result.stdout or "r01" in result.stderr
+    assert not (tmp_path / "score.json").exists()
+    assert not (tmp_path / "score.md").exists()
+
+
+def test_call_cost_reports_the_floor_and_worst_case(tmp_path: Path) -> None:
+    outputs = _write_outputs(
+        _outputs(miss_ids=set(_CELL1) | set(_TRIP_EXTRA_MISSES)),
+        tmp_path,
+    )
+    result = _run(outputs, tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = _report(tmp_path)
+    cost = report["call_cost"]
+    assert cost["runs"] == 150
+    assert cost["floor"] == 300
+    assert cost["worst_case"] == 750
+    floor = cost["mean_calls_per_chart_floor"]
+    assert floor["hit"] == 2.0
+    assert floor["miss"] == 1.0
+    assert round(floor["weighted"], 4) == round((36 * 2.0 + 14 * 1.0) / 50, 4)
+    md = _markdown(tmp_path)
+    assert "300" in md
+    assert "750" in md
+    assert "call" in md.lower()
+
+
 def test_usage_without_outputs_exits_two() -> None:
     result = subprocess.run(
         [sys.executable, str(_SCORE)],
