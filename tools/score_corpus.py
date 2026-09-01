@@ -50,6 +50,7 @@ POISSON_NOTE = (
     "sampling uncertainty and the gate is harder to clear than costed."
 )
 BACKENDS = ("vegalite", "echarts", "chartjs", "plotly", "excel")
+PLANNER_FAILURE_KIND = "planner_failure"
 
 
 def wilson_interval(k: int, n: int, z: float = WILSON_Z) -> dict[str, float]:
@@ -148,6 +149,17 @@ def _parse_reason(value: object) -> dict[str, Any] | None:
     return None
 
 
+def read_miss_kind(record: Mapping[str, Any]) -> str | None:
+    """Read the miss kind a run recorded, if any.
+
+    ADR-0019 D8: `miss_kind: planner_failure` says a reason is *legitimately
+    absent* — the planner never reached a judgement. The closed vocabulary is
+    one value; anything else is not recognised and is not guessed into it.
+    """
+    value = record.get("miss_kind")
+    return PLANNER_FAILURE_KIND if value == PLANNER_FAILURE_KIND else None
+
+
 def _majority(votes: list[bool]) -> bool:
     return sum(votes) >= 2
 
@@ -227,6 +239,7 @@ def score(
     rows: list[dict[str, Any]] = []
     cell_moves: list[dict[str, Any]] = []
     genuine_bucket2: list[str] = []
+    total_runs = 0
     try:
         for item in requests:
             request_id = item["id"]
@@ -275,6 +288,7 @@ def score(
                     facade_invalid = True
 
             records = runs_by_id.get(request_id, [])
+            total_runs += len(records)
             rail_votes = [_rail_vote(run) for run in records]
             raw_sql_votes = [_raw_sql_vote(run) for run in records]
             delivery_votes = [_delivery_vote(run) for run in records]
@@ -285,6 +299,7 @@ def score(
             in_delivery = _majority(emitted_votes) if emitted_votes else False
 
             reported_bucket: int | None = None
+            reported_miss_kind: str | None = None
             if sql_refused:
                 rail_hit = False
                 raw_sql_used = False
@@ -296,6 +311,11 @@ def score(
                 buckets = [parsed["bucket"] for parsed in reasons if parsed is not None]
                 if buckets:
                     reported_bucket = Counter(buckets).most_common(1)[0][0]
+                else:
+                    kinds = [read_miss_kind(run) for run in records]
+                    found_kinds = [kind for kind in kinds if kind is not None]
+                    if found_kinds:
+                        reported_miss_kind = Counter(found_kinds).most_common(1)[0][0]
             if facade_invalid and expected_outcome == "hit":
                 # Narrowing bump: the tagged frame is no longer façade-valid.
                 expected_outcome = "miss"
@@ -325,6 +345,7 @@ def score(
                     "expected_bucket": expected_bucket,
                     "reported_outcome": reported_outcome,
                     "reported_bucket": reported_bucket,
+                    "reported_miss_kind": reported_miss_kind,
                     "surprise_hit": surprise_hit,
                     "facade_invalid": facade_invalid,
                 }
@@ -381,6 +402,55 @@ def score(
         confusion.setdefault(left, {})
         confusion[left][right] = confusion[left].get(right, 0) + 1
 
+    # A miss's reported_bucket is None for two disjoint reasons: the harness
+    # named one (planner_failure) or named none at all (unattributed). Every
+    # row is a hit, a bucketed miss, or exactly one of these — classified
+    # once, here, rather than re-derived at each site that needs a count.
+    unbucketed_misses = [
+        row for row in rows if not row["rail_hit"] and row["reported_bucket"] is None
+    ]
+    planner_failure_ids = [
+        row["id"]
+        for row in unbucketed_misses
+        if row["reported_miss_kind"] == PLANNER_FAILURE_KIND
+    ]
+    unattributed_ids = [
+        row["id"] for row in unbucketed_misses if row["reported_miss_kind"] is None
+    ]
+    reconciliation = {
+        "hits": rail_k,
+        "buckets": sum(histogram.values()),
+        "planner_failure": len(planner_failure_ids),
+        "unattributed": len(unattributed_ids),
+        "n": n,
+    }
+    reconciliation_total = (
+        reconciliation["hits"]
+        + reconciliation["buckets"]
+        + reconciliation["planner_failure"]
+        + reconciliation["unattributed"]
+    )
+    # ADR-0019 D8: every row is a hit, a bucketed miss, a planner-failure
+    # miss, or unattributed — never more than one, never none. A mismatch
+    # here is a scoring bug, not a data-quality question.
+    assert reconciliation_total == n, f"reconciliation failed: {reconciliation}"
+    reconciliation["total"] = reconciliation_total
+
+    # ADR-0019 D6: a run is two calls (step 1 + step 2), so the floor over
+    # every recorded run doubles and the 5-call retry cap sets the worst
+    # case. These are corpus-size facts, not a live measurement — no
+    # planner is built here (module docstring).
+    call_cost = {
+        "runs": total_runs,
+        "floor": total_runs * 2,
+        "worst_case": total_runs * 5,
+        "mean_calls_per_chart_floor": {
+            "hit": 2.0,
+            "miss": 1.0,
+            "weighted": (rail_k * 2.0 + (n - rail_k) * 1.0) / n if n else 0.0,
+        },
+    }
+
     two_one = {
         "rail": sum(_two_one(row["rail_votes"]) for row in rows if row["rail_votes"]),
         "raw_sql_used": sum(
@@ -431,6 +501,12 @@ def score(
         "escape_reason_histogram": {
             str(bucket): int(histogram.get(bucket, 0)) for bucket in (1, 2, 3, 4)
         },
+        "planner_failure_misses": len(planner_failure_ids),
+        "planner_failure_ids": planner_failure_ids,
+        "unattributed_misses": len(unattributed_ids),
+        "unattributed_ids": unattributed_ids,
+        "reconciliation": reconciliation,
+        "call_cost": call_cost,
         "cell_moves": cell_moves,
         "genuine_bucket2_ids": genuine_bucket2,
         "facade_invalid_ids": [row["id"] for row in rows if row["facade_invalid"]],
@@ -532,6 +608,59 @@ def render_markdown(report: Mapping[str, Any]) -> str:
                 f"genuine bucket-2 miss ({', '.join(genuine)}).",
             ]
         )
+    recon = report["reconciliation"]
+    lines.extend(
+        [
+            "",
+            "## Planner-failure and unattributed misses",
+            "",
+            "A planner-failure miss carries no escape reason — the planner "
+            "broke rather than judged — and is never folded into bucket 3 "
+            "or guessed as a bucket. An unattributed miss carries neither a "
+            "bucket nor a `miss_kind` and is a harness bug, never guessed as "
+            "a planner failure.",
+            "",
+            f"Planner-failure misses (no bucket): {recon['planner_failure']}.",
+            f"Unattributed misses (no bucket, no miss_kind): {recon['unattributed']}.",
+            "",
+            f"hits {recon['hits']} + buckets 1–4 {recon['buckets']} + "
+            f"planner-failure {recon['planner_failure']} + unattributed "
+            f"{recon['unattributed']} = {recon['total']}, n {recon['n']}.",
+        ]
+    )
+    planner_failure_ids = report.get("planner_failure_ids") or []
+    if planner_failure_ids:
+        lines.extend(["", f"Planner-failure ids: {', '.join(planner_failure_ids)}."])
+    unattributed_ids = report.get("unattributed_ids") or []
+    if unattributed_ids:
+        lines.extend(["", f"Unattributed ids: {', '.join(unattributed_ids)}."])
+    cost = report["call_cost"]
+    floor = cost["mean_calls_per_chart_floor"]
+    lines.extend(
+        [
+            "",
+            "## Call cost (floor, not a live measurement)",
+            "",
+            "ADR-0019 D6: a run is two calls (step 1, step 2), so the cost "
+            'line ADR-0014 D12 called "150 planner calls" means 150 runs.',
+            "",
+            f"At {cost['runs']} recorded runs the floor is {cost['floor']} "
+            f"calls and the worst case is {cost['worst_case']} at the "
+            "5-call retry cap.",
+            f"Mean planner calls per chart has a floor of {floor['hit']:.1f} "
+            f"on a hit and {floor['miss']:.1f} on a miss; at this run's rail "
+            f"share the no-retry floor is {floor['weighted']:.3f}, not "
+            f"{floor['miss']:.1f}. The floor is published beside the mean "
+            "so a reader does not mistake the no-retry baseline for the "
+            "mean and conclude the planner retries constantly.",
+            "",
+            "Retry rate is published per step, since step 1 and step 2 "
+            "point at different levers — the same argument ADR-0013 D10 "
+            "makes for the histogram. No per-call retry data is recorded "
+            "yet, so no per-step rate is minted here; it is published once "
+            "the harness records it.",
+        ]
+    )
     lines.extend(
         [
             "",
@@ -717,6 +846,17 @@ def main(argv: list[str] | None = None) -> int:
         scored_at=scored_at,
         prereg_sha256=file_digest,
     )
+    # ADR-0019 D8: a miss with no miss_kind is a harness bug, never guessed
+    # as a planner failure. A non-zero unattributed count is a named check
+    # failure, not a rounding line.
+    if report["unattributed_misses"] > 0:
+        ids = ", ".join(report["unattributed_ids"])
+        issues.append(
+            f"UNATTRIBUTED       {report['unattributed_misses']} miss(es) "
+            f"with no bucket and no miss_kind: {ids}"
+        )
+        return _fail(issues)
+
     json_path = Path(ns.json_path)
     md_path = Path(ns.md_path)
     json_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
