@@ -51,6 +51,8 @@ POISSON_NOTE = (
 )
 BACKENDS = ("vegalite", "echarts", "chartjs", "plotly", "excel")
 PLANNER_FAILURE_KIND = "planner_failure"
+UNANSWERABLE_KIND = "unanswerable_instruction"
+_MISS_KINDS = frozenset({PLANNER_FAILURE_KIND, UNANSWERABLE_KIND})
 
 
 def wilson_interval(k: int, n: int, z: float = WILSON_Z) -> dict[str, float]:
@@ -153,11 +155,13 @@ def read_miss_kind(record: Mapping[str, Any]) -> str | None:
     """Read the miss kind a run recorded, if any.
 
     ADR-0019 D8: `miss_kind: planner_failure` says a reason is *legitimately
-    absent* — the planner never reached a judgement. The closed vocabulary is
-    one value; anything else is not recognised and is not guessed into it.
+    absent* — the planner never reached a judgement. ADR-0020 adds a sibling,
+    `unanswerable_instruction` — a `UnanswerableInstructionError`, never a
+    bucket. The closed vocabulary is these two values; anything else is not
+    recognised and is not guessed into either.
     """
     value = record.get("miss_kind")
-    return PLANNER_FAILURE_KIND if value == PLANNER_FAILURE_KIND else None
+    return value if value in _MISS_KINDS else None
 
 
 def _majority(votes: list[bool]) -> bool:
@@ -402,10 +406,11 @@ def score(
         confusion.setdefault(left, {})
         confusion[left][right] = confusion[left].get(right, 0) + 1
 
-    # A miss's reported_bucket is None for two disjoint reasons: the harness
-    # named one (planner_failure) or named none at all (unattributed). Every
-    # row is a hit, a bucketed miss, or exactly one of these — classified
-    # once, here, rather than re-derived at each site that needs a count.
+    # A miss's reported_bucket is None for three disjoint reasons: the harness
+    # named planner_failure, named unanswerable_instruction (ADR-0020), or
+    # named none at all (unattributed). Every row is a hit, a bucketed miss,
+    # or exactly one of these — classified once, here, rather than
+    # re-derived at each site that needs a count.
     unbucketed_misses = [
         row for row in rows if not row["rail_hit"] and row["reported_bucket"] is None
     ]
@@ -414,6 +419,11 @@ def score(
         for row in unbucketed_misses
         if row["reported_miss_kind"] == PLANNER_FAILURE_KIND
     ]
+    unanswerable_ids = [
+        row["id"]
+        for row in unbucketed_misses
+        if row["reported_miss_kind"] == UNANSWERABLE_KIND
+    ]
     unattributed_ids = [
         row["id"] for row in unbucketed_misses if row["reported_miss_kind"] is None
     ]
@@ -421,6 +431,7 @@ def score(
         "hits": rail_k,
         "buckets": sum(histogram.values()),
         "planner_failure": len(planner_failure_ids),
+        "unanswerable_instruction": len(unanswerable_ids),
         "unattributed": len(unattributed_ids),
         "n": n,
     }
@@ -428,11 +439,13 @@ def score(
         reconciliation["hits"]
         + reconciliation["buckets"]
         + reconciliation["planner_failure"]
+        + reconciliation["unanswerable_instruction"]
         + reconciliation["unattributed"]
     )
-    # ADR-0019 D8: every row is a hit, a bucketed miss, a planner-failure
-    # miss, or unattributed — never more than one, never none. A mismatch
-    # here is a scoring bug, not a data-quality question.
+    # ADR-0019 D8 + ADR-0020: every row is a hit, a bucketed miss, a
+    # planner-failure miss, an unanswerable-instruction miss, or
+    # unattributed — never more than one, never none. A mismatch here is a
+    # scoring bug, not a data-quality question.
     assert reconciliation_total == n, f"reconciliation failed: {reconciliation}"
     reconciliation["total"] = reconciliation_total
 
@@ -503,6 +516,8 @@ def score(
         },
         "planner_failure_misses": len(planner_failure_ids),
         "planner_failure_ids": planner_failure_ids,
+        "unanswerable_instruction_misses": len(unanswerable_ids),
+        "unanswerable_instruction_ids": unanswerable_ids,
         "unattributed_misses": len(unattributed_ids),
         "unattributed_ids": unattributed_ids,
         "reconciliation": reconciliation,
@@ -612,25 +627,40 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     lines.extend(
         [
             "",
-            "## Planner-failure and unattributed misses",
+            "## Planner-failure, unanswerable, and unattributed misses",
             "",
             "A planner-failure miss carries no escape reason — the planner "
             "broke rather than judged — and is never folded into bucket 3 "
-            "or guessed as a bucket. An unattributed miss carries neither a "
-            "bucket nor a `miss_kind` and is a harness bug, never guessed as "
-            "a planner failure.",
+            "or guessed as a bucket. An unanswerable-instruction miss "
+            "(ADR-0020) is a request that made no sense against the data — "
+            "a different fault from bucket 1 or 2, and also never a bucket. "
+            "An unattributed miss carries neither a bucket nor a `miss_kind` "
+            "and is a harness bug, never guessed as either.",
             "",
             f"Planner-failure misses (no bucket): {recon['planner_failure']}.",
+            "Unanswerable-instruction misses (no bucket): "
+            f"{recon['unanswerable_instruction']}.",
             f"Unattributed misses (no bucket, no miss_kind): {recon['unattributed']}.",
             "",
             f"hits {recon['hits']} + buckets 1–4 {recon['buckets']} + "
-            f"planner-failure {recon['planner_failure']} + unattributed "
-            f"{recon['unattributed']} = {recon['total']}, n {recon['n']}.",
+            f"planner-failure {recon['planner_failure']} + "
+            f"unanswerable-instruction {recon['unanswerable_instruction']} + "
+            f"unattributed {recon['unattributed']} = {recon['total']}, "
+            f"n {recon['n']}.",
         ]
     )
     planner_failure_ids = report.get("planner_failure_ids") or []
     if planner_failure_ids:
         lines.extend(["", f"Planner-failure ids: {', '.join(planner_failure_ids)}."])
+    unanswerable_instruction_ids = report.get("unanswerable_instruction_ids") or []
+    if unanswerable_instruction_ids:
+        lines.extend(
+            [
+                "",
+                "Unanswerable-instruction ids: "
+                f"{', '.join(unanswerable_instruction_ids)}.",
+            ]
+        )
     unattributed_ids = report.get("unattributed_ids") or []
     if unattributed_ids:
         lines.extend(["", f"Unattributed ids: {', '.join(unattributed_ids)}."])

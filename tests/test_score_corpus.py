@@ -627,6 +627,53 @@ def test_planner_failure_miss_has_no_bucket_and_is_counted_separately(
     assert "unattributed" in md.lower()
 
 
+def test_unanswerable_instruction_miss_has_no_bucket_and_is_counted_separately(
+    tmp_path: Path,
+) -> None:
+    outputs = _write_outputs(
+        _outputs(
+            miss_ids=set(_CELL1) | set(_TRIP_EXTRA_MISSES),
+            miss_reasons={"r01": {}},
+            miss_extras={"r01": {"miss_kind": "unanswerable_instruction"}},
+        ),
+        tmp_path,
+    )
+    result = _run(outputs, tmp_path)
+    assert result.returncode == 0, result.stdout + result.stderr
+    report = _report(tmp_path)
+    by_id = {row["id"]: row for row in report["requests"]}
+    assert by_id["r01"]["reported_bucket"] is None
+    assert by_id["r01"]["reported_miss_kind"] == "unanswerable_instruction"
+    assert by_id["r01"]["rail_hit"] is False
+    assert report["unanswerable_instruction_ids"] == ["r01"]
+    assert report["unanswerable_instruction_misses"] == 1
+    assert report["planner_failure_misses"] == 0
+    assert report["unattributed_misses"] == 0
+    assert report["unattributed_ids"] == []
+    hist = report["escape_reason_histogram"]
+    assert hist["1"] == 13
+    assert sum(hist.values()) == 13
+    recon = report["reconciliation"]
+    assert recon["hits"] == 36
+    assert recon["buckets"] == 13
+    assert recon["planner_failure"] == 0
+    assert recon["unanswerable_instruction"] == 1
+    assert recon["unattributed"] == 0
+    assert recon["n"] == 50
+    total = (
+        recon["hits"]
+        + recon["buckets"]
+        + recon["planner_failure"]
+        + recon["unanswerable_instruction"]
+        + recon["unattributed"]
+    )
+    assert total == recon["n"]
+    assert recon["total"] == total
+    md = _markdown(tmp_path)
+    assert "unanswerable" in md.lower()
+    assert "unattributed" in md.lower()
+
+
 def test_unattributed_row_is_flagged_in_the_score(tmp_path: Path) -> None:
     module = _tool()
     prereg = _prereg()
