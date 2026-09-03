@@ -34,13 +34,22 @@ engine to the Python process by the back door, which ADR-0001 has just rejected 
 So **every rasterisation path now needs a JavaScript runtime we control.** The question is not
 "browser or no browser" but *which runtime*, and where it is allowed to live.
 
-The third constraint is fidelity, and it is the sharpest fact the research produced. ECharts is
-the default web target. Rasterising Vega-Lite as a stand-in produces a visibly different chart
-from the same input document: different palette, different series-to-colour assignment, y-axis
-to 2,500 versus 3,000, and rotated tick labels colliding with the axis title in one render and
-not the other. A Tier-1 overlap lint reaches **opposite verdicts** on the two images.
-`theme_spec` compounds it — ECharts silently ignores it, so a Vega-Lite stand-in inherits a
-theme the delivered chart never had.
+The third constraint is fidelity, and it is the sharpest fact the research produced. A request
+can be delivered on any of the five backends — ADR-0019 picks among them per request, it does
+not fix one. Rasterising a different backend than the one actually delivered produces a
+visibly different chart from the same input document: measured between ECharts and Vega-Lite
+specifically, a different palette, a different series-to-colour assignment, y-axis to 2,500
+versus 3,000, and rotated tick labels colliding with the axis title in one render and not the
+other. A Tier-1 overlap lint reaches **opposite verdicts** on the two images. `theme_spec`
+compounds it — ECharts silently ignores it, so a stand-in on that backend inherits a theme the
+delivered chart never had.
+
+**Erratum — 2026-09-03 ([#93](https://github.com/thearcscode/chartagent/issues/93),
+ADR-0021).** This paragraph originally opened *"ECharts is the default web target"* —
+rewritten above. No ADR ever decided that, and ADR-0021 confirms no backend is privileged
+that way; the measured mismatch is the same regardless of which backend a given request
+delivers on, which is the actual argument for **rasterise the delivered backend, always**
+(Decision 3) rather than a fixed stand-in.
 
 ## Decision
 
@@ -209,9 +218,12 @@ are the hosted app's to measure against its own deployment.
 **`vl-convert` as the default rasteriser.** Rejected. Its advantage was "no Node, no browser",
 which was true when we embedded an engine and is not true now: it cannot compile Flint, so it
 needs a JavaScript runtime in front of it regardless. It is Vega-Lite only, which under
-Decision 3 means the gate would never run for the default web target. It remains a perfectly
-legitimate *caller-supplied* implementation for a Vega-Lite-only deployment — the protocol
-exists so that choice stays available.
+Decision 3's *rasterise the delivered backend* rule means the gate would not run at all
+whenever a request delivers on ECharts, Chart.js, Plotly or Excel — four of the five backends
+a real request can land on, regardless of how often each one does (ADR-0021: it's Vega-Lite
+that leads the ranking, not ECharts). It remains a perfectly legitimate *caller-supplied*
+implementation for a Vega-Lite-only deployment — the protocol exists so that choice stays
+available.
 
 **Node plus per-backend SSR** (ECharts SSR → SVG → resvg, Vega-Lite → `vl-convert`). Rejected as
 the default. It is lighter and byte-stable, and it structurally cannot cover Chart.js or Plotly

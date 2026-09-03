@@ -209,10 +209,17 @@ calibrated house theme is an override, not a lint violation. State hues never en
 `theme_spec`, because they never enter a chart.
 
 Two caveats that belong on the record. `theme_spec` is realised for Vega-Lite and Plotly
-only; ECharts and Chart.js ignore it silently (ADR-0001), and ECharts is our default web
-target — so today the data palette reaches ECharts through our own defaults, not through
+only; ECharts and Chart.js ignore it silently (ADR-0001) — so whenever a request binds to
+one of those two, the data palette reaches it through our own defaults, not through
 `theme_spec`. And `theme_spec` appears in **no** upstream fixture, so nothing in the CI job
 covers it.
+
+**Erratum — 2026-09-03 ([#93](https://github.com/thearcscode/chartagent/issues/93),
+ADR-0021).** The first caveat originally read *"and ECharts is our default web
+target — so today the data palette reaches ECharts..."*, asserting ECharts as the product's
+automatic pick. No ADR ever decided that, and ADR-0021 confirms Studio carries no standing
+target — the caveat now reads conditionally, on whichever of the two backends a given
+request actually binds to.
 
 ## Consequences
 

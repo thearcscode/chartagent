@@ -27,6 +27,20 @@ from chartagent.frame._generated import (
 
 Backend = Literal["vegalite", "echarts", "chartjs", "plotly", "excel"]
 
+# ADR-0019 Decision 3 / ADR-0021 Decision 1: the default ranking among
+# backends that survive the declared-capability filter. Not applied when
+# a request names a backend (ADR-0021's requested_backend, checked first
+# and separately) — this tuple is the fallback order alone. The single
+# citable source; tools/score_corpus.py and the planner (#92) both import
+# it rather than hand-copying the order.
+BACKEND_RANKING: tuple[Backend, ...] = (
+    "vegalite",
+    "echarts",
+    "plotly",
+    "chartjs",
+    "excel",
+)
+
 SourceBucket = Literal[
     "number", "string", "boolean", "date", "timestamp", "timestamptz", "other"
 ]

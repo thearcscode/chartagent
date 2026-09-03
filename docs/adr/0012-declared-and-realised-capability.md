@@ -199,15 +199,27 @@ UI, not a runtime fallback.
 
 **Ranking among the backends that qualify is not decided here.** It depends on the
 instruction, the quality dial and Studio's target, none of which exist yet, and it belongs
-to the planner-output contract. ADR-0006's ECharts-as-default-web-target is Studio's choice,
-not this model's.
+to the planner-output contract.
+
+**Erratum — 2026-09-03 ([#93](https://github.com/thearcscode/chartagent/issues/93),
+ADR-0021).** This decision closed with *"ADR-0006's ECharts-as-default-web-target is
+Studio's choice, not this model's"* — struck. ADR-0006 never decided that (the citation was
+wrong), and ADR-0021 found **Studio has no standing target at all**: it is a plain caller of
+the same ranking a script gets. The ranking question this decision left open is answered by
+ADR-0019 (the fixed list) and ADR-0021 (`requested_backend`, the two-tier composition) —
+"Studio's target" was never one of the real inputs.
 
 ### 8. The theme gap is an advisory, not capability
 
 `theme_spec` is silently ignored by ECharts and Chart.js — byte-identical output with and
-without a theme across three presets — and ECharts is Studio's default web target. It stays
-what ADR-0005 already made it: the `theme_spec_ignored` advisory on `Envelope.warnings`,
-with Studio applying its palette after `assemble*` (ADR-0006 Decision 7).
+without a theme across three presets. It stays what ADR-0005 already made it: the
+`theme_spec_ignored` advisory on `Envelope.warnings`, with Studio applying its palette after
+`assemble*` (ADR-0006 Decision 7).
+
+**Erratum — 2026-09-03 ([#93](https://github.com/thearcscode/chartagent/issues/93),
+ADR-0021).** Dropped *"and ECharts is Studio's default web target"* from the opening
+sentence, for the same reason as Decision 7's erratum above — the advisory earns its place
+on the measurement alone, on whichever backend a request actually binds to.
 
 Capability asks *can this be drawn*; theming asks *how it looks*. The chart draws — it draws
 unthemed. Folding the two together would make a cosmetic gap raise the same error class as

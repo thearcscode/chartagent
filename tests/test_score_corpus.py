@@ -391,8 +391,15 @@ def test_report_renders_per_cell_counts_and_stratum_intervals(
     assert report["authoring_pin"]["flint_version"] == "0.5.1"
     assert report["authoring_pin"]["fixture_commit"] == "34ef451"
     assert report["scoring_pin"]["flint_version"] == "0.5.1"
-    assert report["backend_forced"]["neither_vegalite_nor_plotly"] == 9
-    assert report["backend_forced"]["exactly_one_backend"] == 8
+    partition = report["backend_default_partition"]
+    assert partition == {
+        "vegalite": 36,
+        "echarts": 8,
+        "plotly": 1,
+        "chartjs": 3,
+        "excel": 0,
+        "exactly_one_backend": 8,
+    }
     assert "Poisson-binomial" in md or "poisson-binomial" in md.lower()
 
 
