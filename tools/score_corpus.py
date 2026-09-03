@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from chartagent.errors import ChartAgentError, RawSqlRejectedError
-from chartagent.frame.input import InputFrame
+from chartagent.frame.input import BACKEND_RANKING, InputFrame
 from chartagent.transform.engine import open_connection
 from chartagent.transform.raw_sql import validate_raw_sql
 
@@ -49,7 +49,6 @@ POISSON_NOTE = (
     "1.44× smaller than the binomial at the same mean, so Wilson overstates "
     "sampling uncertainty and the gate is harder to clear than costed."
 )
-BACKENDS = ("vegalite", "echarts", "chartjs", "plotly", "excel")
 PLANNER_FAILURE_KIND = "planner_failure"
 UNANSWERABLE_KIND = "unanswerable_instruction"
 _MISS_KINDS = frozenset({PLANNER_FAILURE_KIND, UNANSWERABLE_KIND})
@@ -98,23 +97,33 @@ def union_chart_types(vocab: Mapping[str, Any]) -> frozenset[str]:
     return frozenset(names)
 
 
-def backend_forced(vocab: Mapping[str, Any]) -> dict[str, int]:
+def backend_default_partition(vocab: Mapping[str, Any]) -> dict[str, int]:
+    """Partition the union of chart types by filter+rank alone (ADR-0021).
+
+    For each chart type, the backend BACKEND_RANKING would pick if nothing
+    overrode it: the first ranked backend that declares the type. A pin
+    fact, computed from declared capability only — no request, no
+    instruction, no Studio target enters this; Studio carries no standing
+    target to enter with (ADR-0021 Decision 1). Supersedes backend_forced's
+    pre-ranking "neither vegalite nor plotly" proxy, which stopped meaning
+    anything once ADR-0019 fixed the actual order (rank 2 is echarts, not
+    plotly).
+    """
+    counts: dict[str, int] = {name: 0 for name in BACKEND_RANKING}
     backends = vocab.get("backends")
     if not isinstance(backends, Mapping):
-        return {"neither_vegalite_nor_plotly": 0, "exactly_one_backend": 0}
+        return {**counts, "exactly_one_backend": 0}
     union = union_chart_types(vocab)
-    neither = 0
     exactly_one = 0
     for chart in union:
-        present = [name for name in BACKENDS if chart in (backends.get(name) or {})]
-        if "vegalite" not in present and "plotly" not in present:
-            neither += 1
+        present = [
+            name for name in BACKEND_RANKING if chart in (backends.get(name) or {})
+        ]
         if len(present) == 1:
             exactly_one += 1
-    return {
-        "neither_vegalite_nor_plotly": neither,
-        "exactly_one_backend": exactly_one,
-    }
+        if present:
+            counts[present[0]] += 1
+    return {**counts, "exactly_one_backend": exactly_one}
 
 
 def read_escape_reason(record: Mapping[str, Any]) -> dict[str, Any] | None:
@@ -488,7 +497,7 @@ def score(
             "fixture_commit": prereg.get("fixture_commit"),
         },
         "scoring_pin": scoring_pin,
-        "backend_forced": backend_forced(vocab),
+        "backend_default_partition": backend_default_partition(vocab),
         "rail_share": {
             "k": rail_k,
             "n": n,
@@ -539,7 +548,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     hist = report["escape_reason_histogram"]
     authoring = report["authoring_pin"]
     scoring = report["scoring_pin"]
-    forced = report["backend_forced"]
+    forced = report["backend_default_partition"]
     lines = [
         f"# Rail-share score — {report['scored_at']}",
         "",
@@ -573,9 +582,19 @@ def render_markdown(report: Mapping[str, Any]) -> str:
         f"[{strata['adversarial']['wilson_95']['lower']:.3f}, "
         f"{strata['adversarial']['wilson_95']['upper']:.3f}].",
         "",
-        "Backend-forced counts (pin fact, beside the share, never inside it): "
-        f"{forced['neither_vegalite_nor_plotly']} of the union on neither "
-        "Vega-Lite nor Plotly; "
+        "Backend ranking applied: vegalite > echarts > plotly > chartjs > "
+        "excel, unless the request named a backend (ADR-0021). Of cell 3's "
+        "six stress slots, four are silenced by this ranking and never "
+        "fire: Excel's empty-after-filter refusal, the pyramid two-groups "
+        "rule, candlestick ordering, and the non-painting ECharts boxplot "
+        "(Boxplot routes to Vega-Lite). The two discrete-channel row-drop "
+        "slots remain — the ranking-proof floor.",
+        "",
+        "Backend default partition — filter+rank only, no override applied "
+        "(pin fact, beside the share, never inside it): "
+        f"vegalite {forced['vegalite']}, echarts {forced['echarts']}, "
+        f"plotly {forced['plotly']}, chartjs {forced['chartjs']}, "
+        f"excel {forced['excel']} of the union; "
         f"{forced['exactly_one_backend']} on exactly one backend.",
         "",
         "## Per-cell rail counts (k of n; no rates, no intervals)",

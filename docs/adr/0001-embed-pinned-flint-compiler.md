@@ -116,16 +116,25 @@ Concretely:
 
    `input` is the ADR-0002 frame. For a live render it includes `data` after our
    transform has run. For persistence it omits `data`; rows come back from
-   `x_chartagent.transform`. `backend` is the planner's recommendation (ECharts is the
-   default web target). The caller may ignore it and pass the same `input` to a
-   different assembler. `x_chartagent` rides on `input`; Flint reads named fields only
-   and does not throw on an unknown sibling (ADR-0002, 705/705, zero throws). CI keeps
-   the delete-`x_chartagent` invariant (ADR-0004, every commit) so a future Flint cannot
-   start rejecting the key on a version bump.
+   `x_chartagent.transform`. `backend` is the planner's recommendation. The caller may
+   ignore it and pass the same `input` to a different assembler. `x_chartagent` rides on
+   `input`; Flint reads named fields only and does not throw on an unknown sibling
+   (ADR-0002, 705/705, zero throws). CI keeps the delete-`x_chartagent` invariant
+   (ADR-0004, every commit) so a future Flint cannot start rejecting the key on a
+   version bump.
 
    The browser (or notebook, or bundler) loads Flint at `flint_version` and calls
    `assembleECharts` / `assembleVegaLite` / … then hands the result to that backend's
    renderer.
+
+   **Erratum — 2026-09-03 ([#93](https://github.com/thearcscode/chartagent/issues/93),
+   ADR-0021).** The parenthetical above read *"(ECharts is the default web target)"* —
+   dropped; it was never a decision anywhere in this document. `backend` is still the
+   planner's recommendation; what it recommends is ADR-0019's fixed ranking
+   (`vegalite` leads, not ECharts) filtered through ADR-0021's `requested_backend`, and
+   Studio carries no standing override of its own. Compile-in-the-client, the envelope
+   shape, and the caller's freedom to pass `input` to a different assembler are
+   unchanged.
 
 6. **Framework-agnostic.** Flint's assemblers are ordinary JavaScript functions. They
    take a plain object and return a plain option or spec object. They do not import
@@ -225,8 +234,14 @@ the churn lives entirely in the code we would never intend to change.
 
 **`theme_spec` is silently ignored by the ECharts and Chart.js backends.** Not an error,
 not a warning — byte-identical output with and without a theme, verified across three
-presets. Themes are realised for Vega-Lite and Plotly only. Recorded here because
-ECharts is our default web target.
+presets. Themes are realised for Vega-Lite and Plotly only.
+
+**Erratum — 2026-09-03 ([#93](https://github.com/thearcscode/chartagent/issues/93),
+ADR-0021).** This paragraph originally closed with *"Recorded here because ECharts is
+our default web target"* — dropped, for the reason above: no ADR ever decided that, and
+Studio carries no standing target (ADR-0021). The measurement stands on its own —
+ECharts and Chart.js silently ignoring `theme_spec` is worth recording regardless of
+which backend a request lands on.
 
 ## Alternatives rejected
 

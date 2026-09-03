@@ -484,10 +484,17 @@ Frozen `Advisory` objects with a stable `code` and a `message`, in a tuple. Not
 | `raw_sql_used` | the escape hatch is in play |
 | `empty_result` | the transform returned zero rows |
 
-`theme_spec_ignored` earns its place: ECharts and Chart.js ignore `theme_spec` with no
-error and no warning (ADR-0001, measured across three presets), and ECharts is the default
-web target. This converts the project's most-cited silent failure into a visible one.
+`theme_spec_ignored` earns its place: two of the five backends, ECharts and Chart.js, ignore
+`theme_spec` with no error and no warning (ADR-0001, measured across three presets). This
+converts the project's most-cited silent failure into a visible one, on whichever of the two
+a request actually binds to.
 `dates_normalised` exists because we rewrote the caller's strings and they should know.
+
+**Erratum — 2026-09-03 ([#93](https://github.com/thearcscode/chartagent/issues/93),
+ADR-0021).** This paragraph originally added *"and ECharts is the default web target"* as a
+second reason. Dropped — no ADR ever decided that, and ADR-0021 confirms Studio carries no
+standing target. The advisory earns its place on the measurement alone: two backends discard
+the field silently, regardless of which one a given request lands on.
 
 **Erratum — 2026-08-26 ([#4](https://github.com/thearcscode/chartagent/issues/4),
 ADR-0008).** Five codes become **six**. `non_finite_nulled` carries the count of non-finite
@@ -625,9 +632,15 @@ where compile happens. An alias is the same mistake with a deprecation notice at
 what it renders to — but it makes "one stored spec, five backends" a mutation rather than
 an argument, and that claim is one of the product's better ones.
 
-**Default `backend="echarts"`.** Rejected for P0. ECharts is the default *web* target and
-will likely be the planner's default pick, but 38 of 705 fixtures are unsupported by it,
+**Default `backend="echarts"`.** Rejected for P0. 38 of 705 fixtures are unsupported by it,
 and a default turns an explicit capability question into a surprise `BackendCapabilityError`.
+
+**Erratum — 2026-09-03 ([#93](https://github.com/thearcscode/chartagent/issues/93),
+ADR-0021).** This entry originally opened *"ECharts is the default web target and will
+likely be the planner's default pick, but..."* — struck. Neither clause held: no ADR ever
+decided ECharts was the default *web* target, and ADR-0019 went on to make Vega-Lite the
+planner's actual default pick, not ECharts. The rejection stands on the fixture count and
+the surprise-error argument alone, which never depended on either clause.
 
 **Let the app read `_bundle/` directly, or fetch Flint from a CDN.** Rejected. The first
 makes a private path load-bearing for the one consumer we control; the second cannot
