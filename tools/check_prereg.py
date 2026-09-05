@@ -24,7 +24,7 @@ import duckdb
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from chartagent.errors import ChartAgentError, RawSqlRejectedError
-from chartagent.frame.input import InputFrame
+from chartagent.frame.input import DEFAULT_BASE_SIZE, BaseSize, InputFrame
 from chartagent.transform.engine import open_connection
 from chartagent.transform.raw_sql import validate_raw_sql
 
@@ -72,6 +72,11 @@ FORBIDDEN_CELL1_TYPES = (
     "upset",
 )
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+# Cell-3 discrete_overflow (ADR-0014 D11) pins a smaller canvas so the
+# layout optimiser drops rows. Frozen here, not on DEFAULT_BASE_SIZE —
+# the planner never emits this size.
+OVERFLOW_BASE_SIZE = BaseSize(width=180, height=90)
 
 INTENT_MAP: dict[str, tuple[str, ...]] = {
     "trend over time": (
@@ -527,6 +532,8 @@ def _check_frame(item: Request) -> list[str]:
     spec = frame.get("chart_spec")
     if not isinstance(spec, Mapping) or spec.get("baseSize") is None:
         issues.append(f"BASE_SIZE          {item.id}: chart_spec.baseSize is required")
+    else:
+        issues.extend(_check_base_size(item, spec["baseSize"]))
     xc = frame.get("x_chartagent")
     if not isinstance(xc, Mapping) or "transform" not in xc:
         issues.append(
@@ -537,6 +544,28 @@ def _check_frame(item: Request) -> list[str]:
     except ChartAgentError as exc:
         issues.append(f"FACADE             {item.id}: {exc}")
     return issues
+
+
+def _check_base_size(item: Request, raw: object) -> list[str]:
+    try:
+        got = BaseSize.model_validate(raw)
+    except (ValidationError, TypeError, ValueError):
+        return [f"BASE_SIZE          {item.id}: chart_spec.baseSize is malformed"]
+    want = (
+        OVERFLOW_BASE_SIZE
+        if item.cell_family == "discrete_overflow"
+        else DEFAULT_BASE_SIZE
+    )
+    name = (
+        "OVERFLOW_BASE_SIZE"
+        if item.cell_family == "discrete_overflow"
+        else "DEFAULT_BASE_SIZE"
+    )
+    if got != want:
+        return [
+            f"BASE_SIZE          {item.id}: chart_spec.baseSize does not match {name}"
+        ]
+    return []
 
 
 def _check_cell2_sql(item: Request, connection: duckdb.DuckDBPyConnection) -> list[str]:

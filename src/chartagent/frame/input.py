@@ -74,6 +74,12 @@ class BaseSize(BaseModel):
     height: float
 
 
+# ADR-0002 Decision 6: a spec that does not pin its size is not a spec that
+# refreshes reproducibly. The planner fills every planned frame from this
+# constant (issue #107). Importable by path; not in chartagent.__all__.
+DEFAULT_BASE_SIZE = BaseSize(width=640, height=400)
+
+
 class ChartSpec(BaseModel):
     model_config = ConfigDict(extra="allow", populate_by_name=True)
     chart_type: ChartType = Field(alias="chartType")

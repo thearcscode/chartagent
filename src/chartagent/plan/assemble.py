@@ -1,10 +1,10 @@
 """Assemble a backend-free input frame from a fragment (ADR-0019 D2/D6).
 
-Code fills ``source_schema``, ``spec_version``, and empty ``annotations`` /
-``interactions``. The model’s fragment carries chart type, encodings,
-transform, and ``semantic_types``. This is also the data-free step-1
-check: the façade, ``check_transform_shape``, and ``raw_sql``’s two locks.
-Unknown columns are ``bind``’s — they need rows.
+Code fills ``source_schema``, ``spec_version``, ``chart_spec.baseSize``, and
+empty ``annotations`` / ``interactions``. The model’s fragment carries chart
+type, encodings, transform, and ``semantic_types``. This is also the
+data-free step-1 check: the façade, ``check_transform_shape``, and
+``raw_sql``’s two locks. Unknown columns are ``bind``’s — they need rows.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from chartagent.frame.input import InputFrame, SourceBucket
+from chartagent.frame.input import DEFAULT_BASE_SIZE, InputFrame, SourceBucket
 from chartagent.plan.schema import Fragment
 from chartagent.profile.models import Profile
 from chartagent.transform.drift import referenced_source_columns
@@ -46,6 +46,7 @@ def assemble(
                     for name, encoding in fragment.encodings.items()
                 },
                 "chartProperties": dict(chart_properties or {}),
+                "baseSize": DEFAULT_BASE_SIZE.model_dump(mode="json"),
             },
             "x_chartagent": {
                 "spec_version": _SPEC_VERSION,
