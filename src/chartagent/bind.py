@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import time
 from os import PathLike
 from typing import Any, Protocol, TypeAlias, get_args
@@ -17,8 +16,13 @@ from chartagent.errors import (
     SpecShapeError,
     SpecVocabularyError,
 )
-from chartagent.frame import _generated
-from chartagent.frame._generated import FLINT_VERSION, GeneratedProperties
+from chartagent.frame._generated import FLINT_VERSION
+from chartagent.frame.capability import (
+    check_backend_chart_type,
+    check_excel_facet,
+    declared_backends,  # noqa: F401 — imported so bind defines none of the four
+    properties_model,
+)
 from chartagent.frame.input import Backend, InputFrame, _omit_nulls
 from chartagent.frame.vocabulary import vocabulary
 from chartagent.transform.drift import (
@@ -63,8 +67,8 @@ def bind(
     frame = _validate_frame(spec, backend=backend)
     if backend not in _BACKENDS:
         raise SpecShapeError(f"backend {backend!r} is not a Flint backend")
-    _check_backend_chart_type(frame, backend)
-    _check_excel_facet(frame, backend)
+    check_backend_chart_type(frame, backend)
+    check_excel_facet(frame, backend)
     _check_chart_properties(frame, backend)
 
     transform = None if frame.x_chartagent is None else frame.x_chartagent.transform
@@ -242,57 +246,9 @@ def _validate_frame(
         raise
 
 
-def _ident(name: str) -> str:
-    return re.sub(r"\W", "_", name)
-
-
-def _properties_model(backend: str, chart_type: str) -> type[GeneratedProperties]:
-    name = f"{_ident(backend).title()}{_ident(chart_type)}Properties"
-    model = getattr(_generated, name, None)
-    if not (isinstance(model, type) and issubclass(model, GeneratedProperties)):
-        raise SpecShapeError(f"no property model for {(backend, chart_type)}")
-    return model
-
-
-def _check_backend_chart_type(frame: InputFrame, backend: Backend) -> None:
-    chart_type = frame.chart_spec.chart_type
-    if chart_type in vocabulary(backend):
-        return
-    raise BackendCapabilityError(
-        f"{backend} does not declare chart type {chart_type!r}",
-        kind="chart_type",
-        keys=(chart_type,),
-        chart_type=chart_type,
-        backend=backend,
-        pin=FLINT_VERSION,
-    )
-
-
-_FACET_CHANNELS = ("column", "row")
-
-
-def _check_excel_facet(frame: InputFrame, backend: Backend) -> None:
-    if backend != "excel":
-        return
-    facets = tuple(
-        name for name in _FACET_CHANNELS if name in frame.chart_spec.encodings
-    )
-    if not facets:
-        return
-    chart_type = frame.chart_spec.chart_type
-    raise BackendCapabilityError(
-        f"excel does not support faceting via {facets}",
-        kind="facet",
-        keys=facets,
-        chart_type=chart_type,
-        backend=backend,
-        pin=FLINT_VERSION,
-    )
-
-
 def _check_chart_properties(frame: InputFrame, backend: Backend) -> None:
     chart_type = frame.chart_spec.chart_type
-    model = _properties_model(backend, chart_type)
+    model = properties_model(backend, chart_type)
     try:
         model.model_validate(frame.chart_spec.chart_properties)
     except ValidationError as exc:
