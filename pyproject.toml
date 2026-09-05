@@ -30,11 +30,20 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/thearcscode/chartagent"
 
+[project.optional-dependencies]
+anthropic = [
+    "pydantic-ai-slim[anthropic]>=2.40.0",
+]
+openai = [
+    "pydantic-ai-slim[openai]>=2.40.0",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=8",
     "ruff>=0.8",
     "mypy>=1.13",
+    "pydantic-ai-slim>=2.40.0",
 ]
 
 [tool.hatch.build.targets.sdist]

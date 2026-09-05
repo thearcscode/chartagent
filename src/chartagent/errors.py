@@ -194,3 +194,15 @@ class PlannerFailureError(ChartAgentError):
     ) -> None:
         super().__init__(message)
         self.reason = reason
+
+
+class ModelClientUnavailableError(ChartAgentError):
+    """The model-vendor extra is not installed.
+
+    ``extra`` is the pip extra to install — ``chartagent[<provider>]``
+    when we ship one, otherwise ``pydantic-ai-slim[<provider>]``.
+    """
+
+    def __init__(self, message: str, *, extra: str) -> None:
+        super().__init__(message)
+        self.extra = extra

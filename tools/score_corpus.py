@@ -28,6 +28,7 @@ from typing import Any
 
 from chartagent.errors import ChartAgentError, RawSqlRejectedError
 from chartagent.frame.input import BACKEND_RANKING, InputFrame
+from chartagent.plan.client import PRODUCT_DECODING
 from chartagent.transform.engine import open_connection
 from chartagent.transform.raw_sql import validate_raw_sql
 
@@ -37,7 +38,6 @@ PREREG_IN_TAG = "corpus/pre-registration.json"
 CORPUS_PREREG_V1_SHA256 = (
     "e4372c8d9309440f0ba1d6d58db841cfda7ffd0b2003120d11f3b7b2aae84c79"
 )
-PRODUCT_DECODING: dict[str, float] = {"temperature": 0}
 GATE_THRESHOLD = 0.60
 WILSON_Z = 1.96
 BUCKET2_SENTENCE = (
