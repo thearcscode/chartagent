@@ -19,9 +19,17 @@ from chartagent.transform.engine import collect, pass_through
 from chartagent.transform.expr import compile_expr
 from chartagent.transform.raw_sql import run_raw_sql
 
-_SLOTS = frozenset(
-    {"filter", "derive", "bin", "group_by", "aggregate", "having", "sort", "limit"}
+TRANSFORM_SLOTS: tuple[str, ...] = (
+    "filter",
+    "derive",
+    "bin",
+    "group_by",
+    "aggregate",
+    "having",
+    "sort",
+    "limit",
 )
+_SLOTS = frozenset(TRANSFORM_SLOTS)
 
 
 def check_transform_shape(transform: Mapping[str, object] | None) -> None:

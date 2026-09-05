@@ -23,6 +23,25 @@ _COMPARISONS = frozenset({"eq", "ne", "lt", "lte", "gt", "gte"})
 _ARITHMETIC = frozenset({"add", "sub", "mul", "div"})
 _STRING_TESTS = frozenset({"contains", "starts_with", "ends_with"})
 _NARY = frozenset({"and", "or", "concat", "coalesce"})
+EXPR_KINDS: frozenset[str] = (
+    frozenset(
+        {
+            "col",
+            "lit",
+            "between",
+            "in",
+            "is_null",
+            "is_not_null",
+            "not",
+            "neg",
+            "case",
+        }
+    )
+    | _COMPARISONS
+    | _ARITHMETIC
+    | _STRING_TESTS
+    | _NARY
+)
 
 
 def compile_expr(
