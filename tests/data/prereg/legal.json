@@ -810,8 +810,8 @@
             "y": "revenue"
           },
           "baseSize": {
-            "width": 640,
-            "height": 400
+            "width": 180,
+            "height": 90
           }
         },
         "x_chartagent": {
@@ -841,8 +841,8 @@
             "y": "revenue"
           },
           "baseSize": {
-            "width": 640,
-            "height": 400
+            "width": 180,
+            "height": 90
           }
         },
         "x_chartagent": {

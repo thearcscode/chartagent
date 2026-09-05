@@ -14,7 +14,7 @@ from chartagent.errors import (
     SpecShapeError,
     SpecVocabularyError,
 )
-from chartagent.frame.input import XChartagent
+from chartagent.frame.input import DEFAULT_BASE_SIZE, XChartagent
 from chartagent.plan.assemble import assemble
 from chartagent.plan.schema import Fragment
 from chartagent.profile.models import Column, NumberColumn, Profile, StringColumn
@@ -112,7 +112,7 @@ def test_chart_properties_pass_through_when_supplied() -> None:
         chart_properties={"innerRadius": 40},
     )
     assert frame.chart_spec.chart_properties == {"innerRadius": 40}
-    assert frame.chart_spec.base_size is None
+    assert frame.chart_spec.base_size == DEFAULT_BASE_SIZE
 
 
 def test_source_schema_covers_exactly_the_transform_source_columns() -> None:
@@ -355,8 +355,13 @@ def test_assemble_is_not_on_the_public_surface() -> None:
     assert not hasattr(chartagent, "assemble")
 
 
-def test_base_size_is_not_filled_here() -> None:
+def test_default_base_size_is_not_on_the_public_surface() -> None:
+    assert "DEFAULT_BASE_SIZE" not in chartagent.__all__
+    assert not hasattr(chartagent, "DEFAULT_BASE_SIZE")
+
+
+def test_assembled_frame_pins_default_base_size() -> None:
     frame = assemble(_fragment(transform=_THREE), _PROFILE)
-    assert frame.chart_spec.base_size is None
+    assert frame.chart_spec.base_size == DEFAULT_BASE_SIZE
     dumped = _dump(frame)
-    assert "baseSize" not in dumped["chart_spec"]
+    assert dumped["chart_spec"]["baseSize"] == DEFAULT_BASE_SIZE.model_dump(mode="json")

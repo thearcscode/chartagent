@@ -12,6 +12,7 @@ from typing import Any, cast
 import pytest
 
 import chartagent
+from chartagent.frame.input import DEFAULT_BASE_SIZE, BaseSize
 
 _REPO = Path(__file__).resolve().parents[1]
 _CHECK = _REPO / "tools" / "check_prereg.py"
@@ -69,17 +70,25 @@ _ADV_CELL4_FAMILIES = ("i", "i", "i", "ii", "iii", "iv")
 _NAMED_FORMS = ("word cloud", "Marimekko", "waffle")
 
 
+def _dump_size(size: BaseSize) -> dict[str, int]:
+    return {"width": int(size.width), "height": int(size.height)}
+
+
 def _sha(label: str) -> str:
     return hashlib.sha256(label.encode()).hexdigest()
 
 
-def _frame(*, raw_sql: str | None = None) -> dict[str, Any]:
+def _frame(
+    *, raw_sql: str | None = None, base_size: dict[str, Any] | None = None
+) -> dict[str, Any]:
     transform: dict[str, Any] = {"raw_sql": raw_sql} if raw_sql is not None else {}
     return {
         "chart_spec": {
             "chartType": "Bar Chart",
             "encodings": {"x": "quarter", "y": "revenue"},
-            "baseSize": {"width": 640, "height": 400},
+            "baseSize": (
+                base_size if base_size is not None else _dump_size(DEFAULT_BASE_SIZE)
+            ),
         },
         "x_chartagent": {"transform": transform},
     }
@@ -112,7 +121,12 @@ def _request(
             original = f"show {named_form} of category share for {rid}"
             rewritten = f"Show a {named_form} of category share for {rid}."
         raw_sql = "SELECT quarter, revenue FROM source" if cell == 2 else None
-        frame = _frame(raw_sql=raw_sql)
+        overflow = (
+            _dump_size(_tool().OVERFLOW_BASE_SIZE)
+            if cell_family == "discrete_overflow"
+            else None
+        )
+        frame = _frame(raw_sql=raw_sql, base_size=overflow)
         expressible = None
         outcome, bucket = "hit", None
     row: dict[str, Any] = {
@@ -374,6 +388,33 @@ def test_non_null_frame_must_carry_basesize(tmp_path: Path) -> None:
     target = next(item for item in doc["requests"] if item["cell"] == 0)
     frame = cast(dict[str, Any], target["reference_frame"])
     del frame["chart_spec"]["baseSize"]
+    result = _run(doc, tmp_path)
+    assert result.returncode == 1
+    assert "BASE_SIZE" in result.stdout
+
+
+def test_non_null_frame_basesize_must_match_default(tmp_path: Path) -> None:
+    doc = _legal()
+    target = next(item for item in doc["requests"] if item["cell"] == 0)
+    frame = cast(dict[str, Any], target["reference_frame"])
+    frame["chart_spec"]["baseSize"] = {
+        "width": DEFAULT_BASE_SIZE.width + 1,
+        "height": DEFAULT_BASE_SIZE.height,
+    }
+    result = _run(doc, tmp_path)
+    assert result.returncode == 1
+    assert "BASE_SIZE" in result.stdout
+
+
+def test_discrete_overflow_frame_must_pin_overflow_base_size(tmp_path: Path) -> None:
+    doc = _legal()
+    target = next(
+        item
+        for item in doc["requests"]
+        if item.get("cell_family") == "discrete_overflow"
+    )
+    frame = cast(dict[str, Any], target["reference_frame"])
+    frame["chart_spec"]["baseSize"] = _dump_size(DEFAULT_BASE_SIZE)
     result = _run(doc, tmp_path)
     assert result.returncode == 1
     assert "BASE_SIZE" in result.stdout
