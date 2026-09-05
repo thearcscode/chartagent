@@ -8,6 +8,7 @@ import chartagent
 from chartagent.errors import (
     ChartAgentError,
     InexpressibleRequestError,
+    ModelClientUnavailableError,
     PlannerFailureError,
     UnanswerableInstructionError,
 )
@@ -67,3 +68,13 @@ def test_none_of_the_three_are_exported_at_the_top_level() -> None:
     ):
         assert name not in chartagent.__all__
         assert not hasattr(chartagent, name)
+
+
+def test_model_client_unavailable_error_carries_the_extra() -> None:
+    err = ModelClientUnavailableError(
+        "install chartagent[anthropic]", extra="chartagent[anthropic]"
+    )
+    assert isinstance(err, ChartAgentError)
+    assert err.extra == "chartagent[anthropic]"
+    assert "ModelClientUnavailableError" not in chartagent.__all__
+    assert not hasattr(chartagent, "ModelClientUnavailableError")

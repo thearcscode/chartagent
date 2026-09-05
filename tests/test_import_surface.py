@@ -10,6 +10,9 @@ _FORBIDDEN = (
     "quickjs",
     "py_mini_racer",
     "mini_racer",
+    "pydantic_ai",
+    "anthropic",
+    "openai",
 )
 
 
