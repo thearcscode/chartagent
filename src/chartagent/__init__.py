@@ -15,6 +15,7 @@ from chartagent.frame import (
 )
 from chartagent.frame._generated import *  # noqa: F403
 from chartagent.frame._generated import __all__ as _GENERATED_ALL
+from chartagent.plan.agent import ChartAgent, create_chart_agent
 from chartagent.result import ChartResult
 
 _GENERATED_MODELS = tuple(
@@ -31,6 +32,8 @@ __all__ = [
     "bind",
     "Envelope",
     "ChartResult",
+    "create_chart_agent",
+    "ChartAgent",
     "DataSource",
     "Advisory",
     "flint_bundle",
