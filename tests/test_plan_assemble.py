@@ -126,9 +126,7 @@ def test_source_schema_covers_exactly_the_transform_source_columns() -> None:
 
 
 def test_raw_sql_star_yields_empty_source_schema() -> None:
-    frame = assemble(
-        _fragment(transform={"raw_sql": "SELECT * FROM source"}), _PROFILE
-    )
+    frame = assemble(_fragment(transform={"raw_sql": "SELECT * FROM source"}), _PROFILE)
     assert frame.x_chartagent is not None
     assert frame.x_chartagent.source_schema == {}
 
