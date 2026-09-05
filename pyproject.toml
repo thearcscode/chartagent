@@ -57,6 +57,8 @@ include = [
 [tool.hatch.build.targets.wheel.force-include]
 "src/chartagent/_bundle/flint.iife.js" = "chartagent/_bundle/flint.iife.js"
 "src/chartagent/frame/vocab.json" = "chartagent/frame/vocab.json"
+"src/chartagent/plan/prompts/step1.system.md" = "chartagent/plan/prompts/step1.system.md"
+"src/chartagent/plan/prompts/step2.system.md" = "chartagent/plan/prompts/step2.system.md"
 "src/chartagent/py.typed" = "chartagent/py.typed"
 
 [tool.ruff]
