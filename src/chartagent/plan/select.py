@@ -49,7 +49,5 @@ def select_backend(
             pin=FLINT_VERSION,
         )
     return next(
-        name
-        for name in BACKEND_RANKING
-        if name != "excel" and name in survivors
+        name for name in BACKEND_RANKING if name != "excel" and name in survivors
     )
