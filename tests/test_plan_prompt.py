@@ -395,6 +395,13 @@ def test_step1_system_requires_outcome_and_menu_aggregate_shape() -> None:
     assert "encodings never carry aggregate" in system
 
 
+def test_step1_system_names_vega_field_types_for_encoding_type() -> None:
+    system = render_step1(_PROFILE, _INSTRUCTION, nonce=_NONCE).system
+    for name in ("nominal", "quantitative", "temporal", "ordinal"):
+        assert name in system
+    assert "source_schema only" in system
+
+
 def test_prompt_renderer_is_not_on_the_public_surface() -> None:
     for name in (
         "render_step1",

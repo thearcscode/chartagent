@@ -15,7 +15,7 @@ Closed vocabulary (generated, exhaustive for this library version):
 - transform slots: $TRANSFORM_SLOTS
 - Expr node kinds: $EXPR_KINDS
 
-A fragment names one chart type from that list, encodings that use only those channels, a transform that uses only those slots and Expr kinds (or raw_sql alone), semantic_types drawn from that list, and requested_backend only when the instruction names a backend. Do not copy semantic_types from the profile. Do not author source_schema. transform.aggregate items are {name, op, field?} — name is the output column. encodings never carry aggregate.
+A fragment names one chart type from that list, encodings that use only those channels, a transform that uses only those slots and Expr kinds (or raw_sql alone), semantic_types drawn from that list, and requested_backend only when the instruction names a backend. Do not copy semantic_types from the profile. Do not author source_schema. transform.aggregate items are {name, op, field?} — name is the output column. encodings never carry aggregate. encoding type, when present, is a Vega field type (nominal, quantitative, temporal, ordinal), never a source bucket and never a semantic-type name. Prefer omitting type. Source buckets belong on source_schema only.
 
 Emit inexpressible with bucket 1 only when no chart type in the list can express the request.
 Emit inexpressible with bucket 2 only when the transform menu cannot express the needed transform.
