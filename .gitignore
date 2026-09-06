@@ -1,6 +1,9 @@
 # Session working files — regenerated per session, deliberately not tracked
 HANDOFF.md
 
+# here.now local claim tokens — never commit
+.herenow/
+
 # Fixture corpus and bump-gate scratch — fetched at job time, never vendored
 /build/
 
