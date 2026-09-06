@@ -258,6 +258,43 @@ def test_encoding_outside_the_global_channels_is_a_schema_failure() -> None:
     assert "not_a_channel" in caught.value.keys
 
 
+@pytest.mark.parametrize(
+    "bucket",
+    ("number", "string", "boolean", "date", "timestamp", "timestamptz", "other"),
+)
+def test_source_bucket_encoding_type_is_a_schema_failure(bucket: str) -> None:
+    fragment = _fragment(
+        encodings={
+            "x": {"field": "quarter", "type": bucket},
+            "y": {"field": "revenue"},
+        }
+    )
+    with pytest.raises(SpecShapeError, match="source bucket"):
+        assemble(fragment, _PROFILE)
+
+
+def test_omitted_encoding_type_still_assembles_and_binds() -> None:
+    frame = assemble(_fragment(), _PROFILE)
+    assert frame.chart_spec.encodings["x"].type is None
+    assert frame.chart_spec.encodings["y"].type is None
+    envelope = bind(frame, _ROWS, backend="vegalite")
+    assert envelope.row_count == 2
+
+
+def test_vega_encoding_types_still_assemble_and_bind() -> None:
+    fragment = _fragment(
+        encodings={
+            "x": {"field": "quarter", "type": "nominal"},
+            "y": {"field": "revenue", "type": "quantitative"},
+        }
+    )
+    frame = assemble(fragment, _PROFILE)
+    assert frame.chart_spec.encodings["x"].type == "nominal"
+    assert frame.chart_spec.encodings["y"].type == "quantitative"
+    envelope = bind(frame, _ROWS, backend="vegalite")
+    assert envelope.row_count == 2
+
+
 def test_chart_type_outside_the_48_is_a_schema_failure() -> None:
     fragment = Fragment.model_construct(
         outcome="fragment",

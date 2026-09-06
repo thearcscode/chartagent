@@ -28,6 +28,7 @@ from chartagent.result import ChartResult as ResultFromStablePath
 
 _FIXTURES = Path(__file__).with_name("data")
 _SALES = _FIXTURES / "sales.csv"
+_SALES_BY_REGION = _FIXTURES / "sales_by_region.csv"
 _FORBIDDEN_KWARGS = (
     "sandbox",
     "outputs",
@@ -240,6 +241,25 @@ _MEASURED_LIVE_STEP1: dict[str, Any] = {
     "requested_backend": None,
 }
 
+# Measured live step-1 fragment (issue #119): well-formed transform, source-bucket
+# encoding types. Bind would succeed; Vega-Lite would not draw.
+_MEASURED_SOURCE_BUCKET_TYPES: dict[str, Any] = {
+    "outcome": "fragment",
+    "chart_type": "Bar Chart",
+    "encodings": {
+        "x": {"field": "region", "type": "string"},
+        "y": {"field": "total_revenue", "type": "number"},
+    },
+    "transform": {
+        "group_by": ["region"],
+        "aggregate": [
+            {"name": "total_revenue", "op": "sum", "field": "revenue"},
+        ],
+    },
+    "semantic_types": {"region": "Region", "total_revenue": "Amount"},
+    "requested_backend": None,
+}
+
 
 def test_nameless_aggregate_is_not_a_bind_time_spec_shape_error() -> None:
     bad = {
@@ -270,6 +290,39 @@ def test_measured_live_payload_is_invalid_emit_not_a_bind_error() -> None:
     assert caught.value.reason == "invalid_emit"
     assert calls["model"] == 2
     assert calls["step2"] == 0
+
+
+def test_source_bucket_encoding_types_are_invalid_emit() -> None:
+    agent = _agent()
+    calls = _install(
+        agent,
+        ("Fragment", _MEASURED_SOURCE_BUCKET_TYPES),
+        ("Fragment", _MEASURED_SOURCE_BUCKET_TYPES),
+    )
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES_BY_REGION, "Bar chart of revenue by region")
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
+def test_vega_encoding_types_still_return_a_chart_result() -> None:
+    fragment = {
+        **_FRAGMENT,
+        "encodings": {
+            "x": {"field": "quarter", "type": "nominal"},
+            "y": {"field": "total", "type": "quantitative"},
+        },
+    }
+    agent = _agent()
+    calls = _install(agent, ("Fragment", fragment), ("step2", {}))
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert isinstance(result, ChartResult)
+    encodings = result.envelope.input["chart_spec"]["encodings"]
+    assert encodings["x"]["type"] == "nominal"
+    assert encodings["y"]["type"] == "quantitative"
+    assert calls["model"] == 2
+    assert calls["step2"] == 1
 
 
 def test_unknown_transform_slot_is_not_a_bind_time_spec_shape_error() -> None:
