@@ -58,6 +58,10 @@ _Avoid_: render (retired — the library does not render), `chartagent.render`, 
 Studio's, not the library's. The last *successful* transform output for a saved chart, written to object storage as `{ revision_id, rows }` JSON by a user-initiated bind, and pointed at by one `bind_caches` row. A Library load fetches it instead of binding — the deterministic rail compiles it in the client, the custom rail renders it in the iframe — and a stale or missing pointer shows *Refresh to bind*. **Rail-independent**: nothing on the custom rail calls `assemble*`, so ADR-0016 D15's *Studio's P2 hole* is closed (ADR-0018). Rows only — never the envelope, the backend, or an advisory, because `theme_spec_ignored` is backend-dependent (ADR-0007).
 _Avoid_: thumbnail, stored render, caching the envelope; treating a cache read as a refresh, or a Library load as a reason to re-read the source
 
+**Plan (Studio)**:
+Studio's user-facing planner action. The user types an **instruction** in the **instruction box** and presses Plan. Studio calls `create_chart` and puts the result in the editor as a **draft** — an unsaved input frame, drawn from a real bind, not written to the database. `POST /api/specs/plan`. Save is the existing explicit Save and turns the draft into a numbered revision. Studio passes no backend. Studio does not compute its own data profile — `create_chart` profiles internally.
+_Avoid_: generate, prompt, ask, "the agent" as a Studio object, treating a draft as a revision, Studio computing its own profile
+
 **Advisory**:
 A frozen `{ code, message }` object on `Envelope.warnings`, describing something the library did or ignored — not a Python warning, because the caller has to render it. Distinct from Flint's `_warnings`, which are produced at compile time in the client and never reach CPython.
 _Avoid_: `warnings.warn`, conflating these with Flint `_warnings`
