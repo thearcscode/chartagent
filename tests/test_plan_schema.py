@@ -197,3 +197,60 @@ def test_step1_schema_is_not_on_the_public_surface() -> None:
     for name in ("Fragment", "Inexpressible", "Unanswerable", "Step1Result"):
         assert name not in chartagent.__all__
         assert not hasattr(chartagent, name)
+
+
+# Measured live omit of the discriminator (issue #118). Vega-Lite `as`
+# is still inside the transform; decode does not treat that as a
+# schema failure — assemble does.
+_MEASURED_FRAGMENT_OMIT_OUTCOME: dict[str, Any] = {
+    "chart_type": "Bar Chart",
+    "encodings": {
+        "x": {"field": "region", "type": "Category"},
+        "y": {"field": "revenue", "type": "Amount"},
+    },
+    "transform": {
+        "group_by": ["region"],
+        "aggregate": [{"op": "sum", "field": "revenue", "as": "revenue"}],
+    },
+    "semantic_types": {"region": "Category", "revenue": "Amount"},
+    "requested_backend": None,
+}
+
+
+def test_fragment_omitting_outcome_decodes_as_fragment() -> None:
+    parsed = _STEP1.validate_python(_MEASURED_FRAGMENT_OMIT_OUTCOME)
+    assert isinstance(parsed, Fragment)
+    assert parsed.outcome == "fragment"
+    assert parsed.chart_type == "Bar Chart"
+
+
+def test_inexpressible_omitting_outcome_decodes_as_inexpressible() -> None:
+    parsed = _STEP1.validate_python({"bucket": 2})
+    assert isinstance(parsed, Inexpressible)
+    assert parsed.outcome == "inexpressible"
+    assert parsed.bucket == 2
+
+
+def test_unanswerable_omitting_outcome_decodes_as_unanswerable() -> None:
+    parsed = _STEP1.validate_python({"kind": "missing_column", "keys": ["sentiment"]})
+    assert isinstance(parsed, Unanswerable)
+    assert parsed.outcome == "unanswerable"
+    assert parsed.kind == "missing_column"
+    assert parsed.keys == ("sentiment",)
+
+
+def test_filling_outcome_does_not_reopen_inexpressible_carrying_transform() -> None:
+    payload = {
+        "bucket": 2,
+        "transform": {"group_by": ["region"]},
+    }
+    with pytest.raises(ValidationError):
+        _STEP1.validate_python(payload)
+    with pytest.raises(ValidationError):
+        _STEP1.validate_python(
+            {
+                "outcome": "inexpressible",
+                "bucket": 2,
+                "transform": {"group_by": ["region"]},
+            }
+        )

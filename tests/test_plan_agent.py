@@ -216,6 +216,62 @@ def test_facade_failure_costs_exactly_two_step1_calls() -> None:
     assert calls["step2"] == 0
 
 
+def test_fragment_tool_call_omitting_outcome_is_not_invalid_emit() -> None:
+    payload = {key: value for key, value in _FRAGMENT.items() if key != "outcome"}
+    agent = _agent()
+    calls = _install(agent, ("Fragment", payload), ("step2", {}))
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert isinstance(result, ChartResult)
+    assert calls["model"] == 2
+    assert calls["step2"] == 1
+
+
+_MEASURED_LIVE_STEP1: dict[str, Any] = {
+    "chart_type": "Bar Chart",
+    "encodings": {
+        "x": {"field": "region", "type": "Category"},
+        "y": {"field": "revenue", "type": "Amount"},
+    },
+    "transform": {
+        "group_by": ["region"],
+        "aggregate": [{"op": "sum", "field": "revenue", "as": "revenue"}],
+    },
+    "semantic_types": {"region": "Category", "revenue": "Amount"},
+    "requested_backend": None,
+}
+
+
+def test_nameless_aggregate_is_not_a_bind_time_spec_shape_error() -> None:
+    bad = {
+        **_FRAGMENT,
+        "transform": {
+            "group_by": ["quarter"],
+            "aggregate": [{"op": "sum", "field": "revenue", "as": "revenue"}],
+        },
+    }
+    agent = _agent()
+    calls = _install(agent, ("Fragment", bad), ("Fragment", bad))
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert not isinstance(caught.value, SpecShapeError)
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
+def test_measured_live_payload_is_invalid_emit_not_a_bind_error() -> None:
+    agent = _agent()
+    calls = _install(
+        agent, ("Fragment", _MEASURED_LIVE_STEP1), ("Fragment", _MEASURED_LIVE_STEP1)
+    )
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "Bar chart of revenue by region")
+    assert not isinstance(caught.value, SpecShapeError)
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
 def test_unknown_transform_slot_is_not_a_bind_time_spec_shape_error() -> None:
     agent = _agent()
     bad = {**_FRAGMENT, "transform": {"pivot": []}}

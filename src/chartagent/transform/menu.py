@@ -33,7 +33,10 @@ _SLOTS = frozenset(TRANSFORM_SLOTS)
 
 
 def check_transform_shape(transform: Mapping[str, object] | None) -> None:
-    """Reject unrecognised slots and ``raw_sql`` mixed with the menu. Data-free."""
+    """Reject unrecognised slots, mixed ``raw_sql``, and nameless aggregates.
+
+    Data-free. ``as`` is not a public alias for ``name``.
+    """
     if not transform:
         return
     if "raw_sql" in transform:
@@ -47,6 +50,21 @@ def check_transform_shape(transform: Mapping[str, object] | None) -> None:
     unknown = tuple(key for key in transform if key not in _SLOTS)
     if unknown:
         raise SpecShapeError(f"unrecognised transform slot(s): {unknown}")
+    _check_aggregate_names(transform.get("aggregate"))
+
+
+def _check_aggregate_names(aggregates: object) -> None:
+    if aggregates is None:
+        return
+    if not isinstance(aggregates, list):
+        raise SpecShapeError("transform.aggregate must be a list")
+    for index, item in enumerate(aggregates):
+        path = f"transform.aggregate[{index}]"
+        if not isinstance(item, dict):
+            raise SpecShapeError(f"{path} must be an object")
+        name = item.get("name")
+        if not isinstance(name, str) or not name:
+            raise SpecShapeError(f"{path}.name is required")
 
 
 def run_transform(

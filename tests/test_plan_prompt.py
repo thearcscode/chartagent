@@ -388,6 +388,13 @@ def test_prompts_have_no_few_shots_or_extended_thinking() -> None:
         assert "extended-thinking" not in text
 
 
+def test_step1_system_requires_outcome_and_menu_aggregate_shape() -> None:
+    system = render_step1(_PROFILE, _INSTRUCTION, nonce=_NONCE).system
+    assert "outcome" in system
+    assert "{name, op, field?}" in system
+    assert "encodings never carry aggregate" in system
+
+
 def test_prompt_renderer_is_not_on_the_public_surface() -> None:
     for name in (
         "render_step1",

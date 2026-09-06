@@ -31,3 +31,29 @@ def test_raw_sql_alone_is_shape_ok() -> None:
 def test_check_transform_shape_is_not_on_the_public_surface() -> None:
     assert "check_transform_shape" not in chartagent.__all__
     assert not hasattr(chartagent, "check_transform_shape")
+
+
+# Measured live emit (issue #118): Vega-Lite `as` instead of menu `name`.
+_MEASURED_AGGREGATE_AS = [{"op": "sum", "field": "revenue", "as": "revenue"}]
+
+
+def test_aggregate_item_without_name_is_a_spec_shape_error() -> None:
+    with pytest.raises(
+        SpecShapeError, match=r"transform\.aggregate\[0\]\.name is required"
+    ):
+        check_transform_shape(
+            {"group_by": ["region"], "aggregate": _MEASURED_AGGREGATE_AS}
+        )
+
+
+def test_as_is_not_accepted_as_an_aggregate_name() -> None:
+    check_transform_shape(
+        {
+            "group_by": ["region"],
+            "aggregate": [{"name": "revenue", "op": "sum", "field": "revenue"}],
+        }
+    )
+    with pytest.raises(
+        SpecShapeError, match=r"transform\.aggregate\[0\]\.name is required"
+    ):
+        check_transform_shape({"aggregate": [{"as": "revenue", "op": "sum"}]})
