@@ -1,5 +1,7 @@
 # Session working files — regenerated per session, deliberately not tracked
 HANDOFF.md
+/tmp/*
+!/tmp/.gitkeep
 
 # here.now local claim tokens — never commit
 .herenow/
