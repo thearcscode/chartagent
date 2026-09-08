@@ -42,6 +42,7 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: uv sync --frozen --all-groups
+      - run: uv run playwright install --with-deps chromium
       - run: uv run pytest
 
   regen-and-diff:

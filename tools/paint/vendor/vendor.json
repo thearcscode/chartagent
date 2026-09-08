@@ -1,0 +1,18 @@
+{
+  "_comment": "Pinned Vega-Lite renderer stack for the paint harness (ADR-0003 Decision 5, issue #126). Each file is the UMD `build/*.min.js` from the named npm tarball, vendored verbatim and never fetched at run time. Bump by re-running `npm pack <name>@<version>`, copying the UMD build here, and recomputing sha256 — never by hand-editing the digest.",
+  "vega": {
+    "version": "6.4.0",
+    "file": "vega.min.js",
+    "sha256": "8f6a3587cf8d4f42c7e08120e3eb05d067e746d554e39d2dcf52acc0bd5ba28f"
+  },
+  "vega-lite": {
+    "version": "6.4.3",
+    "file": "vega-lite.min.js",
+    "sha256": "35a9821df838825b05a6a73e9414b58747a1b18321583858ed903c66393a5c7e"
+  },
+  "vega-embed": {
+    "version": "7.2.0",
+    "file": "vega-embed.min.js",
+    "sha256": "b69eac2846a0061683b7e03501790fb0bcbdb851c797c6baf3417c9d8852819e"
+  }
+}
