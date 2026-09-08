@@ -16,6 +16,7 @@ from pydantic_ai.messages import ModelResponse, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 from chartagent import ChartAgent, create_chart_agent
+from chartagent.errors import PlannerFailureError
 
 _REPO = Path(__file__).resolve().parents[1]
 _TOOL = _REPO / "tools" / "record_corpus.py"
@@ -84,6 +85,8 @@ def _install(agent: ChartAgent, *replies: Any) -> dict[str, int]:
     def fn(messages: object, info: AgentInfo) -> ModelResponse:
         calls["model"] += 1
         reply = queue.pop(0)
+        if isinstance(reply, BaseException):
+            raise reply
         if isinstance(reply, tuple):
             kind, args = reply
             return _reply(kind, args)(messages, info)
@@ -116,6 +119,8 @@ def test_success_is_recorded_as_deterministic_with_the_envelope() -> None:
     assert record["raw_sql_used"] is False
     assert record["envelope"]["backend"] == "vegalite"
     assert set(record["envelope"]) == {"flint_version", "backend", "input"}
+    assert record["step1_calls"] == 1
+    assert record["step2_calls"] == 1
     assert "miss_kind" not in record
     assert "escape_reason" not in record
     assert "residual_error" not in record
@@ -135,7 +140,12 @@ def test_inexpressible_records_escape_reason_and_no_miss_kind() -> None:
     agent = _agent()
     _install(agent, ("Inexpressible", {"outcome": "inexpressible", "bucket": 1}))
     record = rc.attempt(agent, _SALES, "a 3D holographic globe")
-    assert record == {"rail": None, "escape_reason": {"bucket": 1}}
+    assert record == {
+        "rail": None,
+        "escape_reason": {"bucket": 1},
+        "step1_calls": 1,
+        "step2_calls": 0,
+    }
 
 
 def test_planner_failure_records_miss_kind_and_reason_and_no_bucket() -> None:
@@ -147,6 +157,8 @@ def test_planner_failure_records_miss_kind_and_reason_and_no_bucket() -> None:
     assert record["rail"] is None
     assert record["miss_kind"] == "planner_failure"
     assert record["reason"] == "invalid_emit"
+    assert record["step1_calls"] == 2
+    assert record["step2_calls"] == 0
     assert "escape_reason" not in record
     assert "bucket" not in record
 
@@ -161,7 +173,12 @@ def test_unanswerable_instruction_records_miss_kind_and_no_bucket() -> None:
     }
     _install(agent, ("Unanswerable", payload))
     record = rc.attempt(agent, _SALES, "chart sentiment")
-    assert record == {"rail": None, "miss_kind": "unanswerable_instruction"}
+    assert record == {
+        "rail": None,
+        "miss_kind": "unanswerable_instruction",
+        "step1_calls": 1,
+        "step2_calls": 0,
+    }
 
 
 def test_residual_chart_agent_error_has_no_bucket_and_no_miss_kind() -> None:
@@ -173,6 +190,8 @@ def test_residual_chart_agent_error_has_no_bucket_and_no_miss_kind() -> None:
     assert record["rail"] is None
     assert record["residual_error"]["type"] == "SchemaDriftError"
     assert isinstance(record["residual_error"]["message"], str)
+    assert record["step1_calls"] == 1
+    assert record["step2_calls"] == 1
     assert "miss_kind" not in record
     assert "escape_reason" not in record
     assert "bucket" not in record
@@ -451,3 +470,155 @@ def test_main_record_is_zero_exit_with_residual_errors(
     out = capsys.readouterr().out
     assert "Residual errors: 3." in out
     assert journal.exists()
+
+
+# ---------------------------------------------------------------------------
+# Transport retries and per-step call counts (issue #125)
+# ---------------------------------------------------------------------------
+
+
+def test_transport_fault_is_retried_and_the_call_still_counts_once() -> None:
+    """A retried-then-successful call costs one counted planner call, not two."""
+    rc = _tool()
+    agent = _agent()
+    _install(
+        agent,
+        RuntimeError("simulated rate limit"),
+        RuntimeError("simulated rate limit"),
+        ("Fragment", _FRAGMENT),
+        ("step2", {}),
+    )
+    proxy = rc.RecordingClient(agent._client, retries=3, sleep=lambda _s: None)
+    agent._client = proxy
+    record = rc.attempt(agent, _SALES, "revenue by quarter")
+    assert record is not None
+    assert record["rail"] == "deterministic"
+    assert record["step1_calls"] == 1
+    assert record["step2_calls"] == 1
+    assert proxy.transport_retries == 2
+    assert proxy.transport_exhausted == 0
+
+
+def test_transport_fault_exhausting_retries_leaves_the_attempt_unjournalled() -> None:
+    rc = _tool()
+    agent = _agent()
+    _install(
+        agent,
+        RuntimeError("simulated rate limit"),
+        RuntimeError("simulated rate limit"),
+        RuntimeError("simulated rate limit"),
+    )
+    proxy = rc.RecordingClient(agent._client, retries=2, sleep=lambda _s: None)
+    agent._client = proxy
+    record = rc.attempt(agent, _SALES, "revenue by quarter")
+    assert record is None
+    assert proxy.transport_retries == 2
+    assert proxy.transport_exhausted == 1
+
+
+def test_a_planner_shape_failure_is_never_retried_as_transport() -> None:
+    """ValidationError/ToolRetryError/UnexpectedModelBehavior stay the planner's own
+    retry budget — the transport proxy must not intercept them."""
+    rc = _tool()
+    agent = _agent()
+    calls = _install(agent, "empty", "empty")
+    proxy = rc.RecordingClient(agent._client, retries=5, sleep=lambda _s: None)
+    agent._client = proxy
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert caught.value.reason == "empty_response"
+    assert calls["model"] == 2  # step 1's own retry budget, no transport retry spent
+    assert proxy.transport_retries == 0
+    assert proxy.transport_exhausted == 0
+
+
+def test_recording_client_changes_no_planner_behaviour() -> None:
+    """Installing the counting/retry proxy changes no budget, retry, or outcome."""
+    rc = _tool()
+    agent = _agent()
+    payload = {"outcome": "unanswerable", "kind": "missing_column", "keys": ["quarter"]}
+    calls = _install(agent, ("Unanswerable", payload), ("Unanswerable", payload))
+    agent._client = rc.RecordingClient(agent._client)
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+
+
+def test_step1_calls_diagnostic_counts_the_retry() -> None:
+    rc = _tool()
+    agent = _agent()
+    bad = {**_FRAGMENT, "transform": {"pivot": []}}
+    _install(agent, ("Fragment", bad), ("Fragment", _FRAGMENT), ("step2", {}))
+    record = rc.attempt(agent, _SALES, "revenue by quarter")
+    assert record["rail"] == "deterministic"
+    assert record["step1_calls"] == 2
+    assert record["step2_calls"] == 1
+
+
+def test_run_record_leaves_an_exhausted_attempt_out_of_the_journal(
+    tmp_path: Path,
+) -> None:
+    rc = _tool()
+    prereg = {
+        "requests": [
+            {"id": "a", "dataset_path": "tests/data/sales.csv", "query_rewritten": "q"},
+        ]
+    }
+    journal = tmp_path / "journal.jsonl"
+    agent = _agent()
+    _install(
+        agent,
+        RuntimeError("boom"),
+        RuntimeError("boom"),
+        RuntimeError("boom"),
+        ("Inexpressible", {"outcome": "inexpressible", "bucket": 1}),
+        ("Inexpressible", {"outcome": "inexpressible", "bucket": 1}),
+    )
+    agent._client = rc.RecordingClient(agent._client, retries=2, sleep=lambda _s: None)
+    records = rc.run_record(agent, prereg, _REPO, journal)
+    assert ("a", 1) not in records
+    assert ("a", 2) in records
+    assert ("a", 3) in records
+    assert len(records) == 2
+    assert journal.read_text(encoding="utf-8").count("\n") == 2
+
+
+def test_run_record_resumes_cleanly_after_an_exhausted_attempt(
+    tmp_path: Path,
+) -> None:
+    """A crash-and-resume never re-buys an already-journalled attempt, and the
+    left-out attempt is simply retried on the next invocation."""
+    rc = _tool()
+    prereg = {
+        "requests": [
+            {"id": "a", "dataset_path": "tests/data/sales.csv", "query_rewritten": "q"},
+        ]
+    }
+    journal = tmp_path / "journal.jsonl"
+
+    first = _agent()
+    _install(
+        first,
+        RuntimeError("boom"),
+        RuntimeError("boom"),
+        RuntimeError("boom"),
+        ("Inexpressible", {"outcome": "inexpressible", "bucket": 1}),
+        ("Inexpressible", {"outcome": "inexpressible", "bucket": 1}),
+    )
+    first._client = rc.RecordingClient(first._client, retries=2, sleep=lambda _s: None)
+    records = rc.run_record(first, prereg, _REPO, journal)
+    assert len(records) == 2
+    assert ("a", 1) not in records
+
+    second = _agent()
+    calls = _install(
+        second, ("Inexpressible", {"outcome": "inexpressible", "bucket": 1})
+    )
+    second._client = rc.RecordingClient(
+        second._client, retries=2, sleep=lambda _s: None
+    )
+    records_again = rc.run_record(second, prereg, _REPO, journal)
+    assert calls["model"] == 1  # only the missing (a, 1) is re-attempted
+    assert len(records_again) == 3
+    assert ("a", 1) in records_again
