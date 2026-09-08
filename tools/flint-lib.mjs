@@ -1,9 +1,16 @@
-// Shared helpers for the fixture CI jobs. strip/canon are copied verbatim
-// from prototypes/flint-frame/probe.mjs (ADR-0004 Decision 7).
+// Shared helpers for the fixture CI jobs.
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+
+// rowCount, pinSize, strip, canon and clone are browser-safe (no `node:`
+// imports, no filesystem access) and live in flint-predicates.mjs so the
+// corpus recorder's paint leg (#122) can load the same definitions in a
+// browser. Re-exported here so every existing caller of flint-lib.mjs is
+// untouched (#123).
+import { canon, clone, pinSize, rowCount, strip } from "./flint-predicates.mjs";
+export { canon, clone, pinSize, rowCount, strip };
 
 export const EXPECTED_FIXTURES = 705;
 export const EXCEL_FACET_REFUSALS = 102;
@@ -51,32 +58,6 @@ export function loadFixtures(root) {
     .filter(Boolean);
 }
 
-export function pinSize(input) {
-  const baseSize = input.chart_spec?.baseSize;
-  if (!baseSize) return input;
-  return {
-    ...input,
-    chart_spec: { ...input.chart_spec, canvasSize: { ...baseSize } },
-  };
-}
-
-// `_`-prefixed keys are compiler metadata (_width, _warnings, _transform), not
-// output. Canonicalise in one language only — see prototypes/flint-embed/README.md.
-export function strip(value) {
-  if (Array.isArray(value)) return value.map(strip);
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.keys(value)
-        .filter((k) => !k.startsWith('_'))
-        .sort()
-        .map((k) => [k, strip(value[k])]),
-    );
-  }
-  return value;
-}
-
-export const canon = (value) => JSON.stringify(strip(value));
-
 export function meta(spec) {
   if (!spec || typeof spec !== "object") return "";
   return JSON.stringify({
@@ -90,16 +71,6 @@ export function meta(spec) {
 export function warningsMeta(spec) {
   if (!spec || typeof spec !== "object") return "";
   return JSON.stringify(spec._warnings ?? []);
-}
-
-export function rowCount(output) {
-  if (!output || typeof output !== "object") return null;
-  if (typeof output._dataLength === "number") return output._dataLength;
-  if (Array.isArray(output.data?.values)) return output.data.values.length;
-  if (output.schema === "flint.excel.chart/v1" && Array.isArray(output.data)) {
-    return Math.max(0, output.data.length - 1);
-  }
-  return null;
 }
 
 export function dirtyPairs(input, vocab) {
@@ -124,10 +95,6 @@ export function classifyExcel(err) {
   }
   if (/faceting/.test(message)) return "facet";
   return "other";
-}
-
-export function clone(value) {
-  return JSON.parse(JSON.stringify(value));
 }
 
 export function compile(fn, input) {
