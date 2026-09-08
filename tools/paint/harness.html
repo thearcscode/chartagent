@@ -1,0 +1,118 @@
+<!doctype html>
+<!--
+  The paint leg's pinned client harness (ADR-0003 Decisions 4-5, issue #126).
+
+  Loaded over a loopback HTTP server (never a CDN, never an npm resolve) by
+  `tools/paint_corpus.py`, which asserts every script's sha256 before this
+  page is ever served. It loads the vendored Flint IIFE, calls the
+  assembler for the backend an envelope names, hands the compiled option
+  object to a pinned Vega-Lite renderer, and reports three facts back to
+  Python via `window.__paint`: did the assembler accept, did marks appear,
+  and how many rows survived compile.
+
+  Only Vega-Lite is vendored here — the remaining renderers land in #127.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>chartagent paint harness</title>
+    <script src="/vendor/vega.min.js"></script>
+    <script src="/vendor/vega-lite.min.js"></script>
+    <script src="/vendor/vega-embed.min.js"></script>
+    <script src="/flint.iife.js"></script>
+    <script type="module">
+      import { pinSize, rowCount } from "/flint-predicates.mjs";
+
+      // Vega's SVG scenegraph tags the group holding a mark's own drawn
+      // geometry with role-mark — as opposed to role-axis, role-legend,
+      // role-title, role-frame and role-scope, which are chrome. Asserting
+      // geometry inside role-mark is the positive check ADR-0003 requires:
+      // a rasteriser returning bytes (or here, an SVG) without raising has
+      // not necessarily rendered anything.
+      const MARK_GEOMETRY_SELECTOR =
+        "path, rect, circle, line, polygon, polyline, image, text, use";
+
+      async function renderVegaLite(compiled, container) {
+        await window.vegaEmbed(container, compiled, {
+          renderer: "svg",
+          actions: false,
+        });
+        const svg = container.querySelector("svg");
+        if (!svg) return false;
+        for (const group of svg.querySelectorAll("g.role-mark")) {
+          if (group.querySelector(MARK_GEOMETRY_SELECTOR)) return true;
+        }
+        return false;
+      }
+
+      // Backend -> [assembler getter, renderer]. Only vegalite has a
+      // vendored renderer at #126; the map exists so #127 can add the rest
+      // without touching this function's shape.
+      const BACKENDS = {
+        vegalite: [() => window.Flint.assembleVegaLite, renderVegaLite],
+        echarts: [() => window.Flint.assembleECharts, null],
+        chartjs: [() => window.Flint.assembleChartjs, null],
+        plotly: [() => window.Flint.assemblePlotly, null],
+        excel: [() => window.Flint.assembleExcel, null],
+      };
+
+      window.__paint = async function (envelope) {
+        const { backend, input } = envelope;
+        const entry = BACKENDS[backend];
+        if (!entry) {
+          return {
+            accepted: false,
+            painted: false,
+            compiled_row_count: null,
+            error: `unknown backend: ${backend}`,
+          };
+        }
+        const [getAssemble, render] = entry;
+
+        let compiled;
+        try {
+          // canvasSize is derived from the envelope's own chart_spec.baseSize
+          // (ADR-0014 D10) — the harness never imposes one of its own.
+          compiled = getAssemble()(pinSize(input));
+        } catch (err) {
+          return {
+            accepted: false,
+            painted: false,
+            compiled_row_count: null,
+            error: String(err?.message ?? err),
+          };
+        }
+
+        const compiled_row_count = rowCount(compiled);
+        const container = document.getElementById("container");
+        container.innerHTML = "";
+
+        if (!render) {
+          return {
+            accepted: true,
+            painted: false,
+            compiled_row_count,
+            error: `no renderer vendored for backend: ${backend}`,
+          };
+        }
+
+        try {
+          const painted = await render(compiled, container);
+          return { accepted: true, painted, compiled_row_count, error: null };
+        } catch (err) {
+          return {
+            accepted: true,
+            painted: false,
+            compiled_row_count,
+            error: String(err?.message ?? err),
+          };
+        }
+      };
+
+      window.__ready = true;
+    </script>
+  </head>
+  <body>
+    <div id="container" style="position: absolute; left: -99999px; top: 0"></div>
+  </body>
+</html>
