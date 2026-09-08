@@ -339,6 +339,89 @@ def test_resuming_after_a_harness_error_pays_only_for_the_rest(
 
 
 # ---------------------------------------------------------------------------
+# The Excel refusal: not a chart that failed to paint, a surprise that stops
+# the run (ADR-0003 D7, ADR-0014 D2, ADR-0019/0021). Issue #127.
+# ---------------------------------------------------------------------------
+
+
+def _excel_record(request_id: str, run: int) -> dict[str, Any]:
+    return {
+        "request_id": request_id,
+        "run": run,
+        "rail": "deterministic",
+        "envelope": {"backend": "excel", "input": _BAR_INPUT},
+        "bound_row_count": 4,
+    }
+
+
+def test_an_excel_envelope_raises_and_stops_the_run(tmp_path: Path) -> None:
+    rc = _tool()
+    journal = tmp_path / "journal.jsonl"
+    paint_journal = tmp_path / "paint_journal.jsonl"
+    _write_jsonl(journal, [_excel_record("r1", 1)])
+    harness = _FakeHarness([])  # never reached — the harness is never asked
+
+    with pytest.raises(rc.ExcelEnvelopeError) as excinfo:
+        rc.run_paint(harness, journal, paint_journal)
+
+    assert excinfo.value.request_id == "r1"
+    assert excinfo.value.run == 1
+    assert harness.calls == []  # never sent to the browser
+    assert not paint_journal.exists() or paint_journal.read_text() == ""
+
+
+def test_an_excel_envelope_never_records_painted_false(tmp_path: Path) -> None:
+    rc = _tool()
+    journal = tmp_path / "journal.jsonl"
+    paint_journal = tmp_path / "paint_journal.jsonl"
+    _write_jsonl(journal, [_excel_record("r1", 1)])
+    harness = _FakeHarness([])
+
+    with pytest.raises(rc.ExcelEnvelopeError):
+        rc.run_paint(harness, journal, paint_journal)
+
+    assert not paint_journal.exists() or paint_journal.read_text() == ""
+
+
+def test_an_excel_envelope_stops_the_run_but_keeps_records_already_journalled(
+    tmp_path: Path,
+) -> None:
+    rc = _tool()
+    journal = tmp_path / "journal.jsonl"
+    paint_journal = tmp_path / "paint_journal.jsonl"
+    _write_jsonl(journal, [_deterministic_record("r1", 1), _excel_record("r2", 1)])
+    harness = _FakeHarness([_PAINTED_RESULT])
+
+    with pytest.raises(rc.ExcelEnvelopeError):
+        rc.run_paint(harness, journal, paint_journal)
+
+    lines = paint_journal.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["request_id"] == "r1"
+
+
+def test_cmd_paint_reports_the_excel_backend_by_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    rc = _tool()
+    journal = tmp_path / "journal.jsonl"
+    _write_jsonl(journal, [_excel_record("r1", 1)])
+    paint_journal = tmp_path / "paint_journal.jsonl"
+
+    monkeypatch.setattr(
+        rc, "PaintHarness", lambda: _StubHarnessContext(_PAINTED_RESULT)
+    )
+    code = rc.main(
+        ["paint", "--journal", str(journal), "--paint-journal", str(paint_journal)]
+    )
+    assert code == 1
+    out = capsys.readouterr().out
+    assert "EXCEL_BACKEND" in out
+    assert "r1" in out
+    assert not paint_journal.exists() or paint_journal.read_text() == ""
+
+
+# ---------------------------------------------------------------------------
 # The CLI — stubbed harness, no browser
 # ---------------------------------------------------------------------------
 
@@ -562,14 +645,105 @@ def test_an_unknown_chart_type_is_not_accepted_and_not_painted(harness: Any) -> 
 
 def test_the_backend_the_envelope_names_is_the_one_rendered(harness: Any) -> None:
     # No stand-in (ADR-0003 D3): an ECharts envelope is compiled by Flint's
-    # ECharts assembler, never silently substituted with Vega-Lite's. Only
-    # the Vega-Lite renderer is vendored at #126 (#127 adds the rest), so
-    # this is reported as accepted-but-unpainted rather than a false pass.
+    # ECharts assembler and painted by the vendored ECharts renderer, never
+    # silently substituted with Vega-Lite's.
     result = harness.paint({"backend": "echarts", "input": _BAR_INPUT})
+    assert result == {
+        "accepted": True,
+        "painted": True,
+        "compiled_row_count": 4,
+        "error": None,
+    }
+
+
+def test_excel_is_reported_as_never_rasterised_not_merely_unvendored(
+    harness: Any,
+) -> None:
+    # ADR-0003 D7: Excel is not a raster target and never will be — a
+    # distinct fact from "no renderer vendored for this backend yet", which
+    # is what every other backend was before it got one (#126, #127). This
+    # is the raw harness's own fallback message; the corpus recorder never
+    # reaches it (see the ExcelEnvelopeError tests below), because it stops
+    # the run before handing an excel envelope to the harness at all.
+    result = harness.paint({"backend": "excel", "input": _BAR_INPUT})
     assert result["accepted"] is True
     assert result["painted"] is False
     assert result["compiled_row_count"] == 4
-    assert result["error"] and "echarts" in result["error"]
+    assert result["error"] and "ADR-0003" in result["error"]
+
+
+# ---------------------------------------------------------------------------
+# The remaining renderer families — ECharts and Chart.js draw to canvas (a
+# non-blank pixel scan), Plotly draws to SVG (the same mark-vs-chrome scan
+# as Vega-Lite, scoped to Plotly's own `trace` class). issue #127. ECharts'
+# own clean paint is already covered above by
+# test_the_backend_the_envelope_names_is_the_one_rendered.
+# ---------------------------------------------------------------------------
+
+
+def test_clean_paint_chartjs(harness: Any) -> None:
+    result = harness.paint({"backend": "chartjs", "input": _BAR_INPUT})
+    assert result == {
+        "accepted": True,
+        "painted": True,
+        "compiled_row_count": 4,
+        "error": None,
+    }
+
+
+def test_clean_paint_plotly(harness: Any) -> None:
+    result = harness.paint({"backend": "plotly", "input": _BAR_INPUT})
+    assert result == {
+        "accepted": True,
+        "painted": True,
+        "compiled_row_count": 4,
+        "error": None,
+    }
+
+
+def test_a_rendered_but_blank_chart_is_reported_not_hidden(harness: Any) -> None:
+    # assembler accepts, renders, no marks (acceptance table row 3): zero
+    # data rows compiles to a valid Vega-Lite spec with axes but nothing in
+    # any `g.role-mark` group.
+    empty_input = json.loads(json.dumps(_BAR_INPUT))
+    empty_input["data"]["values"] = []
+    result = harness.paint({"backend": "vegalite", "input": empty_input})
+    assert result["accepted"] is True
+    assert result["painted"] is False
+    assert result["compiled_row_count"] == 0
+    assert result["error"] is None
+
+
+def test_a_renderer_exception_is_reported_as_accepted_but_unpainted(
+    harness: Any,
+) -> None:
+    # assembler accepts, renderer throws (acceptance table row 2): Flint's
+    # ECharts assembler happily compiles a cyclic Sankey — it does not
+    # validate DAG-ness — but ECharts' own layout engine raises when it
+    # actually lays the graph out.
+    cyclic_sankey_input = {
+        "data": {
+            "values": [
+                {"src": "A", "dst": "B", "flow": 10},
+                {"src": "B", "dst": "A", "flow": 5},
+            ]
+        },
+        "semantic_types": {"src": "Source", "dst": "Target", "flow": "Value"},
+        "chart_spec": {
+            "chartType": "Sankey Diagram",
+            "encodings": {
+                "x": {"field": "src"},
+                "y": {"field": "dst"},
+                "size": {"field": "flow"},
+            },
+            "baseSize": {"width": 480, "height": 320},
+        },
+    }
+    result = harness.paint({"backend": "echarts", "input": cyclic_sankey_input})
+    assert result["accepted"] is True
+    assert result["painted"] is False
+    assert result["compiled_row_count"] == 2
+    assert result["error"] and "cycle" in result["error"].lower()
 
 
 def test_an_unknown_backend_name_is_rejected(harness: Any) -> None:

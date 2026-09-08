@@ -1,16 +1,22 @@
 <!doctype html>
 <!--
-  The paint leg's pinned client harness (ADR-0003 Decisions 4-5, issue #126).
+  The paint leg's pinned client harness (ADR-0003 Decisions 4-5, issues
+  #126, #127).
 
   Loaded over a loopback HTTP server (never a CDN, never an npm resolve) by
   `tools/paint_corpus.py`, which asserts every script's sha256 before this
   page is ever served. It loads the vendored Flint IIFE, calls the
   assembler for the backend an envelope names, hands the compiled option
-  object to a pinned Vega-Lite renderer, and reports three facts back to
+  object to that backend's pinned renderer, and reports three facts back to
   Python via `window.__paint`: did the assembler accept, did marks appear,
   and how many rows survived compile.
 
-  Only Vega-Lite is vendored here — the remaining renderers land in #127.
+  Vega-Lite, ECharts, Chart.js and Plotly are all vendored here. Excel is
+  not — it is not a raster target and never will be (ADR-0003 Decision 7);
+  an envelope naming it is handled entirely on the Python side
+  (`tools/paint_corpus.py`'s `ExcelEnvelopeError`), which stops the run
+  before this page is ever asked to paint one. The `excel` entry below
+  stays renderer-less only for `paint-one`'s ad hoc debugging.
 -->
 <html>
   <head>
@@ -19,18 +25,54 @@
     <script src="/vendor/vega.min.js"></script>
     <script src="/vendor/vega-lite.min.js"></script>
     <script src="/vendor/vega-embed.min.js"></script>
+    <script src="/vendor/echarts.min.js"></script>
+    <script src="/vendor/chart.umd.min.js"></script>
+    <script src="/vendor/plotly.min.js"></script>
     <script src="/flint.iife.js"></script>
     <script type="module">
       import { pinSize, rowCount } from "/flint-predicates.mjs";
 
-      // Vega's SVG scenegraph tags the group holding a mark's own drawn
-      // geometry with role-mark — as opposed to role-axis, role-legend,
-      // role-title, role-frame and role-scope, which are chrome. Asserting
-      // geometry inside role-mark is the positive check ADR-0003 requires:
-      // a rasteriser returning bytes (or here, an SVG) without raising has
-      // not necessarily rendered anything.
+      // Two rendering families, two predicates (issue #127). Neither
+      // renderer's own drawing mode is changed to make the check uniform —
+      // ADR-0003 D4's whole argument for a browser is identity with the
+      // client, and forcing e.g. ECharts to its SVG renderer would measure
+      // something the client never runs.
+      //
+      // SVG family (Vega-Lite, Plotly): both libraries retain a DOM, and
+      // both tag the group holding a mark's own drawn geometry with a
+      // library-specific class — Vega's `role-mark`, Plotly's `trace` —
+      // as opposed to axes, gridlines, ticks and legends, which are
+      // chrome. Asserting geometry inside that group is the positive
+      // check ADR-0003 requires: a rasteriser returning bytes (or here,
+      // an SVG) without raising has not necessarily rendered anything.
       const MARK_GEOMETRY_SELECTOR =
         "path, rect, circle, line, polygon, polyline, image, text, use";
+
+      function hasMarkGeometry(root, groupSelector) {
+        for (const group of root.querySelectorAll(groupSelector)) {
+          if (group.querySelector(MARK_GEOMETRY_SELECTOR)) return true;
+        }
+        return false;
+      }
+
+      // Canvas family (ECharts, Chart.js): neither library keeps a DOM a
+      // mark-versus-chrome search could scope into — a canvas is flat
+      // pixels. The predicate available on a raster surface is coarser by
+      // necessity: a non-blank pixel scan, over the alpha channel, since
+      // both libraries default to a transparent backing (confirmed against
+      // the vendored builds — an untouched canvas is ~96% fully
+      // transparent pixels; drawn chrome and marks alike leave the pixels
+      // they touch non-transparent).
+      function isCanvasNonBlank(canvas) {
+        if (!canvas || canvas.width === 0 || canvas.height === 0) return false;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return false;
+        const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        for (let i = 3; i < data.length; i += 4) {
+          if (data[i] !== 0) return true;
+        }
+        return false;
+      }
 
       async function renderVegaLite(compiled, container) {
         await window.vegaEmbed(container, compiled, {
@@ -38,21 +80,131 @@
           actions: false,
         });
         const svg = container.querySelector("svg");
-        if (!svg) return false;
-        for (const group of svg.querySelectorAll("g.role-mark")) {
-          if (group.querySelector(MARK_GEOMETRY_SELECTOR)) return true;
-        }
-        return false;
+        return svg ? hasMarkGeometry(svg, "g.role-mark") : false;
       }
 
-      // Backend -> [assembler getter, renderer]. Only vegalite has a
-      // vendored renderer at #126; the map exists so #127 can add the rest
-      // without touching this function's shape.
+      async function renderPlotly(compiled, container) {
+        // Plotly.newPlot's own promise is the render-complete signal —
+        // the same completion contract vegaEmbed's promise gives us.
+        await window.Plotly.newPlot(
+          container,
+          compiled.data,
+          compiled.layout,
+          compiled.config
+        );
+        return hasMarkGeometry(container, "svg.main-svg g.trace");
+      }
+
+      // compiled._width / compiled._height are Flint's own compiler
+      // metadata (flint-predicates.mjs's `strip` already knows to drop
+      // them from output comparisons) — the same size pinSize() baked into
+      // chart_spec.canvasSize before compiling. Vega-Lite and Plotly bake
+      // that size into the compiled object itself; ECharts and Chart.js
+      // don't, and instead read their container element's own CSS size,
+      // so the harness sizes a container from this metadata rather than
+      // imposing a size of its own (ADR-0014 D10).
+      function containerSize(compiled) {
+        return {
+          width: compiled._width || 400,
+          height: compiled._height || 300,
+        };
+      }
+
+      // Both canvas renderers below share this shape: a wrapper div sized
+      // from the compiled object's own metadata, appended to the harness's
+      // container.
+      function sizedContainer(parent, compiled) {
+        const { width, height } = containerSize(compiled);
+        const el = document.createElement("div");
+        el.style.width = `${width}px`;
+        el.style.height = `${height}px`;
+        parent.appendChild(el);
+        return el;
+      }
+
+      // Both canvas renderers also drive their own render-complete signal
+      // (ECharts' 'finished' event, Chart.js' animation.onComplete hook)
+      // rather than a fixed delay — but either could in principle never
+      // fire, so both are bounded by the same timeout, after which the
+      // canvas is scanned anyway rather than hanging the whole corpus run
+      // on one pathological envelope.
+      const CANVAS_RENDER_TIMEOUT_MS = 5000;
+
+      async function renderECharts(compiled, container) {
+        const target = sizedContainer(container, compiled);
+        const chart = window.echarts.init(target);
+        try {
+          return await new Promise((resolve, reject) => {
+            // Register 'finished' before setOption so a synchronous finish
+            // is never missed.
+            const timer = setTimeout(
+              () => resolve(isCanvasNonBlank(target.querySelector("canvas"))),
+              CANVAS_RENDER_TIMEOUT_MS
+            );
+            chart.on("finished", () => {
+              clearTimeout(timer);
+              resolve(isCanvasNonBlank(target.querySelector("canvas")));
+            });
+            try {
+              chart.setOption(compiled);
+            } catch (err) {
+              clearTimeout(timer);
+              reject(err);
+            }
+          });
+        } finally {
+          chart.dispose();
+        }
+      }
+
+      async function renderChartjs(compiled, container) {
+        const wrapper = sizedContainer(container, compiled);
+        const canvas = document.createElement("canvas");
+        wrapper.appendChild(canvas);
+
+        const config = { ...compiled };
+        let chart;
+        try {
+          return await new Promise((resolve, reject) => {
+            const timer = setTimeout(
+              () => resolve(isCanvasNonBlank(canvas)),
+              CANVAS_RENDER_TIMEOUT_MS
+            );
+            // animation.onComplete is Chart.js' own render-complete hook —
+            // it fires once even when the compiled config sets no
+            // explicit animation duration of its own.
+            config.options = {
+              ...config.options,
+              animation: {
+                ...config.options?.animation,
+                onComplete: () => {
+                  clearTimeout(timer);
+                  resolve(isCanvasNonBlank(canvas));
+                },
+              },
+            };
+            try {
+              chart = new window.Chart(canvas, config);
+            } catch (err) {
+              clearTimeout(timer);
+              reject(err);
+            }
+          });
+        } finally {
+          chart?.destroy();
+        }
+      }
+
+      // Backend -> [assembler getter, renderer]. Excel has no renderer —
+      // it is not a raster target and never will be (ADR-0003 D7). The
+      // corpus recorder (tools/paint_corpus.py) never reaches this page
+      // with an excel envelope; the generic "no renderer vendored"
+      // fallback below exists only for paint-one's ad hoc debugging.
       const BACKENDS = {
         vegalite: [() => window.Flint.assembleVegaLite, renderVegaLite],
-        echarts: [() => window.Flint.assembleECharts, null],
-        chartjs: [() => window.Flint.assembleChartjs, null],
-        plotly: [() => window.Flint.assemblePlotly, null],
+        echarts: [() => window.Flint.assembleECharts, renderECharts],
+        chartjs: [() => window.Flint.assembleChartjs, renderChartjs],
+        plotly: [() => window.Flint.assemblePlotly, renderPlotly],
         excel: [() => window.Flint.assembleExcel, null],
       };
 
@@ -88,12 +240,11 @@
         container.innerHTML = "";
 
         if (!render) {
-          return {
-            accepted: true,
-            painted: false,
-            compiled_row_count,
-            error: `no renderer vendored for backend: ${backend}`,
-          };
+          const error =
+            backend === "excel"
+              ? "excel is not a raster target and never will be (ADR-0003 D7)"
+              : `no renderer vendored for backend: ${backend}`;
+          return { accepted: true, painted: false, compiled_row_count, error };
         }
 
         try {

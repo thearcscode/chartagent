@@ -1,6 +1,7 @@
 """Paint leg: compile and paint one envelope in a pinned browser harness.
 
-ADR-0003 Decisions 4, 5, 6 and 7; ADR-0014 D10. Issue #126 (parent #122).
+ADR-0003 Decisions 3, 4, 5, 6 and 7; ADR-0014 D10, D11; ADR-0019; ADR-0021.
+Issues #126, #127 (parent #122).
 
     python tools/paint_corpus.py paint
     python tools/paint_corpus.py paint-one --envelope path/to/envelope.json
@@ -18,24 +19,35 @@ never painted; that absence is delivery rate's own denominator exclusion
 
 Before anything is served, the harness refuses to run unless the vendored
 Flint IIFE's sha256 matches the value ``vocab.json`` records, and unless
-every vendored Vega / Vega-Lite / Vega-Embed file matches
-``tools/paint/vendor/vendor.json`` — never a CDN, never an npm resolve
-(ADR-0003 Decision 5). Every file the harness page loads is served over a
-loopback HTTP server straight from those same vendored bytes, and the page
-is additionally blocked from making any request that is not to that server.
+every vendored Vega / Vega-Lite / Vega-Embed / ECharts / Chart.js / Plotly
+file matches ``tools/paint/vendor/vendor.json`` — never a CDN, never an npm
+resolve (ADR-0003 Decision 5). Every file the harness page loads is served
+over a loopback HTTP server straight from those same vendored bytes, and
+the page is additionally blocked from making any request that is not to
+that server.
 
 The backend rendered is always the one the envelope names (ADR-0003
 Decision 3 — no stand-in, ever), and ``canvasSize`` is derived from the
 envelope's own ``chart_spec.baseSize`` by ``tools/flint-predicates.mjs``'s
 ``pinSize`` — the harness never imposes one of its own (ADR-0014 D10).
 
-``painted`` is a positive assertion — at least one geometry node inside a
-Vega scenegraph's ``role-mark`` group — never the absence of an exception
+``painted`` is a positive assertion, never the absence of an exception
 (ADR-0003's stated hazard: a rasteriser can return bytes without having
-rendered anything). ``painted: false`` is a legitimate recorded outcome,
-journalled exactly like ``painted: true``, never an error and never
-retried. ``compiled_row_count`` comes from ``tools/flint-predicates.mjs``'s
-``rowCount``, the same function the fixture CI job uses.
+rendered anything) — but it is asserted two different ways depending on
+how the backend actually draws (issue #127), because forcing every backend
+onto one rendering mode would mean measuring something other than what the
+client runs (ADR-0003 D4). Vega-Lite and Plotly draw to SVG and keep a DOM,
+so their predicate is at least one geometry node inside the library's own
+mark-group class (Vega's ``role-mark``, Plotly's ``trace``) — chrome like
+axes and legends sits outside it. ECharts and Chart.js draw to canvas and
+keep no such DOM; their predicate is the coarser one a raster surface
+allows, a non-blank scan of the canvas's own pixels. ``painted: false`` is
+a legitimate recorded outcome either way, journalled exactly like
+``painted: true``, never an error and never retried — including the many
+real ECharts boxplot envelopes this reports unpainted; that is the cell-3
+case ADR-0014 asks to be measured, not retried away. ``compiled_row_count``
+comes from ``tools/flint-predicates.mjs``'s ``rowCount``, the same function
+the fixture CI job uses.
 
 A harness-level failure — the browser process dying, a JS exception
 escaping ``window.__paint`` itself — is different from a *reported*
@@ -43,8 +55,21 @@ escaping ``window.__paint`` itself — is different from a *reported*
 invocation retries it for free, and is printed by name rather than
 silently swallowed.
 
+A record naming the Excel backend is different again. Excel is not a
+raster target and never will be (ADR-0003 Decision 7); under ADR-0019 /
+ADR-0021 the ranking never selects it, and no corpus slot names a backend
+(ADR-0014 Decision 11). Such a record is a surprise that invalidates the
+delivery reading, not a chart that failed to paint — recording
+``painted: false`` would charge the planner for a rasterisation gap this
+project chose, not one it hit. ``run_paint`` raises
+:class:`ExcelEnvelopeError` and stops immediately, before the harness is
+ever asked to paint it; records already journalled earlier in the same run
+are kept.
+
 Exit 0 = the run finished.
-Exit 1 = a named pre-flight check failed; the browser never launched.
+Exit 1 = a named pre-flight check failed (the browser never launched), or a
+record named the Excel backend (the run stopped; already-journalled
+records are kept).
 Exit 2 = usage error.
 
 Adds nothing to ``chartagent.__all__`` — no ``Rasteriser`` protocol, no
@@ -288,6 +313,29 @@ def _read_jsonl(path: Path) -> dict[tuple[str, int], dict[str, Any]]:
     return records
 
 
+class ExcelEnvelopeError(Exception):
+    """Raised when a deterministic-rail record names the Excel backend.
+
+    Excel is not a raster target and never will be (ADR-0003 Decision 7);
+    under ADR-0019/0021 the ranking never selects it, and no corpus slot
+    names a backend (ADR-0014 Decision 11). A record naming it here is a
+    surprise that invalidates the delivery reading, not a chart that
+    failed to paint — recording ``painted: false`` would charge the
+    planner for a rasterisation gap this project chose, not one it hit.
+    The run stops here rather than journalling anything for it.
+    """
+
+    def __init__(self, request_id: str, run: int) -> None:
+        self.request_id = request_id
+        self.run = run
+        super().__init__(
+            f"{request_id} run {run} names the excel backend — not a raster "
+            "target (ADR-0003 D7) and never selected by the ranking "
+            "(ADR-0019/0021); this is a surprise that invalidates the "
+            "delivery reading, not a paint failure"
+        )
+
+
 def paint_one(harness: PaintHarness, record: Mapping[str, Any]) -> dict[str, Any]:
     """Paint one ``rail: "deterministic"`` record from the record leg's
     journal and map it to a paint-journal row."""
@@ -318,6 +366,12 @@ def run_paint(
     both the journal and the returned mapping — it costs nothing already
     paid for and is retried on the next invocation. Returns every record
     the paint journal now holds, old and new.
+
+    A record naming the Excel backend is different from either of those: it
+    raises :class:`ExcelEnvelopeError` and stops the run immediately,
+    *before* the harness is asked to paint it, rather than being journalled
+    as ``painted: false`` (ADR-0003 Decision 7; ADR-0014 Decision 11).
+    Records already journalled from earlier in this same call are kept.
     """
     source = _read_jsonl(journal_path)
     records = _read_jsonl(paint_journal_path)
@@ -328,6 +382,8 @@ def run_paint(
                 continue
             if key in records:
                 continue
+            if record["envelope"]["backend"] == "excel":
+                raise ExcelEnvelopeError(record["request_id"], record["run"])
             try:
                 outcome = paint_one(harness, record)
             except Exception as exc:  # noqa: BLE001 — a harness fault, not a paint outcome
@@ -380,6 +436,8 @@ def _cmd_paint(ns: argparse.Namespace) -> int:
             records = run_paint(harness, journal_path, paint_journal_path)
     except PaintPreflightError as exc:
         return _fail(exc.issues)
+    except ExcelEnvelopeError as exc:
+        return _fail([f"EXCEL_BACKEND      {exc}"])
     painted = sum(1 for record in records.values() if record["painted"])
     _print_unpainted_summary(records)
     print(
