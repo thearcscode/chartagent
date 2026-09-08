@@ -1,6 +1,7 @@
 """Run the frozen 50 through the shipped planner into a resumable journal.
 
-ADR-0014 D12, D13. Issue #124 (parent #122).
+ADR-0014 D12, D13. Issue #124 (parent #122). Transport retries and per-step
+call counts: issue #125.
 
     python tools/record_corpus.py record --model <model>
 
@@ -25,6 +26,15 @@ and no miss kind invented for it. Residual errors do not abort the run — the
 remaining attempts are made regardless — and are printed as a named summary
 when the run ends.
 
+Transport, auth and rate-limit failures are not planner outcomes: ``RecordingClient``
+retries them itself with backoff, at the same private seam
+(``agent._client``) ``tests/test_plan_agent.py`` uses to script a model. If
+its own retries exhaust, the attempt is left out of the journal entirely —
+no record is written, and the run resumes it for free next time. Every
+journalled attempt also carries ``step1_calls`` / ``step2_calls``, tagged by
+which step's output type the call carried, so ADR-0019 D6's per-step retry
+rate is observable at all.
+
 Exit 0 = the run finished (residual errors do not change this).
 Exit 1 = a named pre-flight check failed; nothing was spent.
 Exit 2 = usage error.
@@ -39,7 +49,8 @@ import hashlib
 import json
 import subprocess
 import sys
-from collections.abc import Mapping
+import time
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +61,7 @@ from chartagent.errors import (
     PlannerFailureError,
     UnanswerableInstructionError,
 )
+from chartagent.plan.schema import Step1Result
 
 REPO = Path(__file__).resolve().parents[1]
 TAG = "corpus-prereg-v1"
@@ -59,6 +71,15 @@ CORPUS_PREREG_V1_SHA256 = (
 )
 RUNS_PER_REQUEST = 3
 DEFAULT_JOURNAL = REPO / "build" / "corpus" / "journal.jsonl"
+
+_TRANSPORT_RETRIES = 5
+_TRANSPORT_BACKOFF_SECONDS = 1.0
+# pydantic-ai's own signals for a malformed model response (ADR-0019's
+# empty_response / invalid_emit). These belong to create_chart's own step
+# retry budget and must never be intercepted here as a transport fault.
+_EMIT_FAILURE_NAMES = frozenset(
+    {"ValidationError", "ToolRetryError", "UnexpectedModelBehavior"}
+)
 
 
 def _canonical(data: bytes) -> bytes:
@@ -128,27 +149,166 @@ def _fail(issues: list[str]) -> int:
     return 1
 
 
-def attempt(agent: ChartAgent, data: DataSource, instruction: str) -> dict[str, Any]:
+def _walk_exceptions(exc: BaseException | None) -> list[BaseException]:
+    """Every exception reachable from ``exc`` via cause, context, or group.
+
+    A local copy of the walk ``plan/agent.py`` keeps private — duplicated
+    rather than imported, since this tool does not reach into ``plan/``.
+    """
+    found: list[BaseException] = []
+    seen: set[int] = set()
+
+    def walk(current: BaseException | None) -> None:
+        if current is None:
+            return
+        ident = id(current)
+        if ident in seen:
+            return
+        seen.add(ident)
+        found.append(current)
+        if isinstance(current, BaseExceptionGroup):
+            for inner in current.exceptions:
+                walk(inner)
+        walk(current.__cause__)
+        walk(current.__context__)
+
+    walk(exc)
+    return found
+
+
+def _is_transport_fault(exc: BaseException) -> bool:
+    """True unless ``exc`` is one of the planner's own emit-failure signals.
+
+    Those (ADR-0019's empty_response / invalid_emit) are ``create_chart``'s
+    own retry budget to spend, never this tool's. Everything else reaching
+    the client is, by ``ModelClient``'s contract, transport, auth, or a
+    rate limit (ADR-0020) — never guessed at further than that.
+    """
+    names = {type(item).__name__ for item in _walk_exceptions(exc)}
+    return not (names & _EMIT_FAILURE_NAMES)
+
+
+class RecordingClient:
+    """Wraps the agent's ``ModelClient``: retries transport/auth/rate-limit
+    faults with backoff, and counts calls by which step's output type they
+    carried. Installed at ``agent._client`` — the same private seam
+    ``tests/test_plan_agent.py`` uses to script a model.
+
+    Delegates every call to the real client and changes no planner
+    behaviour: a planner emit-failure signal is never retried here, so
+    ``create_chart``'s own budgets, retries, and outcomes are identical
+    whether or not this proxy is installed.
+    """
+
+    def __init__(
+        self,
+        client: Any,
+        *,
+        retries: int = _TRANSPORT_RETRIES,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._client = client
+        self._retries = retries
+        self._sleep = sleep
+        self.step1_calls = 0
+        self.step2_calls = 0
+        self.transport_retries = 0
+        self.transport_exhausted = 0
+
+    def reset_step_calls(self) -> None:
+        self.step1_calls = 0
+        self.step2_calls = 0
+
+    def step_counts(self) -> dict[str, int]:
+        return {"step1_calls": self.step1_calls, "step2_calls": self.step2_calls}
+
+    def run(self, output_type: Any, system_prompt: str, user_turn: str) -> Any:
+        attempt_number = 0
+        while True:
+            try:
+                result = self._client.run(output_type, system_prompt, user_turn)
+            except ChartAgentError:
+                raise
+            except Exception as exc:
+                if not _is_transport_fault(exc):
+                    raise
+                if attempt_number >= self._retries:
+                    self.transport_exhausted += 1
+                    raise
+                attempt_number += 1
+                self.transport_retries += 1
+                self._sleep(_TRANSPORT_BACKOFF_SECONDS * (2 ** (attempt_number - 1)))
+                continue
+            if output_type is Step1Result:
+                self.step1_calls += 1
+            else:
+                self.step2_calls += 1
+            return result
+
+
+def _wrap_client(agent: ChartAgent) -> RecordingClient:
+    """Install (or return the already-installed) ``RecordingClient``.
+
+    Idempotent — a caller that already wrapped ``agent._client`` (a test
+    scripting a model, or an earlier call in the same run) gets the same
+    proxy back rather than a second layer of wrapping.
+    """
+    client = agent._client
+    if isinstance(client, RecordingClient):
+        return client
+    proxy = RecordingClient(client)
+    agent._client = proxy  # type: ignore[assignment]
+    return proxy
+
+
+def attempt(
+    agent: ChartAgent, data: DataSource, instruction: str
+) -> dict[str, Any] | None:
     """Run one ``create_chart`` call and map its outcome to a journal record.
 
     Never raises for any :class:`~chartagent.errors.ChartAgentError` — every
-    such outcome maps to a record. A non-``ChartAgentError`` (transport,
-    auth, model-string) propagates un-wrapped; the recorder does not retry
-    or reclassify it (issue #125's job).
+    such outcome maps to a record, tagged with ``step1_calls`` /
+    ``step2_calls`` (issue #125). Installs :class:`RecordingClient` at
+    ``agent._client`` on first use.
+
+    Returns ``None`` when the recorder's own transport retries exhaust —
+    the attempt is left out of the journal so a later invocation retries it
+    for free, never recorded as a planner outcome.
     """
+    proxy = _wrap_client(agent)
+    proxy.reset_step_calls()
     try:
         result = agent.create_chart(data, instruction)
     except InexpressibleRequestError as exc:
-        return {"rail": None, "escape_reason": {"bucket": exc.bucket}}
+        return {
+            "rail": None,
+            "escape_reason": {"bucket": exc.bucket},
+            **proxy.step_counts(),
+        }
     except PlannerFailureError as exc:
-        return {"rail": None, "miss_kind": "planner_failure", "reason": exc.reason}
+        return {
+            "rail": None,
+            "miss_kind": "planner_failure",
+            "reason": exc.reason,
+            **proxy.step_counts(),
+        }
     except UnanswerableInstructionError:
-        return {"rail": None, "miss_kind": "unanswerable_instruction"}
+        return {
+            "rail": None,
+            "miss_kind": "unanswerable_instruction",
+            **proxy.step_counts(),
+        }
     except ChartAgentError as exc:
         return {
             "rail": None,
             "residual_error": {"type": type(exc).__name__, "message": str(exc)},
+            **proxy.step_counts(),
         }
+    except Exception:
+        # Not a ChartAgentError: by ModelClient's contract (ADR-0020) this is
+        # transport, auth, or a rate limit, and RecordingClient already spent
+        # its retries. Leave the attempt unjournalled rather than record it.
+        return None
     assert isinstance(result, ChartResult)
     envelope = result.envelope
     x_chartagent = envelope.input.get("x_chartagent")
@@ -161,6 +321,7 @@ def attempt(agent: ChartAgent, data: DataSource, instruction: str) -> dict[str, 
         "envelope": envelope.to_dict(),
         "bound_row_count": envelope.row_count,
         "raw_sql_used": bool(raw_sql_used),
+        **proxy.step_counts(),
     }
 
 
@@ -186,7 +347,11 @@ def run_record(
     """Journal three attempts per request, in pre-registration order.
 
     Skips any ``(request_id, run)`` already in the journal — no model call
-    is made for it. Returns every record the journal now holds, old and new.
+    is made for it. An attempt whose transport retries exhaust (``attempt``
+    returns ``None``) is printed by name and left out of both the journal
+    and the returned mapping — it costs nothing already paid for and is
+    retried on the next invocation. Returns every record the journal now
+    holds, old and new.
     """
     records = _read_journal(journal_path)
     journal_path.parent.mkdir(parents=True, exist_ok=True)
@@ -200,6 +365,12 @@ def run_record(
                 if key in records:
                     continue
                 outcome = attempt(agent, str(dataset_path), instruction)
+                if outcome is None:
+                    print(
+                        f"TRANSPORT_EXHAUSTED  {request_id} run {run}: "
+                        "left unjournalled, will retry on the next invocation"
+                    )
+                    continue
                 record = {"request_id": request_id, "run": run, **outcome}
                 handle.write(json.dumps(record) + "\n")
                 handle.flush()
@@ -222,6 +393,20 @@ def _print_residual_summary(records: dict[tuple[str, int], dict[str, Any]]) -> N
         )
 
 
+def _print_transport_summary(client: RecordingClient) -> None:
+    """Report the recorder's own retry spend, separately from the planner's
+    (ADR-0019 D6's per-step retry rate stays a statement about the planner
+    alone)."""
+    if client.transport_retries == 0 and client.transport_exhausted == 0:
+        print("Transport retries: none.")
+        return
+    print(
+        f"Transport retries: {client.transport_retries} "
+        f"({client.transport_exhausted} attempt(s) left unjournalled after "
+        "exhausting retries)."
+    )
+
+
 def _cmd_record(ns: argparse.Namespace) -> int:
     prereg_path = Path(ns.prereg)
     journal_path = Path(ns.journal)
@@ -241,8 +426,10 @@ def _cmd_record(ns: argparse.Namespace) -> int:
         return _fail(dataset_issues)
 
     agent = create_chart_agent(model=ns.model)
+    proxy = _wrap_client(agent)
     records = run_record(agent, prereg_doc, REPO, journal_path)
     _print_residual_summary(records)
+    _print_transport_summary(proxy)
     print(f"OK — {len(records)} attempt(s) journalled at {journal_path}")
     return 0
 
