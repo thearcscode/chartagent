@@ -1,5 +1,5 @@
 {
-  "_comment": "Pinned Vega-Lite renderer stack for the paint harness (ADR-0003 Decision 5, issue #126). Each file is the UMD `build/*.min.js` from the named npm tarball, vendored verbatim and never fetched at run time. Bump by re-running `npm pack <name>@<version>`, copying the UMD build here, and recomputing sha256 — never by hand-editing the digest.",
+  "_comment": "Pinned renderer stack for the paint harness (ADR-0003 Decision 5, issues #126, #127). Each file is a UMD/global browser build from the named npm tarball, vendored verbatim and never fetched at run time. Bump by re-running `npm pack <name>@<version>`, copying the build here, and recomputing sha256 — never by hand-editing the digest. Versions are chosen inside flint-chart 0.5.1's own peerDependencies range (chart.js ^4.0.0, echarts ^5.0.0 || ^6.0.0, plotly.js ^2.0.0 || ^3.0.0) so the vendored renderer is one the assembler's output was actually designed against.",
   "vega": {
     "version": "6.4.0",
     "file": "vega.min.js",
@@ -14,5 +14,20 @@
     "version": "7.2.0",
     "file": "vega-embed.min.js",
     "sha256": "b69eac2846a0061683b7e03501790fb0bcbdb851c797c6baf3417c9d8852819e"
+  },
+  "echarts": {
+    "version": "6.1.0",
+    "file": "echarts.min.js",
+    "sha256": "b66b25aeb4df84e33199dc21694014d336d222cbd9deb0e5a7c14bd6aa0d0fd0"
+  },
+  "chart.js": {
+    "version": "4.5.1",
+    "file": "chart.umd.min.js",
+    "sha256": "48444a82d4edcb5bec0f1965faacdde18d9c17db3063d042abada2f705c9f54a"
+  },
+  "plotly.js": {
+    "version": "3.7.0",
+    "file": "plotly.min.js",
+    "sha256": "8ef4c6ab1369f0019611cbcd2d5b8aafef23e5d19ef58c39d4b4249831fe2180"
   }
 }
