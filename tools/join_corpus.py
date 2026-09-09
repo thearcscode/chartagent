@@ -4,36 +4,44 @@ ADR-0013, ADR-0014 D13. Issue #128 (parent #122).
 
     python tools/join_corpus.py join --model <model> --purpose gate|plumbing
 
-The ``join`` verb reads the record leg's journal (``build/corpus/journal.jsonl``,
-``tools/record_corpus.py``) and the paint leg's journal
-(``build/corpus/paint_journal.jsonl``, ``tools/paint_corpus.py``) and writes the one file
+The ``join`` verb reads the record leg's journal
+(``build/corpus/journal.jsonl``, ``tools/record_corpus.py``) and the paint
+leg's journal (``build/corpus/paint_journal.jsonl``,
+``tools/paint_corpus.py``) and writes the one file
 ``tools/score_corpus.py`` already knows how to read: ``corpus/outputs.json``.
 
 ``outputs.json`` carries three top-level keys: ``decoding`` (copied from
-``chartagent.plan.client.PRODUCT_DECODING``, never a hand-typed copy, so the scorer's
-``DECODING`` check compares the product's settings against themselves), ``runs`` (one merged
-record per journalled attempt), and ``manifest`` (provenance). It carries **no envelopes** —
-the scorer never reads them, and 150 copies of inlined rows would bury the readable evidence —
-so every deterministic-rail run carries ``envelope_sha256`` instead, tying a committed row back
-to the document that produced its paint facts. ``tools/score_corpus.py`` is not modified by
-this tool and ignores unknown top-level keys, so ``manifest`` is additive.
+``chartagent.plan.client.PRODUCT_DECODING``, never a hand-typed copy, so
+the scorer's ``DECODING`` check compares the product's settings against
+themselves), ``runs`` (one merged record per journalled attempt), and
+``manifest`` (provenance). It carries **no envelopes** — the scorer never
+reads them, and 150 copies of inlined rows would bury the readable
+evidence — so every deterministic-rail run carries ``envelope_sha256``
+instead, tying a committed row back to the document that produced its
+paint facts. ``tools/score_corpus.py`` is not modified by this tool and
+ignores unknown top-level keys, so ``manifest`` is additive.
 
-The manifest records what a reader needs years later: the model string; a ``purpose`` field
-marking a gate run apart from a plumbing run (any provider the shipped ``ModelClient`` accepts
-works, so the pipeline can be rehearsed cheaply — ``purpose`` is what makes a rehearsal
-impossible to mistake for the published Wilson bound); the authoring pin (``flint_version``,
-``fixture_commit``) read from the pre-registration and the scoring pin (``flint_version``,
-``bundle_sha256``) read from ``vocab.json``, so ADR-0014 D13's *score the pin we ship* is
-auditable; the pre-registration's own sha256; the renderer pins vendored for the paint leg; the
-library's git commit; the run date; the recorder's own transport-retry counts (not observable
-from the journal alone, since a retry never reaches a run record — passed in by the caller, who
-reads them off ``record_corpus.py``'s printed summary); and the aggregate per-step planner call
-counts (summed from every journalled run's ``step1_calls`` / ``step2_calls``).
+The manifest records what a reader needs years later: the model string; a
+``purpose`` field marking a gate run apart from a plumbing run (any
+provider the shipped ``ModelClient`` accepts works, so the pipeline can be
+rehearsed cheaply — ``purpose`` is what makes a rehearsal impossible to
+mistake for the published Wilson bound); the authoring pin
+(``flint_version``, ``fixture_commit``) read from the pre-registration and
+the scoring pin (``flint_version``, ``bundle_sha256``) read from
+``vocab.json``, so ADR-0014 D13's *score the pin we ship* is auditable;
+the pre-registration's own sha256; the renderer pins vendored for the
+paint leg; the library's git commit; the run date; the recorder's own
+transport-retry counts (not observable from the journal alone, since a
+retry never reaches a run record — passed in by the caller, who reads
+them off ``record_corpus.py``'s printed summary); and the aggregate
+per-step planner call counts (summed from every journalled run's
+``step1_calls`` / ``step2_calls``).
 
-The join refuses to overwrite an existing ``corpus/outputs.json`` without ``--force``, so a
-stray re-run cannot silently replace a scored artefact. It also refuses — before writing
-anything — if a deterministic-rail record in the record journal has no matching paint record:
-a gap there is a paint leg left unfinished, never a row this tool guesses at.
+The join refuses to overwrite an existing ``corpus/outputs.json`` without
+``--force``, so a stray re-run cannot silently replace a scored artefact.
+It also refuses — before writing anything — if a deterministic-rail
+record in the record journal has no matching paint record: a gap there is
+a paint leg left unfinished, never a row this tool guesses at.
 
 Exit 0 = ``corpus/outputs.json`` was written.
 Exit 1 = a named check failed; nothing was written.

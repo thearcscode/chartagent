@@ -446,7 +446,9 @@ def test_cli_rejects_an_unknown_purpose(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def _reply(kind: str, args: dict[str, Any] | None = None) -> Callable[..., ModelResponse]:
+def _reply(
+    kind: str, args: dict[str, Any] | None = None
+) -> Callable[..., ModelResponse]:
     def fn(_messages: object, info: AgentInfo) -> ModelResponse:
         if kind == "step2":
             name = info.output_tools[0].name
