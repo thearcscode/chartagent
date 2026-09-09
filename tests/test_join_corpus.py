@@ -121,9 +121,7 @@ def test_a_hit_is_merged_with_its_paint_record_and_loses_its_envelope() -> None:
 def test_a_paint_error_is_carried_through_when_present() -> None:
     jc = _tool()
     record_journal = {("r1", 1): _hit_record("r1", 1)}
-    paint_journal = {
-        ("r1", 1): _paint_record("r1", 1, painted=False, error="boom")
-    }
+    paint_journal = {("r1", 1): _paint_record("r1", 1, painted=False, error="boom")}
     runs, issues = jc.join_runs(record_journal, paint_journal)
     assert issues == []
     assert runs[0]["painted"] is False
