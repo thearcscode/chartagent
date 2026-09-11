@@ -469,24 +469,25 @@ def _install(agent: ChartAgent, *replies: Any) -> None:
 
 _INEXPRESSIBLE = ("Inexpressible", {"outcome": "inexpressible", "bucket": 1})
 
-# Triggers a SchemaDriftError under create_chart's own bind step regardless
-# of which real dataset it runs against: "missing" names no column that
-# exists anywhere in the corpus. yearid/n mirror r01's own reference frame
-# (ADR-0014's tagged fixture), so step 1's fragment is otherwise valid.
+# Triggers a residual, unattributed ChartAgentError regardless of which
+# real dataset it runs against: Sankey Diagram is not declared for the
+# vegalite backend, so select_backend raises BackendCapabilityError before
+# ever touching the data — a ChartAgentError outside the three named
+# outcomes, still a harness bug the recorder must journal as a residual.
+# (A transform naming a column the source doesn't have used to leak
+# SchemaDriftError the same way; create_chart now attributes that to
+# planner_failure instead — #137.)
 _RESIDUAL_FRAGMENT = {
     "outcome": "fragment",
-    "chart_type": "Line Chart",
-    "encodings": {"x": {"field": "yearid"}, "y": {"field": "n"}},
-    "transform": {
-        "group_by": ["yearid"],
-        "aggregate": [{"name": "n", "op": "count"}],
-        "filter": {
-            "kind": "is_not_null",
-            "args": [{"kind": "col", "name": "missing"}],
-        },
+    "chart_type": "Sankey Diagram",
+    "encodings": {
+        "x": {"field": "yearid"},
+        "y": {"field": "n"},
+        "size": {"field": "n"},
     },
-    "semantic_types": {"n": "Quantity"},
-    "requested_backend": None,
+    "transform": None,
+    "semantic_types": {},
+    "requested_backend": "vegalite",
 }
 
 # r01's own reference frame (ADR-0014's tagged fixture), unmodified — the
@@ -513,8 +514,9 @@ def _replies_for(
     for item in prereg["requests"]:
         for _run in range(3):
             if item["id"] == residual_id:
+                # BackendCapabilityError fires in select_backend, between
+                # step 1 and step 2 — no step2 reply is ever consumed.
                 replies.append(("Fragment", _RESIDUAL_FRAGMENT))
-                replies.append(("step2", {}))
             elif item["id"] == hit_id:
                 replies.append(("Fragment", _HIT_FRAGMENT))
                 replies.append(("step2", {}))

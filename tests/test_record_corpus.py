@@ -42,16 +42,25 @@ _RAW_SQL_FRAGMENT: dict[str, Any] = {
     "semantic_types": {"revenue": "Quantity"},
     "requested_backend": None,
 }
-_MISSING_COLUMN_FRAGMENT: dict[str, Any] = {
-    **_FRAGMENT,
-    "transform": {
-        "filter": {
-            "kind": "is_not_null",
-            "args": [{"kind": "col", "name": "missing"}],
-        }
+# A residual, unattributed ChartAgentError (#137): Sankey Diagram is not
+# declared for the vegalite backend, so select_backend raises
+# BackendCapabilityError — a ChartAgentError outside the three named
+# outcomes, still a harness bug the recorder must journal as a residual.
+# (A transform naming a column the source doesn't have used to leak
+# SchemaDriftError the same way; create_chart now attributes that to
+# planner_failure instead — see test_planner_failure_records_miss_kind_
+# and_reason_and_no_bucket.)
+_BACKEND_CAPABILITY_FRAGMENT: dict[str, Any] = {
+    "outcome": "fragment",
+    "chart_type": "Sankey Diagram",
+    "encodings": {
+        "x": {"field": "quarter"},
+        "y": {"field": "revenue"},
+        "size": {"field": "revenue"},
     },
-    "encodings": {"x": {"field": "quarter"}, "y": {"field": "revenue"}},
-    "semantic_types": {"revenue": "Quantity"},
+    "transform": None,
+    "semantic_types": {},
+    "requested_backend": "vegalite",
 }
 
 
@@ -181,17 +190,47 @@ def test_unanswerable_instruction_records_miss_kind_and_no_bucket() -> None:
     }
 
 
-def test_residual_chart_agent_error_has_no_bucket_and_no_miss_kind() -> None:
-    """The load-bearing row: SchemaDriftError never becomes planner_failure."""
+def test_missing_source_column_is_planner_failure_not_a_residual() -> None:
+    """#137: create_chart no longer leaks SchemaDriftError for this shape."""
     rc = _tool()
     agent = _agent()
-    _install(agent, ("Fragment", _MISSING_COLUMN_FRAGMENT), ("step2", {}))
+    fragment = {
+        **_FRAGMENT,
+        "transform": {
+            "filter": {
+                "kind": "is_not_null",
+                "args": [{"kind": "col", "name": "missing"}],
+            }
+        },
+        "encodings": {"x": {"field": "quarter"}, "y": {"field": "revenue"}},
+        "semantic_types": {"revenue": "Quantity"},
+    }
+    _install(agent, ("Fragment", fragment), ("step2", {}))
     record = rc.attempt(agent, _SALES, "drop missing")
     assert record["rail"] is None
-    assert record["residual_error"]["type"] == "SchemaDriftError"
-    assert isinstance(record["residual_error"]["message"], str)
+    assert record["miss_kind"] == "planner_failure"
+    assert record["reason"] == "invalid_emit"
     assert record["step1_calls"] == 1
     assert record["step2_calls"] == 1
+    assert "residual_error" not in record
+    assert "escape_reason" not in record
+    assert "bucket" not in record
+
+
+def test_residual_chart_agent_error_has_no_bucket_and_no_miss_kind() -> None:
+    """The load-bearing row: a ChartAgentError outside the three named
+    outcomes never becomes planner_failure — it stays an unattributed
+    residual (ADR-0019 D8).
+    """
+    rc = _tool()
+    agent = _agent()
+    _install(agent, ("Fragment", _BACKEND_CAPABILITY_FRAGMENT))
+    record = rc.attempt(agent, _SALES, "sankey in vegalite")
+    assert record["rail"] is None
+    assert record["residual_error"]["type"] == "BackendCapabilityError"
+    assert isinstance(record["residual_error"]["message"], str)
+    assert record["step1_calls"] == 1
+    assert record["step2_calls"] == 0
     assert "miss_kind" not in record
     assert "escape_reason" not in record
     assert "bucket" not in record
@@ -404,12 +443,9 @@ def test_residual_errors_do_not_abort_the_run_and_are_summarised(
     agent = _agent()
     _install(
         agent,
-        ("Fragment", _MISSING_COLUMN_FRAGMENT),
-        ("step2", {}),
-        ("Fragment", _MISSING_COLUMN_FRAGMENT),
-        ("step2", {}),
-        ("Fragment", _MISSING_COLUMN_FRAGMENT),
-        ("step2", {}),
+        ("Fragment", _BACKEND_CAPABILITY_FRAGMENT),
+        ("Fragment", _BACKEND_CAPABILITY_FRAGMENT),
+        ("Fragment", _BACKEND_CAPABILITY_FRAGMENT),
         ("Inexpressible", {"outcome": "inexpressible", "bucket": 1}),
         ("Inexpressible", {"outcome": "inexpressible", "bucket": 1}),
         ("Inexpressible", {"outcome": "inexpressible", "bucket": 1}),
@@ -420,7 +456,7 @@ def test_residual_errors_do_not_abort_the_run_and_are_summarised(
     rc._print_residual_summary(records)
     out = capsys.readouterr().out
     assert "bad" in out
-    assert "SchemaDriftError" in out
+    assert "BackendCapabilityError" in out
     assert "3" in out
 
 
@@ -429,10 +465,7 @@ def test_main_record_is_zero_exit_with_residual_errors(
 ) -> None:
     rc = _tool()
     agent = _agent()
-    _install(
-        agent,
-        *([("Fragment", _MISSING_COLUMN_FRAGMENT), ("step2", {})] * 3),
-    )
+    _install(agent, *([("Fragment", _BACKEND_CAPABILITY_FRAGMENT)] * 3))
     monkeypatch.setattr(rc, "create_chart_agent", lambda **_kwargs: agent)
 
     prereg_path = tmp_path / "pre-registration.json"

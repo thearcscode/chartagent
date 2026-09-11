@@ -182,6 +182,78 @@ def _compile(
     raise SpecShapeError(f"{path}: unknown Expr kind {kind!r}")
 
 
+def check_expr_shape(node: object, *, path: str) -> None:
+    """Validate an Expr node's structure with no column or type context.
+
+    The step-1 half of what :func:`compile_expr` checks: dict-ness, a
+    known ``kind``, arg arity, and ``case``'s ``else``/non-empty
+    ``whens``. Column existence (``scope``) and literal/bucket
+    compatibility need rows and stay ``compile_expr``'s.
+    """
+    if not isinstance(node, dict):
+        raise SpecShapeError(f"{path} is not an Expr")
+    kind = node.get("kind")
+    if not isinstance(kind, str):
+        raise SpecShapeError(f"{path} is not an Expr")
+    if kind not in EXPR_KINDS:
+        raise SpecShapeError(f"{path}: unknown Expr kind {kind!r}")
+    if kind == "col":
+        if not isinstance(node.get("name"), str):
+            raise SpecShapeError(f"{path}.name must be a string")
+    elif kind == "lit":
+        if "value" not in node:
+            raise SpecShapeError(f"{path}.value is required")
+    elif kind in {"is_null", "is_not_null", "not", "neg"}:
+        _check_expr_args_shape(node, path=path, minimum=1, exact=1)
+    elif kind in _COMPARISONS or kind in _ARITHMETIC or kind in _STRING_TESTS:
+        _check_expr_args_shape(node, path=path, minimum=2, exact=2)
+    elif kind == "between":
+        _check_expr_args_shape(node, path=path, minimum=3, exact=3)
+    elif kind == "in":
+        _check_in_shape(node, path=path)
+    elif kind in _NARY:
+        _check_expr_args_shape(node, path=path, minimum=2)
+    elif kind == "case":
+        _check_case_shape(node, path=path)
+
+
+def _check_expr_args_shape(
+    node: dict[str, Any], *, path: str, minimum: int, exact: int | None = None
+) -> None:
+    args = node.get("args")
+    if not isinstance(args, list) or len(args) < minimum:
+        raise SpecShapeError(f"{path}.args must have at least {minimum} Expr node(s)")
+    if exact is not None and len(args) != exact:
+        raise SpecShapeError(f"{path}.args must be {exact} Expr node(s)")
+    for index, arg in enumerate(args):
+        check_expr_shape(arg, path=f"{path}.args[{index}]")
+
+
+def _check_in_shape(node: dict[str, Any], *, path: str) -> None:
+    _check_expr_args_shape(node, path=path, minimum=2)
+    args = node["args"]
+    for index, item in enumerate(args[1:], start=1):
+        if not _is_lit(item):
+            raise SpecShapeError(
+                f"{path}.args[{index}] must be a literal; in RHS is literals only"
+            )
+
+
+def _check_case_shape(node: dict[str, Any], *, path: str) -> None:
+    if "else" not in node:
+        raise SpecShapeError(f"{path} requires else")
+    whens = node.get("whens")
+    if not isinstance(whens, list) or not whens:
+        raise SpecShapeError(f"{path}.whens must be a non-empty list")
+    for index, item in enumerate(whens):
+        branch = f"{path}.whens[{index}]"
+        if not isinstance(item, dict) or "when" not in item or "then" not in item:
+            raise SpecShapeError(f"{branch} must have when and then")
+        check_expr_shape(item["when"], path=f"{branch}.when")
+        check_expr_shape(item["then"], path=f"{branch}.then")
+    check_expr_shape(node["else"], path=f"{path}.else")
+
+
 def _col(
     node: dict[str, Any], *, path: str, scope: set[str], stage: str | None
 ) -> duckdb.Expression:
