@@ -16,6 +16,7 @@ from chartagent.errors import (
     InexpressibleRequestError,
     PlannerFailureError,
     RawSqlRejectedError,
+    SchemaDriftError,
     SpecShapeError,
     SpecVocabularyError,
     UnanswerableInstructionError,
@@ -86,8 +87,21 @@ class ChartAgent:
             requested_backend=fragment.requested_backend,
         )
         properties = _step2(profile, fragment, instruction, backend, invoke)
-        frame = assemble(fragment, profile, chart_properties=properties)
-        envelope = bind(frame, data, backend=backend)
+        try:
+            frame = assemble(fragment, profile, chart_properties=properties)
+            envelope = bind(frame, data, backend=backend)
+        except (SpecShapeError, SchemaDriftError) as exc:
+            # A step-1-shaped fragment can still fail deeper than assemble()
+            # checks (bind-time compile) or against columns the source
+            # doesn't have (#137). Either way the planner emitted something
+            # unusable — never let the bind-time exception type leak past
+            # create_chart. ChartResult.refresh calls bind() directly and
+            # is not this seam: a real drift on new rows must stay
+            # SchemaDriftError there.
+            raise PlannerFailureError(
+                "planner emitted a fragment that failed after step 2",
+                reason="invalid_emit",
+            ) from exc
         return ChartResult(envelope=envelope)
 
 

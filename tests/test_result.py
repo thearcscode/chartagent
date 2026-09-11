@@ -6,7 +6,10 @@ exactly the failure this strips around).
 
 from __future__ import annotations
 
+import pytest
+
 from chartagent import ChartResult, bind
+from chartagent.errors import SchemaDriftError
 
 _FRAME = {
     "chart_spec": {
@@ -48,3 +51,29 @@ def test_refresh_does_not_pass_the_bound_input_straight_back_to_bind() -> None:
     # SpecShapeError exactly as test_bind.py's round-trip test does.
     result = ChartResult(envelope=bind(_FRAME, _ROWS, backend="echarts"))
     result.refresh(_NEW_ROWS)  # no raise
+
+
+def test_refresh_still_raises_schema_drift_on_genuinely_new_rows() -> None:
+    # #137's belt fix catches SpecShapeError/SchemaDriftError inside
+    # create_chart, not inside bind() itself. refresh() calls bind()
+    # directly and is not that seam: rows that later drop a column the
+    # stored transform names must still raise SchemaDriftError, unwrapped.
+    frame = {
+        "chart_spec": {
+            "chartType": "Bar Chart",
+            "encodings": {"x": {"field": "quarter"}, "y": {"field": "revenue"}},
+        },
+        "x_chartagent": {
+            "transform": {
+                "filter": {
+                    "kind": "is_not_null",
+                    "args": [{"kind": "col", "name": "revenue"}],
+                }
+            }
+        },
+    }
+    result = ChartResult(envelope=bind(frame, _ROWS, backend="echarts"))
+    dropped_column = [{"quarter": "Q3"}, {"quarter": "Q4"}]
+    with pytest.raises(SchemaDriftError) as caught:
+        result.refresh(dropped_column)
+    assert caught.value.stage == "source"

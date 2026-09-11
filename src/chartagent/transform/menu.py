@@ -16,7 +16,7 @@ from duckdb import (
 from chartagent.errors import SpecShapeError
 from chartagent.frame.input import SourceBucket
 from chartagent.transform.engine import collect, pass_through
-from chartagent.transform.expr import compile_expr
+from chartagent.transform.expr import check_expr_shape, compile_expr
 from chartagent.transform.raw_sql import run_raw_sql
 
 TRANSFORM_SLOTS: tuple[str, ...] = (
@@ -33,9 +33,13 @@ _SLOTS = frozenset(TRANSFORM_SLOTS)
 
 
 def check_transform_shape(transform: Mapping[str, object] | None) -> None:
-    """Reject unrecognised slots, mixed ``raw_sql``, and nameless aggregates.
+    """Reject unrecognised slots and data-free shape failures (#137).
 
-    Data-free. ``as`` is not a public alias for ``name``.
+    Data-free: unrecognised/mixed slots, nameless aggregates, ``count``
+    with a ``field``, an empty ``group_by``+``aggregate``, and
+    ``filter``/``having``/``derive[].expr`` Expr well-formedness. ``as``
+    is not a public alias for ``name``. Column existence in rows —
+    unknown ``scope`` names — stays bind's; it needs rows.
     """
     if not transform:
         return
@@ -50,10 +54,31 @@ def check_transform_shape(transform: Mapping[str, object] | None) -> None:
     unknown = tuple(key for key in transform if key not in _SLOTS)
     if unknown:
         raise SpecShapeError(f"unrecognised transform slot(s): {unknown}")
-    _check_aggregate_names(transform.get("aggregate"))
+    if "filter" in transform:
+        check_expr_shape(transform["filter"], path="transform.filter")
+    if "having" in transform:
+        check_expr_shape(transform["having"], path="transform.having")
+    _check_derive_shape(transform.get("derive"))
+    _check_aggregate_shape(transform.get("aggregate"))
+    _check_group_and_aggregate_not_both_empty(transform)
 
 
-def _check_aggregate_names(aggregates: object) -> None:
+def _check_derive_shape(items: object) -> None:
+    if items is None:
+        return
+    if not isinstance(items, list):
+        raise SpecShapeError("transform.derive must be a list")
+    for index, item in enumerate(items):
+        path = f"transform.derive[{index}]"
+        if not isinstance(item, dict):
+            raise SpecShapeError(f"{path} must be an object with name and expr")
+        name = item.get("name")
+        if not isinstance(name, str) or not name:
+            raise SpecShapeError(f"{path}.name is required")
+        check_expr_shape(item.get("expr"), path=f"{path}.expr")
+
+
+def _check_aggregate_shape(aggregates: object) -> None:
     if aggregates is None:
         return
     if not isinstance(aggregates, list):
@@ -65,6 +90,21 @@ def _check_aggregate_names(aggregates: object) -> None:
         name = item.get("name")
         if not isinstance(name, str) or not name:
             raise SpecShapeError(f"{path}.name is required")
+        if item.get("op") == "count" and item.get("field") is not None:
+            raise SpecShapeError(f"{path}: count takes no field")
+
+
+def _check_group_and_aggregate_not_both_empty(transform: Mapping[str, object]) -> None:
+    if "group_by" not in transform and "aggregate" not in transform:
+        return
+    groups = transform.get("group_by")
+    aggregates = transform.get("aggregate")
+    groups_empty = groups is None or (isinstance(groups, list) and not groups)
+    aggregates_empty = aggregates is None or (
+        isinstance(aggregates, list) and not aggregates
+    )
+    if groups_empty and aggregates_empty:
+        raise SpecShapeError("transform.group_by and transform.aggregate are empty")
 
 
 def run_transform(

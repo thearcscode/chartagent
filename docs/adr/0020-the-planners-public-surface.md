@@ -148,6 +148,22 @@ wrapping: every one is already a `ChartAgentError` subclass, so `except ChartAge
 catches everything from one call site regardless of which internal verb raised it — exactly
 what ADR-0005's flat taxonomy bought.
 
+**Erratum — 2026-09-11 ([#137](https://github.com/thearcscode/chartagent/issues/137)).**
+`SchemaDriftError` is narrowed: it surfaces un-wrapped only from `bind` called directly, and
+from `ChartResult.refresh()`'s `bind` call — never from `create_chart`'s own internal
+`assemble`/`bind` after step 2. There, `SpecShapeError` and `SchemaDriftError` are now caught
+and re-raised as `PlannerFailureError(reason="invalid_emit")`. The corpus gate found the gap
+this closes: a transform naming a column the just-profiled source doesn't have (an invented
+name, e.g. a `group_by` key nothing in the profile matches) is the planner breaking, not a
+caller-facing drift signal — the same *kind* of failed emit as the data-free shape checks
+ADR-0019 Decision 7 already routes to `invalid_emit`, one seam later. Left unattributed, the
+scorer's `UNATTRIBUTED` check (ADR-0019 Decision 8) refused to produce a number at all,
+mistaking a harness bug for what was actually working as designed. `refresh()` re-binds
+already-planned rows with no model call to blame the drift on — a real drift there, on
+genuinely new rows, stays the caller's problem exactly as this decision said.
+`BackendCapabilityError`, `TransformError`, and `RawSqlRejectedError` are unaffected; they
+still surface un-wrapped from every `create_chart` call, as decided above.
+
 ### 5. `quality` does not exist at P1
 
 PRD §7.8's `quality="balanced"` governs the review gate, which is P2 ("Review-gate tier
@@ -192,7 +208,10 @@ prompt) and stay signatures-only until #92.
   values, never buckets, keeping the four-bucket vocabulary ADR-0013/ADR-0014 closed shut.
 - **`bind`'s error surface is now reachable two ways** (directly, and through
   `create_chart`), with no new wrapping layer — a consequence of Decision 1, priced in
-  Decision 4.
+  Decision 4. **Superseded in part by the 2026-09-11 erratum**: `create_chart`'s own
+  post-step-2 `assemble`/`bind` call now wraps `SpecShapeError`/`SchemaDriftError` into
+  `PlannerFailureError`; `bind` called directly, and `ChartResult.refresh`, are still the
+  no-wrapping path this consequence described.
 - **History and quality are named absences, not silent ones.** A caller reading this ADR
   knows `history=`/`quality=` are coming at P2, rather than discovering their omission by
   trial and error.

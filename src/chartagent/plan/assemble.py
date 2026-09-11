@@ -4,8 +4,12 @@ Code fills ``source_schema``, ``spec_version``, ``chart_spec.baseSize``, and
 empty ``annotations`` / ``interactions``. The model’s fragment carries chart
 type, encodings, transform, and ``semantic_types``. This is also the
 data-free step-1 check: the façade, ``check_transform_shape``,
-source-bucket encoding types, and ``raw_sql``’s two locks. Unknown
-columns are ``bind``’s — they need rows.
+source-bucket encoding types, and ``raw_sql``’s two locks.
+``check_transform_shape`` covers data-free transform **shape** — Expr
+well-formedness for ``filter``/``having``/``derive[].expr``, ``count``
+arity, and an empty ``group_by``+``aggregate`` — one function deeper
+than the slot names it used to stop at (#137). Unknown **column
+existence in rows** stays ``bind``’s — it needs rows.
 """
 
 from __future__ import annotations

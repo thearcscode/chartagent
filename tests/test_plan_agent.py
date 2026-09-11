@@ -16,7 +16,6 @@ import chartagent
 from chartagent import ChartAgent, ChartResult, create_chart_agent
 from chartagent.errors import (
     BackendCapabilityError,
-    ChartAgentError,
     InexpressibleRequestError,
     PlannerFailureError,
     SchemaDriftError,
@@ -279,6 +278,122 @@ def test_nameless_aggregate_is_not_a_bind_time_spec_shape_error() -> None:
     assert calls["step2"] == 0
 
 
+def test_filter_that_is_not_an_expr_is_not_a_bind_time_spec_shape_error() -> None:
+    bad = {**_FRAGMENT, "transform": {"filter": "revenue > 100"}}
+    agent = _agent()
+    calls = _install(agent, ("Fragment", bad), ("Fragment", bad))
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "revenue over 100")
+    assert not isinstance(caught.value, SpecShapeError)
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
+def test_count_with_a_field_is_not_a_bind_time_spec_shape_error() -> None:
+    bad = {
+        **_FRAGMENT,
+        "transform": {
+            "group_by": ["quarter"],
+            "aggregate": [{"name": "n", "op": "count", "field": "revenue"}],
+        },
+    }
+    agent = _agent()
+    calls = _install(agent, ("Fragment", bad), ("Fragment", bad))
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "count rows by quarter")
+    assert not isinstance(caught.value, SpecShapeError)
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
+def test_having_that_is_not_an_expr_is_not_a_bind_time_spec_shape_error() -> None:
+    bad = {
+        **_FRAGMENT,
+        "transform": {**_TRANSFORM, "having": "total > 100"},
+    }
+    agent = _agent()
+    calls = _install(agent, ("Fragment", bad), ("Fragment", bad))
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "revenue by quarter over 100")
+    assert not isinstance(caught.value, SpecShapeError)
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
+def test_derive_case_missing_else_is_not_a_bind_time_spec_shape_error() -> None:
+    bad = {
+        **_FRAGMENT,
+        "transform": {
+            "derive": [
+                {
+                    "name": "bucket",
+                    "expr": {
+                        "kind": "case",
+                        "whens": [
+                            {
+                                "when": {
+                                    "kind": "gt",
+                                    "args": [
+                                        {"kind": "col", "name": "revenue"},
+                                        {"kind": "lit", "value": 100},
+                                    ],
+                                },
+                                "then": {"kind": "lit", "value": "high"},
+                            }
+                        ],
+                    },
+                }
+            ]
+        },
+    }
+    agent = _agent()
+    calls = _install(agent, ("Fragment", bad), ("Fragment", bad))
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "bucket revenue")
+    assert not isinstance(caught.value, SpecShapeError)
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
+def test_empty_group_by_and_aggregate_is_not_a_bind_time_spec_shape_error() -> None:
+    bad = {**_FRAGMENT, "transform": {"group_by": [], "aggregate": []}}
+    agent = _agent()
+    calls = _install(agent, ("Fragment", bad), ("Fragment", bad))
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert not isinstance(caught.value, SpecShapeError)
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
+def test_unknown_expr_kind_is_not_a_bind_time_spec_shape_error() -> None:
+    bad = {
+        **_FRAGMENT,
+        "transform": {
+            "filter": {
+                "kind": "regex_match",
+                "args": [
+                    {"kind": "col", "name": "quarter"},
+                    {"kind": "lit", "value": "Q.*"},
+                ],
+            }
+        },
+    }
+    agent = _agent()
+    calls = _install(agent, ("Fragment", bad), ("Fragment", bad))
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "quarters matching a pattern")
+    assert not isinstance(caught.value, SpecShapeError)
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
 def test_measured_live_payload_is_invalid_emit_not_a_bind_error() -> None:
     agent = _agent()
     calls = _install(
@@ -413,7 +528,12 @@ def test_happy_path_over_committed_csv_then_zero_llm_refresh() -> None:
     assert refreshed is not result
 
 
-def test_bind_errors_surface_unwrapped_and_are_chart_agent_errors() -> None:
+def test_missing_source_column_is_a_planner_failure_not_schema_drift() -> None:
+    # #137: a transform naming a column the source doesn't have is a failed
+    # emit against the same source that was just profiled, not a drift the
+    # caller must handle. create_chart never leaks SchemaDriftError from its
+    # own post-step-2 bind() — see test_refresh_still_raises_schema_drift_on_
+    # genuinely_new_rows for the case that must still raise it.
     agent = _agent()
     fragment = {
         **_FRAGMENT,
@@ -429,14 +549,13 @@ def test_bind_errors_surface_unwrapped_and_are_chart_agent_errors() -> None:
         },
         "semantic_types": {"revenue": "Quantity"},
     }
-    _install(agent, ("Fragment", fragment), ("step2", {}))
-    try:
+    calls = _install(agent, ("Fragment", fragment), ("step2", {}))
+    with pytest.raises(PlannerFailureError) as caught:
         agent.create_chart(_SALES, "drop missing")
-    except ChartAgentError as caught:
-        assert isinstance(caught, SchemaDriftError)
-        assert caught.stage == "source"
-    else:
-        raise AssertionError("expected SchemaDriftError")
+    assert not isinstance(caught.value, SchemaDriftError)
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 1
 
 
 def test_requested_backend_capability_miss_never_calls_step2() -> None:
