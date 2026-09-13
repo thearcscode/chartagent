@@ -1,4 +1,4 @@
-"""create_chart_agent / create_chart — sequence, budgets, errors (issue #108)."""
+"""create_chart_agent / create_chart — sequence, budgets, errors (#108, #140)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from pydantic_ai.messages import ModelResponse, ToolCallPart
+from pydantic_ai.messages import (
+    ModelResponse,
+    SystemPromptPart,
+    ToolCallPart,
+    UserPromptPart,
+)
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
 import chartagent
@@ -79,14 +84,37 @@ def _reply(
     return fn
 
 
-def _install(agent: ChartAgent, *replies: Any) -> dict[str, int]:
+def _prompt_text(messages: object, part_type: type) -> str:
+    text = ""
+    if not isinstance(messages, list):
+        return text
+    for message in messages:
+        parts = getattr(message, "parts", ())
+        for part in parts:
+            if isinstance(part, part_type):
+                content = getattr(part, "content", "")
+                if isinstance(content, str):
+                    text = content
+    return text
+
+
+def _install(agent: ChartAgent, *replies: Any) -> dict[str, Any]:
     queue = list(replies)
-    calls = {"model": 0, "step2": 0}
+    calls: dict[str, Any] = {
+        "model": 0,
+        "step2": 0,
+        "system": [],
+        "user": [],
+        "n_messages": [],
+    }
 
     def fn(messages: object, info: AgentInfo) -> ModelResponse:
         calls["model"] += 1
         if len(info.output_tools) == 1:
             calls["step2"] += 1
+        calls["system"].append(_prompt_text(messages, SystemPromptPart))
+        calls["user"].append(_prompt_text(messages, UserPromptPart))
+        calls["n_messages"].append(len(messages) if isinstance(messages, list) else 0)
         reply = queue.pop(0)
         if isinstance(reply, tuple):
             kind, args = reply
@@ -170,6 +198,12 @@ def test_refuted_missing_column_is_retried_then_planner_failure() -> None:
     assert not isinstance(caught.value, UnanswerableInstructionError)
     assert caught.value.reason == "invalid_emit"
     assert calls["model"] == 2
+    second = calls["user"][1]
+    assert '"kind":"missing_column"' in second
+    assert '"keys":["quarter"]' in second
+    assert "refuted" in second
+    assert "count takes no field" not in second
+    assert calls["n_messages"] == [1, 1]
 
 
 def test_refuted_missing_role_is_the_same_path() -> None:
@@ -214,6 +248,22 @@ def test_facade_failure_costs_exactly_two_step1_calls() -> None:
     assert caught.value.reason == "invalid_emit"
     assert calls["model"] == 2
     assert calls["step2"] == 0
+
+
+def test_schema_decode_failure_puts_the_payload_and_checker_on_the_next_ask() -> None:
+    bad = {**_FRAGMENT, "chart_type": "Nope"}
+    agent = _agent()
+    calls = _install(agent, ("Fragment", bad), ("Fragment", bad))
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert caught.value.reason == "invalid_emit"
+    first, second = calls["user"]
+    assert '"chart_type":"Nope"' not in first
+    assert '"chart_type":"Nope"' in second
+    assert '"encodings"' in second
+    assert "Input should be" in second
+    assert calls["system"][0] == calls["system"][1]
+    assert calls["n_messages"] == [1, 1]
 
 
 def test_fragment_tool_call_omitting_outcome_is_not_invalid_emit() -> None:
@@ -306,6 +356,29 @@ def test_count_with_a_field_is_not_a_bind_time_spec_shape_error() -> None:
     assert caught.value.reason == "invalid_emit"
     assert calls["model"] == 2
     assert calls["step2"] == 0
+
+
+def test_assemble_reject_puts_the_rejected_emit_and_checker_on_the_next_ask() -> None:
+    bad = {
+        **_FRAGMENT,
+        "transform": {
+            "group_by": ["quarter"],
+            "aggregate": [{"name": "n", "op": "count", "field": "revenue"}],
+        },
+    }
+    agent = _agent()
+    calls = _install(agent, ("Fragment", bad), ("Fragment", bad))
+    with pytest.raises(PlannerFailureError):
+        agent.create_chart(_SALES, "count rows by quarter")
+    first, second = calls["user"]
+    assert "count takes no field" not in first
+    assert '"op":"count"' not in first.split("Instruction:", 1)[-1]
+    assert "count takes no field" in second
+    assert '"op":"count"' in second
+    assert '"field":"revenue"' in second
+    assert calls["system"][0] == calls["system"][1]
+    assert calls["n_messages"] == [1, 1]
+    assert first != second
 
 
 def test_having_that_is_not_an_expr_is_not_a_bind_time_spec_shape_error() -> None:
@@ -466,6 +539,13 @@ def test_chart_properties_failing_their_model_cost_three_step2_calls() -> None:
     assert caught.value.reason == "invalid_emit"
     assert calls["model"] == 4
     assert calls["step2"] == 3
+    first_step2, second_step2 = calls["user"][1], calls["user"][2]
+    assert '"notAKey":1' not in first_step2
+    assert '"notAKey":1' in second_step2
+    assert "notAKey" in second_step2
+    assert "Extra inputs are not permitted" in second_step2
+    assert calls["system"][1] == calls["system"][2]
+    assert calls["n_messages"] == [1, 1, 1, 1]
 
 
 def test_no_run_exceeds_five_calls_and_the_cap_cannot_bind() -> None:
@@ -493,6 +573,8 @@ def test_empty_step_is_empty_response() -> None:
         agent.create_chart(_SALES, "revenue by quarter")
     assert caught.value.reason == "empty_response"
     assert calls["model"] == 2
+    assert "Rejected emit:" not in calls["user"][1]
+    assert "Checker:" not in calls["user"][1]
 
 
 def test_happy_path_over_committed_csv_then_zero_llm_refresh() -> None:
@@ -534,6 +616,9 @@ def test_missing_source_column_is_a_planner_failure_not_schema_drift() -> None:
     # caller must handle. create_chart never leaks SchemaDriftError from its
     # own post-step-2 bind() — see test_refresh_still_raises_schema_drift_on_
     # genuinely_new_rows for the case that must still raise it.
+    # #140: that wrap is a repair — the extra step-1 ask sees the fragment
+    # and the bind checker. Budgets stay 1 extra at step 1, so a second
+    # identical emit then fails as planner_failure.
     agent = _agent()
     fragment = {
         **_FRAGMENT,
@@ -549,13 +634,54 @@ def test_missing_source_column_is_a_planner_failure_not_schema_drift() -> None:
         },
         "semantic_types": {"revenue": "Quantity"},
     }
-    calls = _install(agent, ("Fragment", fragment), ("step2", {}))
+    calls = _install(
+        agent,
+        ("Fragment", fragment),
+        ("step2", {}),
+        ("Fragment", fragment),
+        ("step2", {}),
+    )
     with pytest.raises(PlannerFailureError) as caught:
         agent.create_chart(_SALES, "drop missing")
     assert not isinstance(caught.value, SchemaDriftError)
     assert caught.value.reason == "invalid_emit"
-    assert calls["model"] == 2
-    assert calls["step2"] == 1
+    assert calls["model"] == 4
+    assert calls["step2"] == 2
+    retry = calls["user"][2]
+    assert '"name":"missing"' in retry
+    assert '"chartProperties"' in retry
+    assert "dropped" in retry
+    assert calls["n_messages"] == [1, 1, 1, 1]
+
+
+def test_bind_wrap_repair_can_emit_a_usable_fragment() -> None:
+    bad = {
+        **_FRAGMENT,
+        "transform": {
+            "filter": {
+                "kind": "is_not_null",
+                "args": [{"kind": "col", "name": "missing"}],
+            }
+        },
+        "encodings": {
+            "x": {"field": "quarter"},
+            "y": {"field": "revenue"},
+        },
+        "semantic_types": {"revenue": "Quantity"},
+    }
+    agent = _agent()
+    calls = _install(
+        agent,
+        ("Fragment", bad),
+        ("step2", {}),
+        ("Fragment", _FRAGMENT),
+        ("step2", {}),
+    )
+    result = agent.create_chart(_SALES, "drop missing")
+    assert isinstance(result, ChartResult)
+    assert calls["model"] == 4
+    assert calls["step2"] == 2
+    assert "dropped" in calls["user"][2]
 
 
 def test_requested_backend_capability_miss_never_calls_step2() -> None:

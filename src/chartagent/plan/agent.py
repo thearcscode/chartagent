@@ -8,7 +8,9 @@ or unanswerable verdict is an answer, never a retry.
 
 from __future__ import annotations
 
-from typing import Any, Literal, cast
+import json
+from dataclasses import replace
+from typing import Any, Literal, TypeVar, cast
 
 from chartagent.bind import DataSource, bind
 from chartagent.errors import (
@@ -35,13 +37,57 @@ _STEP1_RETRIES = 1
 _STEP2_RETRIES = 2
 _CALL_CAP = 5
 
+_Prompt = TypeVar("_Prompt", Step1Prompt, Step2Prompt)
+
 
 class _EmitFailed(Exception):
     """The model returned nothing, or output that failed a step check."""
 
-    def __init__(self, reason: Literal["empty_response", "invalid_emit"]) -> None:
+    def __init__(
+        self,
+        reason: Literal["empty_response", "invalid_emit"],
+        *,
+        rejected: Any = None,
+        checker: str = "",
+    ) -> None:
         super().__init__(reason)
         self.reason = reason
+        self.rejected = rejected
+        self.checker = checker
+
+
+def _repair_user(user: str, rejected: Any, checker: str) -> str:
+    parts = [user]
+    if rejected is not None:
+        parts.append(
+            "Rejected emit:\n"
+            + json.dumps(rejected, separators=(",", ":"), default=str)
+        )
+    if checker:
+        parts.append(f"Checker:\n{checker}")
+    return "\n\n".join(parts)
+
+
+def _with_repair(prompt: _Prompt, repair: _EmitFailed | None) -> _Prompt:
+    if repair is None or (repair.rejected is None and not repair.checker):
+        return prompt
+    return replace(
+        prompt, user=_repair_user(prompt.user, repair.rejected, repair.checker)
+    )
+
+
+def _dump_emit(value: Any) -> Any:
+    dump = getattr(value, "model_dump", None)
+    if callable(dump):
+        return dump(mode="json", exclude_none=True)
+    return value
+
+
+def _checker_message(exc: BaseException) -> str:
+    for item in _walk_exceptions(exc):
+        if type(item).__name__ in {"ValidationError", "ToolRetryError"}:
+            return str(item)
+    return str(exc)
 
 
 def create_chart_agent(*, model: str) -> ChartAgent:
@@ -78,73 +124,99 @@ class ChartAgent:
                 reason = _call_failure_reason(exc)
                 if reason is None:
                     raise
-                raise _EmitFailed(reason) from exc
+                raise _EmitFailed(
+                    reason,
+                    rejected=getattr(exc, "rejected_emit", None),
+                    checker=(_checker_message(exc) if reason == "invalid_emit" else ""),
+                ) from exc
 
-        fragment = _step1(profile, instruction, invoke)
-        backend = select_backend(
-            fragment.chart_type,
-            fragment.encodings,
-            requested_backend=fragment.requested_backend,
+        last: Literal["empty_response", "invalid_emit"] | None = None
+        repair: _EmitFailed | None = None
+        for _ in range(_STEP1_RETRIES + 1):
+            try:
+                fragment = _step1_attempt(profile, instruction, invoke, repair)
+            except _EmitFailed as exc:
+                last = exc.reason
+                repair = exc
+                continue
+            backend = select_backend(
+                fragment.chart_type,
+                fragment.encodings,
+                requested_backend=fragment.requested_backend,
+            )
+            properties = _step2(profile, fragment, instruction, backend, invoke)
+            try:
+                frame = assemble(fragment, profile, chart_properties=properties)
+                envelope = bind(frame, data, backend=backend)
+            except (SpecShapeError, SchemaDriftError) as exc:
+                # A step-1-shaped fragment can still fail deeper than
+                # assemble() checks (bind-time compile) or against columns
+                # the source doesn't have (#137). Either way the planner
+                # emitted something unusable — never let the bind-time
+                # exception type leak past create_chart.
+                # ChartResult.refresh calls bind() directly and is not this
+                # seam: a real drift on new rows must stay SchemaDriftError
+                # there. #140: this wrap is a step-1 repair.
+                last = "invalid_emit"
+                repair = _EmitFailed(
+                    "invalid_emit",
+                    rejected={
+                        "fragment": fragment.model_dump(mode="json", exclude_none=True),
+                        "chartProperties": properties,
+                    },
+                    checker=str(exc),
+                )
+                continue
+            return ChartResult(envelope=envelope)
+        raise PlannerFailureError(
+            "step 1 did not emit a usable fragment",
+            reason=last or "invalid_emit",
         )
-        properties = _step2(profile, fragment, instruction, backend, invoke)
-        try:
-            frame = assemble(fragment, profile, chart_properties=properties)
-            envelope = bind(frame, data, backend=backend)
-        except (SpecShapeError, SchemaDriftError) as exc:
-            # A step-1-shaped fragment can still fail deeper than assemble()
-            # checks (bind-time compile) or against columns the source
-            # doesn't have (#137). Either way the planner emitted something
-            # unusable — never let the bind-time exception type leak past
-            # create_chart. ChartResult.refresh calls bind() directly and
-            # is not this seam: a real drift on new rows must stay
-            # SchemaDriftError there.
-            raise PlannerFailureError(
-                "planner emitted a fragment that failed after step 2",
-                reason="invalid_emit",
-            ) from exc
-        return ChartResult(envelope=envelope)
 
 
-def _step1(
+def _step1_attempt(
     profile: Profile,
     instruction: str,
     invoke: Any,
+    repair: _EmitFailed | None,
 ) -> Fragment:
-    last: Literal["empty_response", "invalid_emit"] | None = None
-    for _ in range(_STEP1_RETRIES + 1):
-        prompt = render_step1(profile, instruction)
-        try:
-            result = invoke(Step1Result, prompt)
-        except _EmitFailed as exc:
-            last = exc.reason
-            continue
-        if isinstance(result, Inexpressible):
-            raise InexpressibleRequestError(
-                f"request is inexpressible (bucket {result.bucket})",
-                bucket=result.bucket,
+    prompt = _with_repair(render_step1(profile, instruction), repair)
+    result = invoke(Step1Result, prompt)
+    if isinstance(result, Inexpressible):
+        raise InexpressibleRequestError(
+            f"request is inexpressible (bucket {result.bucket})",
+            bucket=result.bucket,
+        )
+    if isinstance(result, Unanswerable):
+        if _claim_refuted(result, profile):
+            raise _EmitFailed(
+                "invalid_emit",
+                rejected=result.model_dump(mode="json", exclude_none=True),
+                checker=(
+                    f"unanswerable {result.kind} is refuted: "
+                    f"keys {result.keys!r} are in the profile"
+                ),
             )
-        if isinstance(result, Unanswerable):
-            if _claim_refuted(result, profile):
-                last = "invalid_emit"
-                continue
-            raise UnanswerableInstructionError(
-                f"instruction is unanswerable ({result.kind})",
-                kind=result.kind,
-                keys=result.keys,
-            )
-        if not isinstance(result, Fragment):
-            last = "invalid_emit"
-            continue
-        try:
-            assemble(result, profile)
-        except (SpecShapeError, SpecVocabularyError, RawSqlRejectedError):
-            last = "invalid_emit"
-            continue
-        return result
-    raise PlannerFailureError(
-        "step 1 did not emit a usable fragment",
-        reason=last or "invalid_emit",
-    )
+        raise UnanswerableInstructionError(
+            f"instruction is unanswerable ({result.kind})",
+            kind=result.kind,
+            keys=result.keys,
+        )
+    if not isinstance(result, Fragment):
+        raise _EmitFailed(
+            "invalid_emit",
+            rejected=_dump_emit(result),
+            checker="step 1 did not return a fragment",
+        )
+    try:
+        assemble(result, profile)
+    except (SpecShapeError, SpecVocabularyError, RawSqlRejectedError) as exc:
+        raise _EmitFailed(
+            "invalid_emit",
+            rejected=result.model_dump(mode="json", exclude_none=True),
+            checker=str(exc),
+        ) from exc
+    return result
 
 
 def _step2(
@@ -155,16 +227,25 @@ def _step2(
     invoke: Any,
 ) -> dict[str, Any]:
     last: Literal["empty_response", "invalid_emit"] | None = None
+    repair: _EmitFailed | None = None
     for _ in range(_STEP2_RETRIES + 1):
-        prompt = render_step2(profile, fragment, instruction, backend)
+        prompt = _with_repair(
+            render_step2(profile, fragment, instruction, backend), repair
+        )
         try:
             result = invoke(prompt.output_type, prompt)
         except _EmitFailed as exc:
             last = exc.reason
+            repair = exc
             continue
         dumped = result.model_dump(exclude_unset=True, exclude_none=True)
         if not isinstance(dumped, dict):
             last = "invalid_emit"
+            repair = _EmitFailed(
+                "invalid_emit",
+                rejected=_dump_emit(result),
+                checker="step 2 did not return chartProperties",
+            )
             continue
         return dumped
     raise PlannerFailureError(

@@ -207,6 +207,20 @@ rate is published per step**, since the two point at different levers — the sa
 ADR-0013 Decision 10 makes for the histogram. Retries remain **cost, not share**
 (ADR-0013 Decision 6). The gate is not reopened.
 
+**Erratum — 2026-09-13.** The extra ask is a **repair**, not a silent do-over. The
+implementation of Decision 6 re-rendered the same prompt and dropped the checker
+error. At temperature 0 that second call is a duplicate miss. A retry now includes
+the **rejected emit** and the **checker message** on the next user turn. The system
+prompt stays static (ADR-0022 Decision 6). It is still a **new** call, not a
+conversation continuation. Budgets are unchanged: 1 extra ask at step 1, 2 at
+step 2, cap 5. A well-formed inexpressible or unanswerable verdict is still never
+retried — those are answers. Every illegal emit is a repair: step-1 decode,
+`assemble`, a refuted unanswerable, step-2 `chartProperties`, and the post-step-2
+`bind` wrap (`PlannerFailureError(reason="invalid_emit")`). First-ask transform
+grammar (typed menu, prompt lines, a chartagent-owned skill) is a later grilling
+([#139](https://github.com/thearcscode/chartagent/issues/139)), not this repair.
+The repair itself is [#140](https://github.com/thearcscode/chartagent/issues/140).
+
 ### 7. Buckets are trusted at run time; one contradiction is a schema failure
 
 Verifying a claimed bucket in general needs the judgement we just paid a model for. So the

@@ -12,6 +12,7 @@ not :class:`~chartagent.errors.ChartAgentError` subclasses, so
 
 from __future__ import annotations
 
+import json
 from typing import Any, TypeVar, cast
 
 from chartagent.errors import ModelClientUnavailableError
@@ -63,6 +64,8 @@ class ModelClient:
         self._settings = settings
 
     def run(self, output_type: type[T], system_prompt: str, user_turn: str) -> T:
+        from pydantic_ai import capture_run_messages
+
         agent = self._Agent(
             self._model,
             output_type=output_type,
@@ -70,5 +73,34 @@ class ModelClient:
             retries=_CLIENT_RETRIES,
             model_settings=self._settings,
         )
-        result = agent.run_sync(user_turn, retries=_CLIENT_RETRIES)
+        with capture_run_messages() as messages:
+            try:
+                result = agent.run_sync(user_turn, retries=_CLIENT_RETRIES)
+            except Exception as exc:
+                rejected = _rejected_emit(messages)
+                if rejected is not None:
+                    try:
+                        setattr(exc, "rejected_emit", rejected)
+                    except (AttributeError, TypeError):
+                        pass
+                raise
         return result.output
+
+
+def _rejected_emit(messages: list[Any]) -> Any:
+    from pydantic_ai.messages import ModelResponse, ToolCallPart
+
+    for message in reversed(messages):
+        if not isinstance(message, ModelResponse):
+            continue
+        for part in reversed(message.parts):
+            if not isinstance(part, ToolCallPart):
+                continue
+            args: Any = part.args
+            if isinstance(args, str):
+                try:
+                    return json.loads(args)
+                except json.JSONDecodeError:
+                    return args
+            return args
+    return None
