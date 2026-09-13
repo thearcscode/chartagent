@@ -760,3 +760,24 @@ def test_usage_without_outputs_exits_two() -> None:
     )
     assert result.returncode == 2
     assert "usage" in result.stderr.lower()
+
+
+def test_the_frozen_corpus_outputs_still_scores(tmp_path: Path) -> None:
+    """Issue #144: the corpus-prereg-v1 freeze predates the per-attempt
+    ``attempts`` field and is never re-recorded — the real scorer must
+    still read it exactly as committed."""
+    module = _tool()
+    out_json = tmp_path / "score.json"
+    out_md = tmp_path / "score.md"
+    code = module.main(
+        [
+            str(_REPO / "corpus" / "outputs.json"),
+            "--json",
+            str(out_json),
+            "--md",
+            str(out_md),
+        ]
+    )
+    assert code == 0
+    report = json.loads(out_json.read_text(encoding="utf-8"))
+    assert len(report["requests"]) == 50

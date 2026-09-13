@@ -118,6 +118,22 @@ def test_a_hit_is_merged_with_its_paint_record_and_loses_its_envelope() -> None:
     assert "error" not in row
 
 
+def test_join_runs_tolerates_the_per_attempt_journal_field() -> None:
+    """Issue #144: record_corpus.py now writes an ``attempts`` list on every
+    record; join_runs whitelists fields onto ``merged`` by name, so an
+    unknown key is silently dropped, never a break."""
+    jc = _tool()
+    attempts = [
+        {"step": 1, "ask": 1, "outcome": "ok", "emit": "fragment"},
+        {"step": 2, "ask": 1, "outcome": "ok"},
+    ]
+    record_journal = {("r1", 1): _hit_record("r1", 1, attempts=attempts)}
+    paint_journal = {("r1", 1): _paint_record("r1", 1)}
+    runs, issues = jc.join_runs(record_journal, paint_journal)
+    assert issues == []
+    assert "attempts" not in runs[0]
+
+
 def test_a_paint_error_is_carried_through_when_present() -> None:
     jc = _tool()
     record_journal = {("r1", 1): _hit_record("r1", 1)}

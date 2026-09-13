@@ -28,6 +28,7 @@ from chartagent.errors import (
     UnanswerableInstructionError,
 )
 from chartagent.frame.input import DEFAULT_BASE_SIZE
+from chartagent.plan.agent import Attempt
 from chartagent.result import ChartResult as ResultFromStablePath
 
 _FIXTURES = Path(__file__).with_name("data")
@@ -127,6 +128,14 @@ def _install(agent: ChartAgent, *replies: Any) -> dict[str, Any]:
 
 def _agent() -> ChartAgent:
     return create_chart_agent(model="test")
+
+
+def _observe(agent: ChartAgent) -> list[Attempt]:
+    """Install the private per-attempt observer (issue #144) and return the
+    list it appends to, in order."""
+    attempts: list[Attempt] = []
+    agent._attempt_observer = attempts.append
+    return attempts
 
 
 def test_public_surface_grows_by_exactly_two_and_chart_result_stays() -> None:
@@ -713,3 +722,196 @@ def test_no_chart_recipe_and_no_escape_reason_are_written() -> None:
     assert "ChartRecipe" not in names
     assert "escape_reason" not in names
     assert "EscapeReason" not in names
+
+
+# ---------------------------------------------------------------------------
+# The per-attempt observer (issue #144, ADR-0023 Decision 8): step, ask,
+# outcome, emit, rejected_emit, checker — every row of the mapping table.
+# ---------------------------------------------------------------------------
+
+
+def test_step1_schema_decode_failure_is_observed_as_decode() -> None:
+    bad = {**_FRAGMENT, "chart_type": "Nope"}
+    agent = _agent()
+    _install(agent, ("Fragment", bad), ("Fragment", bad))
+    attempts = _observe(agent)
+    with pytest.raises(PlannerFailureError):
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert [(a.step, a.ask, a.outcome, a.emit) for a in attempts] == [
+        (1, 1, "decode", None),
+        (1, 2, "decode", None),
+    ]
+    for a in attempts:
+        assert a.rejected_emit is not None
+        assert a.checker is not None and "Input should be" in a.checker
+
+
+def test_step1_assemble_reject_is_observed_as_assemble() -> None:
+    bad = {
+        **_FRAGMENT,
+        "transform": {
+            "group_by": ["quarter"],
+            "aggregate": [{"name": "n", "op": "count", "field": "revenue"}],
+        },
+    }
+    agent = _agent()
+    _install(agent, ("Fragment", bad), ("Fragment", bad))
+    attempts = _observe(agent)
+    with pytest.raises(PlannerFailureError):
+        agent.create_chart(_SALES, "count rows by quarter")
+    assert [(a.step, a.ask, a.outcome, a.emit) for a in attempts] == [
+        (1, 1, "assemble", None),
+        (1, 2, "assemble", None),
+    ]
+    for a in attempts:
+        assert a.rejected_emit is not None
+        assert a.checker is not None and "count takes no field" in a.checker
+
+
+def test_step1_refuted_unanswerable_is_observed_as_refuted() -> None:
+    payload = {
+        "outcome": "unanswerable",
+        "kind": "missing_column",
+        "keys": ["quarter"],
+    }
+    agent = _agent()
+    _install(agent, ("Unanswerable", payload), ("Unanswerable", payload))
+    attempts = _observe(agent)
+    with pytest.raises(PlannerFailureError):
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert [(a.step, a.ask, a.outcome, a.emit) for a in attempts] == [
+        (1, 1, "refuted", None),
+        (1, 2, "refuted", None),
+    ]
+    for a in attempts:
+        assert a.rejected_emit is not None
+        assert a.checker is not None and "refuted" in a.checker
+
+
+def test_step1_fragment_assembles_is_observed_ok_emit_fragment() -> None:
+    agent = _agent()
+    _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
+    attempts = _observe(agent)
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert isinstance(result, ChartResult)
+    step1 = attempts[0]
+    got = (step1.step, step1.ask, step1.outcome, step1.emit)
+    assert got == (1, 1, "ok", "fragment")
+    assert step1.rejected_emit is None
+    assert step1.checker is None
+
+
+def test_well_formed_inexpressible_is_one_attempt_ok_no_retry() -> None:
+    agent = _agent()
+    calls = _install(
+        agent, ("Inexpressible", {"outcome": "inexpressible", "bucket": 1})
+    )
+    attempts = _observe(agent)
+    with pytest.raises(InexpressibleRequestError):
+        agent.create_chart(_SALES, "a 3D holographic globe")
+    assert calls["model"] == 1
+    assert attempts == [Attempt(step=1, ask=1, outcome="ok", emit="inexpressible")]
+
+
+def test_well_formed_unanswerable_is_one_attempt_ok_no_retry() -> None:
+    agent = _agent()
+    payload = {
+        "outcome": "unanswerable",
+        "kind": "missing_column",
+        "keys": ["sentiment"],
+    }
+    calls = _install(agent, ("Unanswerable", payload))
+    attempts = _observe(agent)
+    with pytest.raises(UnanswerableInstructionError):
+        agent.create_chart(_SALES, "chart sentiment")
+    assert calls["model"] == 1
+    assert attempts == [Attempt(step=1, ask=1, outcome="ok", emit="unanswerable")]
+
+
+def test_step2_schema_decode_failure_is_observed_as_decode() -> None:
+    agent = _agent()
+    _install(
+        agent,
+        ("Fragment", _FRAGMENT),
+        ("step2", {"notAKey": 1}),
+        ("step2", {"notAKey": 1}),
+        ("step2", {"notAKey": 1}),
+    )
+    attempts = _observe(agent)
+    with pytest.raises(PlannerFailureError):
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert [(a.step, a.ask, a.outcome, a.emit) for a in attempts] == [
+        (1, 1, "ok", "fragment"),
+        (2, 1, "decode", None),
+        (2, 2, "decode", None),
+        (2, 3, "decode", None),
+    ]
+    for a in attempts[1:]:
+        assert a.rejected_emit is not None
+        assert a.checker is not None
+        assert "Extra inputs are not permitted" in a.checker
+
+
+def test_post_step2_bind_wrap_is_observed_as_step2_assemble() -> None:
+    fragment = {
+        **_FRAGMENT,
+        "transform": {
+            "filter": {
+                "kind": "is_not_null",
+                "args": [{"kind": "col", "name": "missing"}],
+            }
+        },
+        "encodings": {"x": {"field": "quarter"}, "y": {"field": "revenue"}},
+        "semantic_types": {"revenue": "Quantity"},
+    }
+    agent = _agent()
+    _install(
+        agent,
+        ("Fragment", fragment),
+        ("step2", {}),
+        ("Fragment", fragment),
+        ("step2", {}),
+    )
+    attempts = _observe(agent)
+    with pytest.raises(PlannerFailureError):
+        agent.create_chart(_SALES, "drop missing")
+    assert [(a.step, a.ask, a.outcome, a.emit) for a in attempts] == [
+        (1, 1, "ok", "fragment"),
+        (2, 1, "assemble", None),
+        (1, 2, "ok", "fragment"),
+        (2, 2, "assemble", None),
+    ]
+    for a in attempts:
+        if a.outcome != "assemble":
+            continue
+        assert set(a.rejected_emit) == {"fragment", "chartProperties"}
+        assert a.checker is not None and "dropped" in a.checker
+
+
+def test_step2_accepted_is_observed_ok() -> None:
+    agent = _agent()
+    _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
+    attempts = _observe(agent)
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert isinstance(result, ChartResult)
+    step2 = attempts[1]
+    assert (step2.step, step2.ask, step2.outcome, step2.emit) == (2, 1, "ok", None)
+    assert step2.rejected_emit is None
+    assert step2.checker is None
+
+
+def test_asks_per_chart_never_exceed_the_five_call_cap() -> None:
+    agent = _agent()
+    _install(
+        agent,
+        ("Fragment", {**_FRAGMENT, "transform": {"pivot": []}}),
+        ("Fragment", _FRAGMENT),
+        ("step2", {"notAKey": 1}),
+        ("step2", {"notAKey": 1}),
+        ("step2", {"notAKey": 1}),
+    )
+    attempts = _observe(agent)
+    with pytest.raises(PlannerFailureError):
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert len(attempts) <= 5
+    assert len(attempts) == 5

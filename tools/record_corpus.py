@@ -1,7 +1,8 @@
 """Run the frozen 50 through the shipped planner into a resumable journal.
 
 ADR-0014 D12, D13. Issue #124 (parent #122). Transport retries and per-step
-call counts: issue #125.
+call counts: issue #125. Every ask counted, and a per-attempt journal:
+issue #144 (ADR-0023 Decision 8).
 
     python tools/record_corpus.py record --model <model>
 
@@ -32,8 +33,17 @@ retries them itself with backoff, at the same private seam
 its own retries exhaust, the attempt is left out of the journal entirely —
 no record is written, and the run resumes it for free next time. Every
 journalled attempt also carries ``step1_calls`` / ``step2_calls``, tagged by
-which step's output type the call carried, so ADR-0019 D6's per-step retry
-rate is observable at all.
+which step's output type the call carried — **counting every ask, decoded or
+not** (issue #144; a transport retry inside one ask still doesn't count
+twice) — so ADR-0019 D6's per-step retry rate is observable at all. Each
+record also carries ``attempts``: one row per ask, with ``step``, ``ask``,
+``outcome`` (``decode | assemble | refuted | ok``), and, where applicable,
+``emit``, ``rejected_emit`` and ``checker`` — installed at
+``ChartAgent._attempt_observer``, the seam ``assemble`` and
+refuted-unanswerable failures need since those happen inside the agent, not
+at ``RecordingClient``. A series recorded before this fix counted decoded
+emits, not asks, and is not comparable on those two columns
+(``corpus/report-notes.md``).
 
 Exit 0 = the run finished (residual errors do not change this).
 Exit 1 = a named pre-flight check failed; nothing was spent.
@@ -61,6 +71,7 @@ from chartagent.errors import (
     PlannerFailureError,
     UnanswerableInstructionError,
 )
+from chartagent.plan.agent import Attempt
 from chartagent.plan.schema import Step1Result
 
 REPO = Path(__file__).resolve().parents[1]
@@ -190,7 +201,7 @@ def _is_transport_fault(exc: BaseException) -> bool:
 
 class RecordingClient:
     """Wraps the agent's ``ModelClient``: retries transport/auth/rate-limit
-    faults with backoff, and counts calls by which step's output type they
+    faults with backoff, and counts asks by which step's output type they
     carried. Installed at ``agent._client`` — the same private seam
     ``tests/test_plan_agent.py`` uses to script a model.
 
@@ -198,6 +209,15 @@ class RecordingClient:
     behaviour: a planner emit-failure signal is never retried here, so
     ``create_chart``'s own budgets, retries, and outcomes are identical
     whether or not this proxy is installed.
+
+    **Counts every ask, decoded or not** (issue #144). A schema decode
+    failure (``ValidationError``/``ToolRetryError``/``UnexpectedModelBehavior``,
+    ``_is_transport_fault``'s own vocabulary) still cost a real call to the
+    model and counts once, same as a call that decodes — only a transport
+    retry *within* one ask stays uncounted, because it's the same ask asked
+    again. Before this fix the counter incremented only on a decoded
+    return, so two decode failures at step 1 recorded ``step1_calls=0``
+    instead of ``2`` (ADR-0023 Decision 8's evidence, ``r09``).
     """
 
     def __init__(
@@ -222,15 +242,23 @@ class RecordingClient:
     def step_counts(self) -> dict[str, int]:
         return {"step1_calls": self.step1_calls, "step2_calls": self.step2_calls}
 
+    def _count(self, output_type: Any) -> None:
+        if output_type is Step1Result:
+            self.step1_calls += 1
+        else:
+            self.step2_calls += 1
+
     def run(self, output_type: Any, system_prompt: str, user_turn: str) -> Any:
         attempt_number = 0
         while True:
             try:
                 result = self._client.run(output_type, system_prompt, user_turn)
             except ChartAgentError:
+                self._count(output_type)
                 raise
             except Exception as exc:
                 if not _is_transport_fault(exc):
+                    self._count(output_type)
                     raise
                 if attempt_number >= self._retries:
                     self.transport_exhausted += 1
@@ -239,10 +267,7 @@ class RecordingClient:
                 self.transport_retries += 1
                 self._sleep(_TRANSPORT_BACKOFF_SECONDS * (2 ** (attempt_number - 1)))
                 continue
-            if output_type is Step1Result:
-                self.step1_calls += 1
-            else:
-                self.step2_calls += 1
+            self._count(output_type)
             return result
 
 
@@ -261,6 +286,23 @@ def _wrap_client(agent: ChartAgent) -> RecordingClient:
     return proxy
 
 
+def _attempt_row(record: Attempt) -> dict[str, Any]:
+    """One ``Attempt`` as its journal shape — absent fields left out
+    entirely, never written as ``null`` (issue #144)."""
+    row: dict[str, Any] = {
+        "step": record.step,
+        "ask": record.ask,
+        "outcome": record.outcome,
+    }
+    if record.emit is not None:
+        row["emit"] = record.emit
+    if record.rejected_emit is not None:
+        row["rejected_emit"] = record.rejected_emit
+    if record.checker is not None:
+        row["checker"] = record.checker
+    return row
+
+
 def attempt(
     agent: ChartAgent, data: DataSource, instruction: str
 ) -> dict[str, Any] | None:
@@ -268,8 +310,13 @@ def attempt(
 
     Never raises for any :class:`~chartagent.errors.ChartAgentError` — every
     such outcome maps to a record, tagged with ``step1_calls`` /
-    ``step2_calls`` (issue #125). Installs :class:`RecordingClient` at
-    ``agent._client`` on first use.
+    ``step2_calls`` (issue #125) and ``attempts``, one row per ask
+    (issue #144), installing an :class:`~chartagent.plan.agent.Attempt`
+    observer at ``agent._attempt_observer`` for the duration of the call —
+    the seam ``assemble`` and refuted-unanswerable failures need, since
+    those happen inside the agent, never at ``RecordingClient``.
+
+    Installs :class:`RecordingClient` at ``agent._client`` on first use.
 
     Returns ``None`` when the recorder's own transport retries exhaust —
     the attempt is left out of the journal so a later invocation retries it
@@ -277,6 +324,8 @@ def attempt(
     """
     proxy = _wrap_client(agent)
     proxy.reset_step_calls()
+    attempts: list[dict[str, Any]] = []
+    agent._attempt_observer = lambda record: attempts.append(_attempt_row(record))
     try:
         result = agent.create_chart(data, instruction)
     except InexpressibleRequestError as exc:
@@ -284,6 +333,7 @@ def attempt(
             "rail": None,
             "escape_reason": {"bucket": exc.bucket},
             **proxy.step_counts(),
+            "attempts": attempts,
         }
     except PlannerFailureError as exc:
         return {
@@ -291,24 +341,29 @@ def attempt(
             "miss_kind": "planner_failure",
             "reason": exc.reason,
             **proxy.step_counts(),
+            "attempts": attempts,
         }
     except UnanswerableInstructionError:
         return {
             "rail": None,
             "miss_kind": "unanswerable_instruction",
             **proxy.step_counts(),
+            "attempts": attempts,
         }
     except ChartAgentError as exc:
         return {
             "rail": None,
             "residual_error": {"type": type(exc).__name__, "message": str(exc)},
             **proxy.step_counts(),
+            "attempts": attempts,
         }
     except Exception:
         # Not a ChartAgentError: by ModelClient's contract (ADR-0020) this is
         # transport, auth, or a rate limit, and RecordingClient already spent
         # its retries. Leave the attempt unjournalled rather than record it.
         return None
+    finally:
+        agent._attempt_observer = None
     assert isinstance(result, ChartResult)
     envelope = result.envelope
     x_chartagent = envelope.input.get("x_chartagent")
@@ -322,6 +377,7 @@ def attempt(
         "bound_row_count": envelope.row_count,
         "raw_sql_used": bool(raw_sql_used),
         **proxy.step_counts(),
+        "attempts": attempts,
     }
 
 
