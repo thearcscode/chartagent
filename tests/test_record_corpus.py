@@ -154,6 +154,7 @@ def test_inexpressible_records_escape_reason_and_no_miss_kind() -> None:
         "escape_reason": {"bucket": 1},
         "step1_calls": 1,
         "step2_calls": 0,
+        "attempts": [{"step": 1, "ask": 1, "outcome": "ok", "emit": "inexpressible"}],
     }
 
 
@@ -187,6 +188,7 @@ def test_unanswerable_instruction_records_miss_kind_and_no_bucket() -> None:
         "miss_kind": "unanswerable_instruction",
         "step1_calls": 1,
         "step2_calls": 0,
+        "attempts": [{"step": 1, "ask": 1, "outcome": "ok", "emit": "unanswerable"}],
     }
 
 
@@ -593,6 +595,48 @@ def test_step1_calls_diagnostic_counts_the_retry() -> None:
     assert record["rail"] == "deterministic"
     assert record["step1_calls"] == 2
     assert record["step2_calls"] == 1
+
+
+def test_two_step1_decode_failures_still_record_step1_calls_two() -> None:
+    """Issue #144: a schema decode failure still cost a real ask — before
+    this fix the counter only incremented on a decoded return, so this
+    recorded ``step1_calls=0`` (ADR-0023 Decision 8's ``r09``)."""
+    rc = _tool()
+    agent = _agent()
+    bad = {**_FRAGMENT, "chart_type": "Nope"}
+    _install(agent, ("Fragment", bad), ("Fragment", bad))
+    record = rc.attempt(agent, _SALES, "revenue by quarter")
+    assert record["rail"] is None
+    assert record["miss_kind"] == "planner_failure"
+    assert record["reason"] == "invalid_emit"
+    assert record["step1_calls"] == 2
+    assert record["step2_calls"] == 0
+    assert [row["outcome"] for row in record["attempts"]] == ["decode", "decode"]
+    assert all(row["step"] == 1 for row in record["attempts"])
+    assert [row["ask"] for row in record["attempts"]] == [1, 2]
+    assert all("checker" in row for row in record["attempts"])
+    assert all("rejected_emit" in row for row in record["attempts"])
+
+
+def test_attempts_survive_a_retried_transport_fault_unaffected() -> None:
+    """Ask numbering (and the observer) live in ``plan/agent.py`` and never
+    see a transport retry — ``RecordingClient`` retries below that seam."""
+    rc = _tool()
+    agent = _agent()
+    _install(
+        agent,
+        RuntimeError("simulated rate limit"),
+        ("Fragment", _FRAGMENT),
+        ("step2", {}),
+    )
+    agent._client = rc.RecordingClient(agent._client, retries=3, sleep=lambda _s: None)
+    record = rc.attempt(agent, _SALES, "revenue by quarter")
+    assert record is not None
+    assert record["rail"] == "deterministic"
+    assert record["step1_calls"] == 1
+    assert record["step2_calls"] == 1
+    rows = [(row["step"], row["ask"], row["outcome"]) for row in record["attempts"]]
+    assert rows == [(1, 1, "ok"), (2, 1, "ok")]
 
 
 def test_run_record_leaves_an_exhausted_attempt_out_of_the_journal(
