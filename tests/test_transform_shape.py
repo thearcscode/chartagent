@@ -121,11 +121,7 @@ def test_derive_item_unrecognised_key_is_a_spec_shape_error() -> None:
         match=r"transform\.derive\[0\]: unrecognised key\(s\) \('as',\)",
     ):
         check_transform_shape(
-            {
-                "derive": [
-                    {"name": "x", "expr": {"kind": "lit", "value": 1}, "as": "y"}
-                ]
-            }
+            {"derive": [{"name": "x", "expr": {"kind": "lit", "value": 1}, "as": "y"}]}
         )
 
 
