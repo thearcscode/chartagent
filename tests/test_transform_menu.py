@@ -587,3 +587,175 @@ def test_numeric_bin_emits_the_lower_edge() -> None:
 def test_window_slot_is_a_spec_shape_error() -> None:
     with pytest.raises(SpecShapeError, match="unrecognised"):
         _bind({"window": []})
+
+
+# --- #143: closed keys inside slot items and on Expr nodes, at bind too --
+# Frozen envelopes carried sort items shaped `{field, order}`; the compiler
+# read only `dir`/`nulls` and ignored `order`, drawing rows ascending no
+# matter what `order` said (settled in #139, ADR-0023 D4;
+# corpus/report-notes.md). A stored frame carrying that shape must now
+# raise on `bind`/`ChartResult.refresh` instead of drawing ascending.
+def test_sort_order_key_is_rejected_at_bind_not_silently_ignored() -> None:
+    with pytest.raises(SpecShapeError, match=r"unrecognised key\(s\) \('order',\)"):
+        _bind(
+            {"sort": [{"field": "revenue", "order": "descending"}]},
+            [
+                {"quarter": "Q1", "revenue": 200},
+                {"quarter": "Q2", "revenue": 100},
+            ],
+        )
+
+
+def test_expr_col_alias_key_is_rejected_at_bind() -> None:
+    with pytest.raises(SpecShapeError, match=r"unrecognised key\(s\) \('alias',\)"):
+        _bind(
+            {
+                "filter": {
+                    "kind": "eq",
+                    "args": [
+                        {"kind": "col", "name": "revenue", "alias": "y"},
+                        {"kind": "lit", "value": 100},
+                    ],
+                }
+            }
+        )
+
+
+# The rest of the closed-key table (#143), one case per slot item kind and
+# per Expr node shape, exercised through the same bind() call the two
+# named cases above use.
+@pytest.mark.parametrize(
+    "transform, unknown",
+    [
+        pytest.param(
+            {"aggregate": [{"name": "n", "op": "sum", "field": "revenue", "extra": 1}]},
+            "extra",
+            id="aggregate",
+        ),
+        pytest.param(
+            {"bin": [{"name": "b", "field": "revenue", "width": 10, "scale": "log"}]},
+            "scale",
+            id="bin",
+        ),
+        pytest.param(
+            {"derive": [{"name": "x", "expr": {"kind": "lit", "value": 1}, "as": "y"}]},
+            "as",
+            id="derive",
+        ),
+        pytest.param({"limit": {"count": 10, "page": 2}}, "page", id="limit"),
+        pytest.param(
+            {"filter": {"kind": "lit", "value": True, "label": "n"}},
+            "label",
+            id="expr-lit",
+        ),
+        pytest.param(
+            {
+                "filter": {
+                    "kind": "not",
+                    "args": [{"kind": "lit", "value": True}],
+                    "note": "n",
+                }
+            },
+            "note",
+            id="expr-unary",
+        ),
+        pytest.param(
+            {
+                "filter": {
+                    "kind": "eq",
+                    "args": [
+                        {"kind": "col", "name": "revenue"},
+                        {"kind": "lit", "value": 1},
+                    ],
+                    "note": "n",
+                }
+            },
+            "note",
+            id="expr-binary",
+        ),
+        pytest.param(
+            {
+                "filter": {
+                    "kind": "and",
+                    "args": [
+                        {"kind": "lit", "value": True},
+                        {"kind": "lit", "value": True},
+                    ],
+                    "note": "n",
+                }
+            },
+            "note",
+            id="expr-nary",
+        ),
+        pytest.param(
+            {
+                "filter": {
+                    "kind": "between",
+                    "args": [
+                        {"kind": "col", "name": "revenue"},
+                        {"kind": "lit", "value": 0},
+                        {"kind": "lit", "value": 1000},
+                    ],
+                    "note": "n",
+                }
+            },
+            "note",
+            id="expr-between",
+        ),
+        pytest.param(
+            {
+                "filter": {
+                    "kind": "in",
+                    "args": [
+                        {"kind": "col", "name": "revenue"},
+                        {"kind": "lit", "value": 100},
+                    ],
+                    "note": "n",
+                }
+            },
+            "note",
+            id="expr-in",
+        ),
+        pytest.param(
+            {
+                "filter": {
+                    "kind": "case",
+                    "whens": [
+                        {
+                            "when": {"kind": "lit", "value": True},
+                            "then": {"kind": "lit", "value": True},
+                        }
+                    ],
+                    "else": {"kind": "lit", "value": False},
+                    "note": "n",
+                }
+            },
+            "note",
+            id="expr-case",
+        ),
+        pytest.param(
+            {
+                "filter": {
+                    "kind": "case",
+                    "whens": [
+                        {
+                            "when": {"kind": "lit", "value": True},
+                            "then": {"kind": "lit", "value": True},
+                            "label": "hi",
+                        }
+                    ],
+                    "else": {"kind": "lit", "value": False},
+                }
+            },
+            "label",
+            id="expr-case-when",
+        ),
+    ],
+)
+def test_unrecognised_key_is_rejected_at_bind(
+    transform: dict[str, Any], unknown: str
+) -> None:
+    with pytest.raises(
+        SpecShapeError, match=rf"unrecognised key\(s\) \('{unknown}',\)"
+    ):
+        _bind(transform)

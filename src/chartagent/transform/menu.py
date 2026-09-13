@@ -16,7 +16,11 @@ from duckdb import (
 from chartagent.errors import SpecShapeError
 from chartagent.frame.input import SourceBucket
 from chartagent.transform.engine import collect, pass_through
-from chartagent.transform.expr import check_expr_shape, compile_expr
+from chartagent.transform.expr import (
+    check_expr_shape,
+    check_no_unknown_keys,
+    compile_expr,
+)
 from chartagent.transform.raw_sql import run_raw_sql
 
 TRANSFORM_SLOTS: tuple[str, ...] = (
@@ -31,15 +35,23 @@ TRANSFORM_SLOTS: tuple[str, ...] = (
 )
 _SLOTS = frozenset(TRANSFORM_SLOTS)
 
+_SORT_ITEM_KEYS = frozenset({"field", "dir", "nulls"})
+_AGGREGATE_ITEM_KEYS = frozenset({"name", "op", "field"})
+_BIN_ITEM_KEYS = frozenset({"name", "field", "unit", "width", "origin"})
+_DERIVE_ITEM_KEYS = frozenset({"name", "expr"})
+_LIMIT_KEYS = frozenset({"count", "offset"})
+
 
 def check_transform_shape(transform: Mapping[str, object] | None) -> None:
     """Reject unrecognised slots and data-free shape failures (#137).
 
     Data-free: unrecognised/mixed slots, nameless aggregates, ``count``
-    with a ``field``, an empty ``group_by``+``aggregate``, and
-    ``filter``/``having``/``derive[].expr`` Expr well-formedness. ``as``
-    is not a public alias for ``name``. Column existence in rows —
-    unknown ``scope`` names — stays bind's; it needs rows.
+    with a ``field``, an empty ``group_by``+``aggregate``,
+    ``filter``/``having``/``derive[].expr`` Expr well-formedness, and
+    closed keys on every ``sort``/``aggregate``/``bin``/``derive`` item
+    and on ``limit`` (#143). ``as`` is not a public alias for ``name``.
+    Column existence in rows — unknown ``scope`` names — stays bind's;
+    it needs rows.
     """
     if not transform:
         return
@@ -60,6 +72,9 @@ def check_transform_shape(transform: Mapping[str, object] | None) -> None:
         check_expr_shape(transform["having"], path="transform.having")
     _check_derive_shape(transform.get("derive"))
     _check_aggregate_shape(transform.get("aggregate"))
+    _check_item_keys(transform.get("sort"), _SORT_ITEM_KEYS, slot="sort")
+    _check_item_keys(transform.get("bin"), _BIN_ITEM_KEYS, slot="bin")
+    _check_limit_shape(transform.get("limit"))
     _check_group_and_aggregate_not_both_empty(transform)
 
 
@@ -75,6 +90,7 @@ def _check_derive_shape(items: object) -> None:
         name = item.get("name")
         if not isinstance(name, str) or not name:
             raise SpecShapeError(f"{path}.name is required")
+        check_no_unknown_keys(item, _DERIVE_ITEM_KEYS, path=path)
         check_expr_shape(item.get("expr"), path=f"{path}.expr")
 
 
@@ -90,8 +106,29 @@ def _check_aggregate_shape(aggregates: object) -> None:
         name = item.get("name")
         if not isinstance(name, str) or not name:
             raise SpecShapeError(f"{path}.name is required")
+        check_no_unknown_keys(item, _AGGREGATE_ITEM_KEYS, path=path)
         if item.get("op") == "count" and item.get("field") is not None:
             raise SpecShapeError(f"{path}: count takes no field")
+
+
+def _check_item_keys(items: object, allowed: frozenset[str], *, slot: str) -> None:
+    """Closed-key check for a list slot's items, skipping other shape faults.
+
+    Whether ``items`` is a list at all, and whether each item is an
+    object, stay the bind-time appliers' (:mod:`chartagent.transform.menu`
+    doesn't otherwise validate ``sort``/``bin`` at step-1) — #143 only
+    closes the key vocabulary, on whatever already looks like an item.
+    """
+    if not isinstance(items, list):
+        return
+    for index, item in enumerate(items):
+        if isinstance(item, dict):
+            check_no_unknown_keys(item, allowed, path=f"transform.{slot}[{index}]")
+
+
+def _check_limit_shape(limit: object) -> None:
+    if isinstance(limit, dict):
+        check_no_unknown_keys(limit, _LIMIT_KEYS, path="transform.limit")
 
 
 def _check_group_and_aggregate_not_both_empty(transform: Mapping[str, object]) -> None:
