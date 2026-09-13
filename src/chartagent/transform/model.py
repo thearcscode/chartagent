@@ -53,27 +53,25 @@ EXPR_KINDS: frozenset[str] = (
     UNARY_KINDS | BINARY_KINDS | NARY_KINDS | _LEAF_AND_VARIADIC_KINDS
 )
 
-# The eight slots, in the fragment/stored-frame's canonical order. Menu's
-# fields below must list exactly these, in this order — a test pins the two
-# together so they cannot drift apart.
-TRANSFORM_SLOTS: tuple[str, ...] = (
-    "filter",
-    "derive",
-    "bin",
-    "group_by",
-    "aggregate",
-    "having",
-    "sort",
-    "limit",
-)
-_TRANSFORM_SLOTS_SET = frozenset(TRANSFORM_SLOTS)
+# TRANSFORM_SLOTS is derived from Menu.model_fields once Menu is defined
+# below (its field order *is* the eight slots' canonical order) — one
+# source, not a hand-copied tuple a test would otherwise have to pin
+# against drift. Menu's own validators reference `_TRANSFORM_SLOTS_SET`
+# lazily (as a module global, resolved when a validator runs, never at
+# class-body time), so the forward reference is safe.
 
-# Loc segments a callable discriminator inserts that are never a real field
-# or slot name in this grammar — stripped when rendering a human-readable
-# field path (chartagent.frame.input._map_validation_error).
-DISCRIMINATOR_TAGS: frozenset[str] = frozenset(
-    {"menu", "raw_sql", "unary", "binary", "nary"} | _LEAF_AND_VARIADIC_KINDS
+# The two callable discriminators' tag vocabularies — TransformSpec's
+# (Menu vs RawSql) and Expr's (the eight arity-group shapes). Neither tag
+# is ever a real field or slot name in this grammar, so both sets are
+# stripped together when rendering a human-readable field path
+# (chartagent.frame.input._map_validation_error) — that's the only thing
+# that treats them as one set; each discriminator's own tag function keeps
+# its own vocabulary.
+_TRANSFORM_TAGS: frozenset[str] = frozenset({"menu", "raw_sql"})
+_EXPR_TAGS: frozenset[str] = (
+    frozenset({"unary", "binary", "nary"}) | _LEAF_AND_VARIADIC_KINDS
 )
+DISCRIMINATOR_TAGS: frozenset[str] = _TRANSFORM_TAGS | _EXPR_TAGS
 
 
 def _unrecognised_keys(cls: type[BaseModel], data: Any) -> Any:
@@ -377,6 +375,12 @@ class Menu(BaseModel):
 
 
 Menu.model_rebuild()
+
+# The eight slots, in the fragment/stored-frame's canonical order — Menu's
+# own field order, read back rather than hand-copied, so the two can never
+# drift apart.
+TRANSFORM_SLOTS: tuple[str, ...] = tuple(Menu.model_fields)
+_TRANSFORM_SLOTS_SET: frozenset[str] = frozenset(TRANSFORM_SLOTS)
 
 
 class RawSql(BaseModel):
