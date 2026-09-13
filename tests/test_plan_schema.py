@@ -26,7 +26,9 @@ _FRAGMENT: dict[str, Any] = {
         "x": {"field": "quarter"},
         "y": {"field": "revenue"},
     },
-    "transform": {"select": [{"kind": "column", "name": "quarter"}]},
+    "transform": {
+        "derive": [{"name": "quarter2", "expr": {"kind": "col", "name": "quarter"}}]
+    },
     "semantic_types": {"revenue": "Quantity"},
     "requested_backend": None,
 }
@@ -36,10 +38,23 @@ def test_fragment_round_trips() -> None:
     parsed = Fragment.model_validate(_FRAGMENT)
     assert parsed.chart_type == "Bar Chart"
     assert parsed.encodings["x"].field == "quarter"
-    assert parsed.transform == {"select": [{"kind": "column", "name": "quarter"}]}
+    assert parsed.transform is not None
+    assert parsed.transform.model_dump(exclude_none=True) == {
+        "derive": [{"name": "quarter2", "expr": {"kind": "col", "name": "quarter"}}]
+    }
     assert parsed.semantic_types == {"revenue": "Quantity"}
     assert parsed.requested_backend is None
-    assert Fragment.model_validate(parsed.model_dump()) == parsed
+    # exclude_none — every real caller dumps Fragment/InputFrame this way
+    # (plan/agent.py, plan/assemble.py); a bare model_dump() would carry
+    # every unset Menu slot as an explicit `null`, which round-trips back
+    # through Menu's own present-but-empty group_by+aggregate check
+    # differently than an untrusted emit ever could (that check reads
+    # whether the *original* dict named the key at all). requested_backend
+    # is nullable-but-required, so it is re-added — exclude_none would
+    # drop it too, and it carries no Menu round-trip risk of its own.
+    dumped = parsed.model_dump(exclude_none=True)
+    dumped["requested_backend"] = None
+    assert Fragment.model_validate(dumped) == parsed
     assert isinstance(_STEP1.validate_python(_FRAGMENT), Fragment)
 
 
@@ -199,9 +214,10 @@ def test_step1_schema_is_not_on_the_public_surface() -> None:
         assert not hasattr(chartagent, name)
 
 
-# Measured live omit of the discriminator (issue #118). Vega-Lite `as`
-# is still inside the transform; decode does not treat that as a
-# schema failure — assemble does.
+# Measured live omit of the discriminator (issue #118). ADR-0023: the typed
+# menu now decodes `aggregate` shape too, so the item must carry the real
+# `name` key (Vega-Lite `as` no longer merely defers to assemble — it fails
+# to decode, tests/test_transform_model.py).
 _MEASURED_FRAGMENT_OMIT_OUTCOME: dict[str, Any] = {
     "chart_type": "Bar Chart",
     "encodings": {
@@ -210,7 +226,7 @@ _MEASURED_FRAGMENT_OMIT_OUTCOME: dict[str, Any] = {
     },
     "transform": {
         "group_by": ["region"],
-        "aggregate": [{"op": "sum", "field": "revenue", "as": "revenue"}],
+        "aggregate": [{"name": "revenue", "op": "sum", "field": "revenue"}],
     },
     "semantic_types": {"region": "Category", "revenue": "Amount"},
     "requested_backend": None,

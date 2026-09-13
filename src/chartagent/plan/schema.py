@@ -28,6 +28,7 @@ from pydantic_core import CoreSchema, core_schema
 
 from chartagent.frame._generated import ChartType, SemanticTypeName
 from chartagent.frame.input import Backend, EncodingObject
+from chartagent.transform.model import TransformSpec
 
 
 def _default_outcome(data: Any, tag: str) -> Any:
@@ -43,7 +44,7 @@ class Fragment(BaseModel):
     outcome: Literal["fragment"]
     chart_type: ChartType
     encodings: dict[str, EncodingObject]
-    transform: dict[str, Any] | None
+    transform: TransformSpec | None
     semantic_types: dict[str, SemanticTypeName]
     requested_backend: Backend | None
 

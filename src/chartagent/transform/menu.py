@@ -1,4 +1,10 @@
-"""Compile the eight-slot transform menu to DuckDB's relational API."""
+"""Compile the eight-slot transform menu to DuckDB's relational API.
+
+Shape is :mod:`chartagent.transform.model`'s (ADR-0023): by the time
+``run_transform`` is called, ``transform`` has already decoded through that
+model, so this module only executes it — plus the data-dependent checks the
+model cannot make (column existence, scope per stage).
+"""
 
 from __future__ import annotations
 
@@ -16,132 +22,11 @@ from duckdb import (
 from chartagent.errors import SpecShapeError
 from chartagent.frame.input import SourceBucket
 from chartagent.transform.engine import collect, pass_through
-from chartagent.transform.expr import (
-    check_expr_shape,
-    check_no_unknown_keys,
-    compile_expr,
-)
+from chartagent.transform.expr import compile_expr
+from chartagent.transform.model import TRANSFORM_SLOTS
 from chartagent.transform.raw_sql import run_raw_sql
 
-TRANSFORM_SLOTS: tuple[str, ...] = (
-    "filter",
-    "derive",
-    "bin",
-    "group_by",
-    "aggregate",
-    "having",
-    "sort",
-    "limit",
-)
-_SLOTS = frozenset(TRANSFORM_SLOTS)
-
-_SORT_ITEM_KEYS = frozenset({"field", "dir", "nulls"})
-_AGGREGATE_ITEM_KEYS = frozenset({"name", "op", "field"})
-_BIN_ITEM_KEYS = frozenset({"name", "field", "unit", "width", "origin"})
-_DERIVE_ITEM_KEYS = frozenset({"name", "expr"})
-_LIMIT_KEYS = frozenset({"count", "offset"})
-
-
-def check_transform_shape(transform: Mapping[str, object] | None) -> None:
-    """Reject unrecognised slots and data-free shape failures (#137).
-
-    Data-free: unrecognised/mixed slots, nameless aggregates, ``count``
-    with a ``field``, an empty ``group_by``+``aggregate``,
-    ``filter``/``having``/``derive[].expr`` Expr well-formedness, and
-    closed keys on every ``sort``/``aggregate``/``bin``/``derive`` item
-    and on ``limit`` (#143). ``as`` is not a public alias for ``name``.
-    Column existence in rows — unknown ``scope`` names — stays bind's;
-    it needs rows.
-    """
-    if not transform:
-        return
-    if "raw_sql" in transform:
-        others = tuple(key for key in transform if key != "raw_sql")
-        menu = tuple(key for key in others if key in _SLOTS)
-        if menu:
-            raise SpecShapeError(f"raw_sql cannot mix with menu slots: {menu}")
-        if others:
-            raise SpecShapeError(f"unrecognised transform slot(s): {others}")
-        return
-    unknown = tuple(key for key in transform if key not in _SLOTS)
-    if unknown:
-        raise SpecShapeError(f"unrecognised transform slot(s): {unknown}")
-    if "filter" in transform:
-        check_expr_shape(transform["filter"], path="transform.filter")
-    if "having" in transform:
-        check_expr_shape(transform["having"], path="transform.having")
-    _check_derive_shape(transform.get("derive"))
-    _check_aggregate_shape(transform.get("aggregate"))
-    _check_item_keys(transform.get("sort"), _SORT_ITEM_KEYS, slot="sort")
-    _check_item_keys(transform.get("bin"), _BIN_ITEM_KEYS, slot="bin")
-    _check_limit_shape(transform.get("limit"))
-    _check_group_and_aggregate_not_both_empty(transform)
-
-
-def _check_derive_shape(items: object) -> None:
-    if items is None:
-        return
-    if not isinstance(items, list):
-        raise SpecShapeError("transform.derive must be a list")
-    for index, item in enumerate(items):
-        path = f"transform.derive[{index}]"
-        if not isinstance(item, dict):
-            raise SpecShapeError(f"{path} must be an object with name and expr")
-        name = item.get("name")
-        if not isinstance(name, str) or not name:
-            raise SpecShapeError(f"{path}.name is required")
-        check_no_unknown_keys(item, _DERIVE_ITEM_KEYS, path=path)
-        check_expr_shape(item.get("expr"), path=f"{path}.expr")
-
-
-def _check_aggregate_shape(aggregates: object) -> None:
-    if aggregates is None:
-        return
-    if not isinstance(aggregates, list):
-        raise SpecShapeError("transform.aggregate must be a list")
-    for index, item in enumerate(aggregates):
-        path = f"transform.aggregate[{index}]"
-        if not isinstance(item, dict):
-            raise SpecShapeError(f"{path} must be an object")
-        name = item.get("name")
-        if not isinstance(name, str) or not name:
-            raise SpecShapeError(f"{path}.name is required")
-        check_no_unknown_keys(item, _AGGREGATE_ITEM_KEYS, path=path)
-        if item.get("op") == "count" and item.get("field") is not None:
-            raise SpecShapeError(f"{path}: count takes no field")
-
-
-def _check_item_keys(items: object, allowed: frozenset[str], *, slot: str) -> None:
-    """Closed-key check for a list slot's items, skipping other shape faults.
-
-    Whether ``items`` is a list at all, and whether each item is an
-    object, stay the bind-time appliers' (:mod:`chartagent.transform.menu`
-    doesn't otherwise validate ``sort``/``bin`` at step-1) — #143 only
-    closes the key vocabulary, on whatever already looks like an item.
-    """
-    if not isinstance(items, list):
-        return
-    for index, item in enumerate(items):
-        if isinstance(item, dict):
-            check_no_unknown_keys(item, allowed, path=f"transform.{slot}[{index}]")
-
-
-def _check_limit_shape(limit: object) -> None:
-    if isinstance(limit, dict):
-        check_no_unknown_keys(limit, _LIMIT_KEYS, path="transform.limit")
-
-
-def _check_group_and_aggregate_not_both_empty(transform: Mapping[str, object]) -> None:
-    if "group_by" not in transform and "aggregate" not in transform:
-        return
-    groups = transform.get("group_by")
-    aggregates = transform.get("aggregate")
-    groups_empty = groups is None or (isinstance(groups, list) and not groups)
-    aggregates_empty = aggregates is None or (
-        isinstance(aggregates, list) and not aggregates
-    )
-    if groups_empty and aggregates_empty:
-        raise SpecShapeError("transform.group_by and transform.aggregate are empty")
+__all__ = ["TRANSFORM_SLOTS", "run_transform"]
 
 
 def run_transform(
@@ -154,7 +39,6 @@ def run_transform(
     memory_limit: str | None = None,
 ) -> tuple[pa.Table, dict[str, str]]:
     """Execute an absent/empty transform as pass-through, else the menu or raw_sql."""
-    check_transform_shape(transform)
     if not transform:
         return pass_through(connection, timeout=timeout), dict(source_types)
 
@@ -227,15 +111,11 @@ def _apply_derive(
     scope: set[str],
     schema: dict[str, SourceBucket],
 ) -> tuple[duckdb.DuckDBPyRelation, set[str]]:
-    if not isinstance(items, list):
-        raise SpecShapeError("transform.derive must be a list")
+    assert isinstance(items, list)
     for index, item in enumerate(items):
         path = f"transform.derive[{index}]"
-        if not isinstance(item, dict):
-            raise SpecShapeError(f"{path} must be an object with name and expr")
-        name = item.get("name")
-        if not isinstance(name, str) or not name:
-            raise SpecShapeError(f"{path}.name is required")
+        name = item["name"]
+        assert isinstance(name, str)
         if name in scope:
             raise SpecShapeError(f"{path}: colliding transform output name {name!r}")
         expr = compile_expr(
@@ -260,10 +140,6 @@ def _apply_derive(
     return relation, scope
 
 
-_TEMPORAL_UNITS = frozenset({"year", "quarter", "month", "week", "day", "hour"})
-_AGG_OPS = frozenset({"sum", "mean", "min", "max", "count", "count_distinct", "median"})
-
-
 def _apply_bin(
     relation: duckdb.DuckDBPyRelation,
     items: object,
@@ -271,49 +147,37 @@ def _apply_bin(
     scope: set[str],
     schema: dict[str, SourceBucket],
 ) -> tuple[duckdb.DuckDBPyRelation, set[str]]:
-    if not isinstance(items, list):
-        raise SpecShapeError("transform.bin must be a list")
+    assert isinstance(items, list)
     for index, item in enumerate(items):
         path = f"transform.bin[{index}]"
-        if not isinstance(item, dict):
-            raise SpecShapeError(f"{path} must be a temporal or numeric bin")
-        name = item.get("name")
-        field = item.get("field")
-        if not isinstance(name, str) or not name:
-            raise SpecShapeError(f"{path}.name is required")
-        if not isinstance(field, str) or not field:
-            raise SpecShapeError(f"{path}.field is required")
+        name = item["name"]
+        field = item["field"]
+        assert isinstance(name, str) and isinstance(field, str)
         if name in scope:
             raise SpecShapeError(f"{path}: colliding transform output name {name!r}")
         if field not in scope:
             raise SpecShapeError(f"{path}.field: unknown column {field!r}")
-        expr = _bin_expr(item, path=path, field=field)
+        expr = _bin_expr(item, field=field)
         relation = relation.project(StarExpression(), expr.alias(name))
         scope.add(name)
-        if "unit" in item:
+        if item.get("unit") is not None:
             schema[name] = "timestamp" if item["unit"] == "hour" else "date"
         else:
             schema[name] = "number"
     return relation, scope
 
 
-def _bin_expr(item: dict[str, object], *, path: str, field: str) -> duckdb.Expression:
+def _bin_expr(item: dict[str, object], *, field: str) -> duckdb.Expression:
     column = ColumnExpression(field)
-    if "unit" in item:
-        unit = item["unit"]
-        if unit not in _TEMPORAL_UNITS:
-            raise SpecShapeError(
-                f"{path}.unit must be one of {sorted(_TEMPORAL_UNITS)}"
-            )
+    unit = item.get("unit")
+    if unit is not None:
+        assert isinstance(unit, str)
         truncated = FunctionExpression("date_trunc", ConstantExpression(unit), column)
         cast_to = "TIMESTAMP" if unit == "hour" else "DATE"
         return truncated.cast(cast_to)
-    width = item.get("width")
-    if not isinstance(width, (int, float)) or isinstance(width, bool) or width == 0:
-        raise SpecShapeError(f"{path}.width must be a non-zero number")
     origin = item.get("origin", 0)
-    if not isinstance(origin, (int, float)) or isinstance(origin, bool):
-        raise SpecShapeError(f"{path}.origin must be a number")
+    width = item["width"]
+    assert isinstance(origin, (int, float)) and isinstance(width, (int, float))
     origin_expr = ConstantExpression(origin)
     width_expr = ConstantExpression(width)
     return (
@@ -350,10 +214,7 @@ def _apply_group(
 def _group_names(groups: object, *, scope: set[str]) -> list[str]:
     if groups is None:
         return []
-    if not isinstance(groups, list) or not all(
-        isinstance(name, str) for name in groups
-    ):
-        raise SpecShapeError("transform.group_by must be a list of column names")
+    assert isinstance(groups, list)
     names = [str(name) for name in groups]
     unknown = [name for name in names if name not in scope]
     if unknown:
@@ -366,26 +227,18 @@ def _aggregate_exprs(
 ) -> tuple[list[duckdb.Expression], list[str]]:
     if aggregates is None:
         return [], []
-    if not isinstance(aggregates, list):
-        raise SpecShapeError("transform.aggregate must be a list")
+    assert isinstance(aggregates, list)
     exprs: list[duckdb.Expression] = []
     names: list[str] = []
     seen = set(reserved)
     for index, item in enumerate(aggregates):
         path = f"transform.aggregate[{index}]"
-        if not isinstance(item, dict):
-            raise SpecShapeError(f"{path} must be an object")
-        name = item.get("name")
-        op = item.get("op")
-        if not isinstance(name, str) or not name:
-            raise SpecShapeError(f"{path}.name is required")
-        if op not in _AGG_OPS:
-            raise SpecShapeError(f"{path}.op must be one of {sorted(_AGG_OPS)}")
+        name = item["name"]
+        op = item["op"]
+        assert isinstance(name, str) and isinstance(op, str)
         if name in seen:
             raise SpecShapeError(f"{path}: colliding transform output name {name!r}")
-        exprs.append(
-            _aggregate_expr(item, path=path, op=str(op), scope=scope).alias(name)
-        )
+        exprs.append(_aggregate_expr(item, path=path, op=op, scope=scope).alias(name))
         names.append(name)
         seen.add(name)
     return exprs, names
@@ -394,13 +247,10 @@ def _aggregate_exprs(
 def _aggregate_expr(
     item: dict[str, object], *, path: str, op: str, scope: set[str]
 ) -> duckdb.Expression:
-    field = item.get("field")
     if op == "count":
-        if field is not None:
-            raise SpecShapeError(f"{path}: count takes no field")
         return FunctionExpression("count")
-    if not isinstance(field, str) or not field:
-        raise SpecShapeError(f"{path}.field is required")
+    field = item["field"]
+    assert isinstance(field, str)
     if field not in scope:
         raise SpecShapeError(f"{path}.field: unknown column {field!r}")
     column = ColumnExpression(field)
@@ -422,23 +272,18 @@ def _apply_sort_limit(
     keys: list[duckdb.Expression] = []
     used: set[str] = set()
     if sorts is not None:
-        if not isinstance(sorts, list):
-            raise SpecShapeError("transform.sort must be a list")
-        for index, item in enumerate(sorts):
-            path = f"transform.sort[{index}]"
-            if not isinstance(item, dict):
-                raise SpecShapeError(f"{path} must be an object")
-            field = item.get("field")
-            if not isinstance(field, str):
-                raise SpecShapeError(f"{path}.field must be an output column")
+        assert isinstance(sorts, list)
+        for item in sorts:
+            field = item["field"]
+            assert isinstance(field, str)
+            # A sort.field naming a column not in output scope is silently
+            # skipped, unchanged (ADR-0023 Decision 4 — bind-time scope
+            # needs rows; the typed model cannot make this refusal; its own
+            # later ticket).
             if field not in scope:
                 continue
-            direction = item.get("dir", "asc")
-            nulls = item.get("nulls", "last")
-            if direction not in {"asc", "desc"}:
-                raise SpecShapeError(f"{path}.dir must be 'asc' or 'desc'")
-            if nulls not in {"first", "last"}:
-                raise SpecShapeError(f"{path}.nulls must be 'first' or 'last'")
+            direction = item["dir"]
+            nulls = item["nulls"]
             expr = ColumnExpression(field)
             expr = expr.desc() if direction == "desc" else expr.asc()
             expr = expr.nulls_first() if nulls == "first" else expr.nulls_last()
@@ -452,12 +297,8 @@ def _apply_sort_limit(
         relation = relation.sort(*keys)
     if limit is None:
         return relation
-    if not isinstance(limit, dict):
-        raise SpecShapeError("transform.limit must be an object")
-    count = limit.get("count")
-    offset = limit.get("offset", 0)
-    if not isinstance(count, int) or isinstance(count, bool) or count < 0:
-        raise SpecShapeError("transform.limit.count must be a non-negative integer")
-    if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
-        raise SpecShapeError("transform.limit.offset must be a non-negative integer")
+    assert isinstance(limit, dict)
+    count = limit["count"]
+    offset = limit["offset"]
+    assert isinstance(count, int) and isinstance(offset, int)
     return relation.limit(count, offset)

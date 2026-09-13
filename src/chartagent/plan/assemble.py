@@ -1,15 +1,12 @@
 """Assemble a backend-free input frame from a fragment (ADR-0019 D2/D6).
 
 Code fills ``source_schema``, ``spec_version``, ``chart_spec.baseSize``, and
-empty ``annotations`` / ``interactions``. The model’s fragment carries chart
-type, encodings, transform, and ``semantic_types``. This is also the
-data-free step-1 check: the façade, ``check_transform_shape``,
-source-bucket encoding types, and ``raw_sql``’s two locks.
-``check_transform_shape`` covers data-free transform **shape** — Expr
-well-formedness for ``filter``/``having``/``derive[].expr``, ``count``
-arity, and an empty ``group_by``+``aggregate`` — one function deeper
-than the slot names it used to stop at (#137). Unknown **column
-existence in rows** stays ``bind``’s — it needs rows.
+empty ``annotations`` / ``interactions``. The fragment carries chart type,
+encodings, transform, and ``semantic_types`` — already shape-valid, since
+``Fragment.transform`` decoded through the typed menu (ADR-0023). This is
+also the data-free step-1 check: the façade, source-bucket encoding types,
+and ``raw_sql``'s two locks. Unknown **column existence in rows** stays
+``bind``'s — it needs rows.
 """
 
 from __future__ import annotations
@@ -23,7 +20,7 @@ from chartagent.plan.schema import Fragment
 from chartagent.profile.models import Profile
 from chartagent.transform.drift import referenced_source_columns
 from chartagent.transform.engine import open_connection
-from chartagent.transform.menu import check_transform_shape
+from chartagent.transform.model import transform_mapping
 from chartagent.transform.raw_sql import sql_source_refs, validate_raw_sql
 
 _SPEC_VERSION = "1.2"
@@ -37,9 +34,9 @@ def assemble(
     chart_properties: Mapping[str, Any] | None = None,
 ) -> InputFrame:
     """Build a backend-free ``InputFrame``. Raises on a step-1 schema failure."""
-    check_transform_shape(fragment.transform)
     _check_encoding_types(fragment)
-    refs = _source_refs(fragment.transform)
+    transform = transform_mapping(fragment.transform)
+    refs = _source_refs(transform)
     buckets = {column.name: column.bucket for column in profile.columns}
     source_schema: dict[str, SourceBucket] = {
         name: buckets[name] for name in sorted(refs) if name in buckets

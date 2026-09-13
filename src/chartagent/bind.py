@@ -38,6 +38,7 @@ from chartagent.transform.engine import (
     register_source,
 )
 from chartagent.transform.menu import run_transform
+from chartagent.transform.model import transform_mapping
 from chartagent.transform.raw_sql import sql_source_refs, validate_raw_sql
 from chartagent.transform.serialize import serialize_rows
 
@@ -71,7 +72,11 @@ def bind(
     check_excel_facet(frame, backend)
     _check_chart_properties(frame, backend)
 
-    transform = None if frame.x_chartagent is None else frame.x_chartagent.transform
+    transform = (
+        None
+        if frame.x_chartagent is None
+        else transform_mapping(frame.x_chartagent.transform)
+    )
     baseline = None if frame.x_chartagent is None else frame.x_chartagent.source_schema
     connection = open_connection(memory_limit=memory_limit)
     started = time.perf_counter()

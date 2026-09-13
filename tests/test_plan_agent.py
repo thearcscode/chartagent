@@ -747,13 +747,13 @@ def test_step1_schema_decode_failure_is_observed_as_decode() -> None:
 
 
 def test_step1_assemble_reject_is_observed_as_assemble() -> None:
-    bad = {
-        **_FRAGMENT,
-        "transform": {
-            "group_by": ["quarter"],
-            "aggregate": [{"name": "n", "op": "count", "field": "revenue"}],
-        },
-    }
+    # Shape the typed menu decodes (ADR-0023) can no longer reach assemble()
+    # rejected — a count+field mismatch now fails at decode instead (see
+    # test_step1_schema_decode_failure_is_observed_as_decode and
+    # test_count_with_a_field_is_not_a_bind_time_spec_shape_error below).
+    # raw_sql's lock 1 is a runtime SQL parse assemble() still owns, so it
+    # is still the "assemble" outcome's coverage here.
+    bad = {**_FRAGMENT, "transform": {"raw_sql": "SELECT 1; SELECT 2"}}
     agent = _agent()
     _install(agent, ("Fragment", bad), ("Fragment", bad))
     attempts = _observe(agent)
@@ -765,7 +765,7 @@ def test_step1_assemble_reject_is_observed_as_assemble() -> None:
     ]
     for a in attempts:
         assert a.rejected_emit is not None
-        assert a.checker is not None and "count takes no field" in a.checker
+        assert a.checker is not None and "multiple statements" in a.checker
 
 
 def test_step1_refuted_unanswerable_is_observed_as_refuted() -> None:

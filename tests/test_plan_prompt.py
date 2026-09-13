@@ -35,8 +35,7 @@ from chartagent.profile.models import (
     Truncation,
     untrusted_paths,
 )
-from chartagent.transform.expr import EXPR_KINDS
-from chartagent.transform.menu import TRANSFORM_SLOTS
+from chartagent.transform.model import EXPR_KINDS, TRANSFORM_SLOTS
 
 _REPO = Path(__file__).resolve().parents[1]
 _NONCE = "aaaabbbbccccdddd"
@@ -388,11 +387,23 @@ def test_prompts_have_no_few_shots_or_extended_thinking() -> None:
         assert "extended-thinking" not in text
 
 
-def test_step1_system_requires_outcome_and_menu_aggregate_shape() -> None:
+def test_step1_system_requires_outcome_and_forbids_aggregate_on_encodings() -> None:
+    # ADR-0023 Decision 6: `transform.aggregate items are {name, op,
+    # field?}` is deleted from the prompt — the typed menu now states that
+    # shape, and the model enforces it (tests/test_transform_model.py).
     system = render_step1(_PROFILE, _INSTRUCTION, nonce=_NONCE).system
     assert "outcome" in system
-    assert "{name, op, field?}" in system
+    assert "{name, op, field?}" not in system
     assert "encodings never carry aggregate" in system
+
+
+def test_step1_system_states_only_what_the_schema_cannot() -> None:
+    # ADR-0023 Decision 6: the two prose lines a JSON schema cannot state,
+    # each with its own enforcement test.
+    system = render_step1(_PROFILE, _INSTRUCTION, nonce=_NONCE).system
+    assert "raw_sql" in system and "UNPIVOT" in system
+    assert "having is the late filter" in system
+    assert "derived columns" in system
 
 
 def test_step1_system_names_vega_field_types_for_encoding_type() -> None:

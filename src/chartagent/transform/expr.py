@@ -1,8 +1,16 @@
-"""Compile a closed Expr AST to DuckDB's expression API (ADR-0008 D3)."""
+"""Compile a closed Expr AST to DuckDB's expression API (ADR-0008 D3).
+
+Shape — a known ``kind``, closed node keys, arity, ``case``'s ``else`` and
+non-empty ``whens``, ``in``'s literal-only right-hand side — is the typed
+model's now (:mod:`chartagent.transform.model`, ADR-0023). By the time a
+transform reaches this compiler it has already decoded through that model,
+so this module only compiles: column existence and stage scope, and
+literal-versus-column bucket compatibility, both of which need the source
+and so stay here.
+"""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import date, datetime
 from functools import reduce
 from operator import and_, or_
@@ -19,51 +27,18 @@ from duckdb import (
 
 from chartagent.errors import SpecShapeError, TransformError
 from chartagent.frame.input import SourceBucket
-
-_COMPARISONS = frozenset({"eq", "ne", "lt", "lte", "gt", "gte"})
-_ARITHMETIC = frozenset({"add", "sub", "mul", "div"})
-_STRING_TESTS = frozenset({"contains", "starts_with", "ends_with"})
-_NARY = frozenset({"and", "or", "concat", "coalesce"})
-EXPR_KINDS: frozenset[str] = (
-    frozenset(
-        {
-            "col",
-            "lit",
-            "between",
-            "in",
-            "is_null",
-            "is_not_null",
-            "not",
-            "neg",
-            "case",
-        }
-    )
-    | _COMPARISONS
-    | _ARITHMETIC
-    | _STRING_TESTS
-    | _NARY
+from chartagent.transform.model import (
+    ARITHMETIC_KINDS as _ARITHMETIC,
 )
-_CASE_WHEN_KEYS = frozenset({"when", "then"})
-
-
-def _allowed_expr_keys(kind: str) -> frozenset[str]:
-    """Closed key set per Expr node shape (#143, ADR-0023 D4)."""
-    if kind == "col":
-        return frozenset({"kind", "name"})
-    if kind == "lit":
-        return frozenset({"kind", "value"})
-    if kind == "case":
-        return frozenset({"kind", "whens", "else"})
-    return frozenset({"kind", "args"})  # unary / binary / n-ary / between / in
-
-
-def check_no_unknown_keys(
-    node: Mapping[str, object], allowed: frozenset[str], *, path: str
-) -> None:
-    """Closed-key check shared with :mod:`chartagent.transform.menu` (#143)."""
-    unknown = tuple(key for key in node if key not in allowed)
-    if unknown:
-        raise SpecShapeError(f"{path}: unrecognised key(s) {unknown}")
+from chartagent.transform.model import (
+    COMPARISON_KINDS as _COMPARISONS,
+)
+from chartagent.transform.model import (
+    NARY_KINDS as _NARY,
+)
+from chartagent.transform.model import (
+    STRING_TEST_KINDS as _STRING_TESTS,
+)
 
 
 def compile_expr(
@@ -75,15 +50,9 @@ def compile_expr(
     as_bucket: SourceBucket | None = None,
     stage: str | None = None,
 ) -> duckdb.Expression:
-    """Compile one Expr node. Unknown kinds are a shape error."""
-    if not isinstance(node, dict):
-        raise SpecShapeError(f"{path} is not an Expr")
-    kind = node.get("kind")
-    if not isinstance(kind, str):
-        raise SpecShapeError(f"{path} is not an Expr")
-    if kind not in EXPR_KINDS:
-        raise SpecShapeError(f"{path}: unknown Expr kind {kind!r}")
-    check_no_unknown_keys(node, _allowed_expr_keys(kind), path=path)
+    """Compile one Expr node. ``node`` is already shape-valid (the model)."""
+    assert isinstance(node, dict) and isinstance(node.get("kind"), str)
+    kind = node["kind"]
     try:
         return _compile(
             node,
@@ -207,87 +176,10 @@ def _compile(
     raise SpecShapeError(f"{path}: unknown Expr kind {kind!r}")
 
 
-def check_expr_shape(node: object, *, path: str) -> None:
-    """Validate an Expr node's structure with no column or type context.
-
-    The step-1 half of what :func:`compile_expr` checks: dict-ness, a
-    known ``kind``, closed node keys (#143), arg arity, and ``case``'s
-    ``else``/non-empty ``whens`` with closed ``when``/``then`` keys.
-    Column existence (``scope``) and literal/bucket compatibility need
-    rows and stay ``compile_expr``'s.
-    """
-    if not isinstance(node, dict):
-        raise SpecShapeError(f"{path} is not an Expr")
-    kind = node.get("kind")
-    if not isinstance(kind, str):
-        raise SpecShapeError(f"{path} is not an Expr")
-    if kind not in EXPR_KINDS:
-        raise SpecShapeError(f"{path}: unknown Expr kind {kind!r}")
-    check_no_unknown_keys(node, _allowed_expr_keys(kind), path=path)
-    if kind == "col":
-        if not isinstance(node.get("name"), str):
-            raise SpecShapeError(f"{path}.name must be a string")
-    elif kind == "lit":
-        if "value" not in node:
-            raise SpecShapeError(f"{path}.value is required")
-    elif kind in {"is_null", "is_not_null", "not", "neg"}:
-        _check_expr_args_shape(node, path=path, minimum=1, exact=1)
-    elif kind in _COMPARISONS or kind in _ARITHMETIC or kind in _STRING_TESTS:
-        _check_expr_args_shape(node, path=path, minimum=2, exact=2)
-    elif kind == "between":
-        _check_expr_args_shape(node, path=path, minimum=3, exact=3)
-    elif kind == "in":
-        _check_in_shape(node, path=path)
-    elif kind in _NARY:
-        _check_expr_args_shape(node, path=path, minimum=2)
-    elif kind == "case":
-        _check_case_shape(node, path=path)
-
-
-def _check_expr_args_shape(
-    node: dict[str, Any], *, path: str, minimum: int, exact: int | None = None
-) -> None:
-    args = node.get("args")
-    if not isinstance(args, list) or len(args) < minimum:
-        raise SpecShapeError(f"{path}.args must have at least {minimum} Expr node(s)")
-    if exact is not None and len(args) != exact:
-        raise SpecShapeError(f"{path}.args must be {exact} Expr node(s)")
-    for index, arg in enumerate(args):
-        check_expr_shape(arg, path=f"{path}.args[{index}]")
-
-
-def _check_in_shape(node: dict[str, Any], *, path: str) -> None:
-    _check_expr_args_shape(node, path=path, minimum=2)
-    args = node["args"]
-    for index, item in enumerate(args[1:], start=1):
-        if not _is_lit(item):
-            raise SpecShapeError(
-                f"{path}.args[{index}] must be a literal; in RHS is literals only"
-            )
-
-
-def _check_case_shape(node: dict[str, Any], *, path: str) -> None:
-    if "else" not in node:
-        raise SpecShapeError(f"{path} requires else")
-    whens = node.get("whens")
-    if not isinstance(whens, list) or not whens:
-        raise SpecShapeError(f"{path}.whens must be a non-empty list")
-    for index, item in enumerate(whens):
-        branch = f"{path}.whens[{index}]"
-        if not isinstance(item, dict) or "when" not in item or "then" not in item:
-            raise SpecShapeError(f"{branch} must have when and then")
-        check_no_unknown_keys(item, _CASE_WHEN_KEYS, path=branch)
-        check_expr_shape(item["when"], path=f"{branch}.when")
-        check_expr_shape(item["then"], path=f"{branch}.then")
-    check_expr_shape(node["else"], path=f"{path}.else")
-
-
 def _col(
     node: dict[str, Any], *, path: str, scope: set[str], stage: str | None
 ) -> duckdb.Expression:
-    name = node.get("name")
-    if not isinstance(name, str):
-        raise SpecShapeError(f"{path}.name must be a string")
+    name = node["name"]
     if name not in scope:
         if stage == "having":
             raise SpecShapeError(
@@ -301,8 +193,6 @@ def _col(
 def _lit(
     node: dict[str, Any], *, path: str, as_bucket: SourceBucket | None
 ) -> duckdb.Expression:
-    if "value" not in node:
-        raise SpecShapeError(f"{path}.value is required")
     value = node["value"]
     if as_bucket in {"date", "timestamp", "timestamptz"}:
         value = _temporal_literal(value, path=path, bucket=as_bucket)
@@ -317,9 +207,7 @@ def _unary(
     source_schema: dict[str, SourceBucket],
     stage: str | None,
 ) -> duckdb.Expression:
-    args = node.get("args")
-    if not isinstance(args, list) or len(args) != 1:
-        raise SpecShapeError(f"{path}.args must be one Expr node")
+    args = node["args"]
     return compile_expr(
         args[0],
         path=f"{path}.args[0]",
@@ -338,7 +226,7 @@ def _nary(
     source_schema: dict[str, SourceBucket],
     stage: str | None,
 ) -> duckdb.Expression:
-    args = _args(node, path=path, minimum=2)
+    args = node["args"]
     compiled = [
         compile_expr(
             arg,
@@ -366,7 +254,7 @@ def _binary_args(
     source_schema: dict[str, SourceBucket],
     stage: str | None,
 ) -> tuple[duckdb.Expression, duckdb.Expression]:
-    args = _args(node, path=path, minimum=2, exact=2)
+    args = node["args"]
     left = compile_expr(
         args[0],
         path=f"{path}.args[0]",
@@ -392,7 +280,7 @@ def _typed_binary(
     source_schema: dict[str, SourceBucket],
     stage: str | None,
 ) -> tuple[duckdb.Expression, duckdb.Expression]:
-    args = _args(node, path=path, minimum=2, exact=2)
+    args = node["args"]
     return (
         _typed_arg(
             args[0],
@@ -444,7 +332,7 @@ def _between(
     source_schema: dict[str, SourceBucket],
     stage: str | None,
 ) -> duckdb.Expression:
-    args = _args(node, path=path, minimum=3, exact=3)
+    args = node["args"]
     tested = compile_expr(
         args[0],
         path=f"{path}.args[0]",
@@ -479,12 +367,7 @@ def _in_expr(
     source_schema: dict[str, SourceBucket],
     stage: str | None,
 ) -> duckdb.Expression:
-    args = _args(node, path=path, minimum=2)
-    for index, item in enumerate(args[1:], start=1):
-        if not _is_lit(item):
-            raise SpecShapeError(
-                f"{path}.args[{index}] must be a literal; in RHS is literals only"
-            )
+    args = node["args"]
     tested = compile_expr(
         args[0],
         path=f"{path}.args[0]",
@@ -514,19 +397,12 @@ def _case(
     source_schema: dict[str, SourceBucket],
     stage: str | None,
 ) -> duckdb.Expression:
-    if "else" not in node:
-        raise SpecShapeError(f"{path} requires else")
-    whens = node.get("whens")
-    if not isinstance(whens, list) or not whens:
-        raise SpecShapeError(f"{path}.whens must be a non-empty list")
+    whens = node["whens"]
     compiled: duckdb.Expression | None = None
     branch_types: set[str] = set()
     _note_lit_type(node["else"], branch_types)
     for index, item in enumerate(whens):
         branch = f"{path}.whens[{index}]"
-        if not isinstance(item, dict) or "when" not in item or "then" not in item:
-            raise SpecShapeError(f"{branch} must have when and then")
-        check_no_unknown_keys(item, _CASE_WHEN_KEYS, path=branch)
         _note_lit_type(item["then"], branch_types)
         if len(branch_types) > 1:
             raise SpecShapeError(f"{path}: case branches must share one result type")
@@ -558,17 +434,6 @@ def _case(
             stage=stage,
         )
     )
-
-
-def _args(
-    node: dict[str, Any], *, path: str, minimum: int, exact: int | None = None
-) -> list[object]:
-    args = node.get("args")
-    if not isinstance(args, list) or len(args) < minimum:
-        raise SpecShapeError(f"{path}.args must have at least {minimum} Expr node(s)")
-    if exact is not None and len(args) != exact:
-        raise SpecShapeError(f"{path}.args must be {exact} Expr node(s)")
-    return args
 
 
 def _compare(

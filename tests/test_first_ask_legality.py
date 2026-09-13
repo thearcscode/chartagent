@@ -33,12 +33,16 @@ _FRAGMENT: dict[str, Any] = {
     "semantic_types": {"total": "Quantity"},
     "requested_backend": None,
 }
-# A step-1 fragment `assemble()` rejects outright (an unrecognised slot) —
-# unlike record_corpus.py's/test_plan_agent.py's bind-wrap examples, this
-# fails at step 1, never reaching step 2.
+# A step-1 fragment `assemble()` rejects outright (a raw_sql that fails its
+# lock 1 — a runtime SQL parse, not a shape the typed menu decodes) — unlike
+# record_corpus.py's/test_plan_agent.py's bind-wrap examples, this fails at
+# step 1, never reaching step 2. An unrecognised slot fails earlier, at
+# decode (ADR-0023): the typed menu moves that miss from `assemble` to
+# `decode`, which is exactly the shift the after-measurement's breakdown is
+# for.
 _BAD_TRANSFORM_FRAGMENT: dict[str, Any] = {
     **_FRAGMENT,
-    "transform": {"not_a_real_slot": []},
+    "transform": {"raw_sql": "SELECT 1; SELECT 2"},
 }
 
 
