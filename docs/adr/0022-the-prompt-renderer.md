@@ -179,6 +179,16 @@ A hand-authored vocabulary section with a sync test is the fallback only if the 
 proves unreadable as prompt prose — not the default, on the same "nothing here is typed twice"
 principle `untrusted_paths()` and `BACKEND_RANKING` already established.
 
+**Erratum — 2026-09-13 ([#139](https://github.com/thearcscode/chartagent/issues/139),
+ADR-0023).** Slot and `Expr` kind **names** in prose were not enough: the transform rules
+lived in Python after return, and hand-written grammar lines crept into `step1.system.md`
+outside this decision. The transform menu now reaches step 1 as a **typed tool schema**
+(arity-grouped `Expr`, non-strict on every vendor). A rule that schema can state lives on the
+model, and its prose line is deleted. A rule no JSON schema can state — `raw_sql` alone for
+UNPIVOT, window functions and JSON extraction; `having` as the late filter — may stay as a
+hand-written line **only with a test** that the checker enforces it. No chartagent-owned skill
+or prompt loader is added; the system prompt stays static and cached (Decision 6).
+
 ### 8. Zero few-shot examples at P1; the counterweight against an easy miss is vocabulary plus one instruction, not extended thinking
 
 **No few-shot examples ship in this prompt.** A hand-authored example is itself a judgement —
