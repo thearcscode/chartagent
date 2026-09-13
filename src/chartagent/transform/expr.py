@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import date, datetime
 from functools import reduce
 from operator import and_, or_
@@ -42,6 +43,27 @@ EXPR_KINDS: frozenset[str] = (
     | _STRING_TESTS
     | _NARY
 )
+_CASE_WHEN_KEYS = frozenset({"when", "then"})
+
+
+def _allowed_expr_keys(kind: str) -> frozenset[str]:
+    """Closed key set per Expr node shape (#143, ADR-0023 D4)."""
+    if kind == "col":
+        return frozenset({"kind", "name"})
+    if kind == "lit":
+        return frozenset({"kind", "value"})
+    if kind == "case":
+        return frozenset({"kind", "whens", "else"})
+    return frozenset({"kind", "args"})  # unary / binary / n-ary / between / in
+
+
+def check_no_unknown_keys(
+    node: Mapping[str, object], allowed: frozenset[str], *, path: str
+) -> None:
+    """Closed-key check shared with :mod:`chartagent.transform.menu` (#143)."""
+    unknown = tuple(key for key in node if key not in allowed)
+    if unknown:
+        raise SpecShapeError(f"{path}: unrecognised key(s) {unknown}")
 
 
 def compile_expr(
@@ -59,6 +81,9 @@ def compile_expr(
     kind = node.get("kind")
     if not isinstance(kind, str):
         raise SpecShapeError(f"{path} is not an Expr")
+    if kind not in EXPR_KINDS:
+        raise SpecShapeError(f"{path}: unknown Expr kind {kind!r}")
+    check_no_unknown_keys(node, _allowed_expr_keys(kind), path=path)
     try:
         return _compile(
             node,
@@ -186,9 +211,10 @@ def check_expr_shape(node: object, *, path: str) -> None:
     """Validate an Expr node's structure with no column or type context.
 
     The step-1 half of what :func:`compile_expr` checks: dict-ness, a
-    known ``kind``, arg arity, and ``case``'s ``else``/non-empty
-    ``whens``. Column existence (``scope``) and literal/bucket
-    compatibility need rows and stay ``compile_expr``'s.
+    known ``kind``, closed node keys (#143), arg arity, and ``case``'s
+    ``else``/non-empty ``whens`` with closed ``when``/``then`` keys.
+    Column existence (``scope``) and literal/bucket compatibility need
+    rows and stay ``compile_expr``'s.
     """
     if not isinstance(node, dict):
         raise SpecShapeError(f"{path} is not an Expr")
@@ -197,6 +223,7 @@ def check_expr_shape(node: object, *, path: str) -> None:
         raise SpecShapeError(f"{path} is not an Expr")
     if kind not in EXPR_KINDS:
         raise SpecShapeError(f"{path}: unknown Expr kind {kind!r}")
+    check_no_unknown_keys(node, _allowed_expr_keys(kind), path=path)
     if kind == "col":
         if not isinstance(node.get("name"), str):
             raise SpecShapeError(f"{path}.name must be a string")
@@ -249,6 +276,7 @@ def _check_case_shape(node: dict[str, Any], *, path: str) -> None:
         branch = f"{path}.whens[{index}]"
         if not isinstance(item, dict) or "when" not in item or "then" not in item:
             raise SpecShapeError(f"{branch} must have when and then")
+        check_no_unknown_keys(item, _CASE_WHEN_KEYS, path=branch)
         check_expr_shape(item["when"], path=f"{branch}.when")
         check_expr_shape(item["then"], path=f"{branch}.then")
     check_expr_shape(node["else"], path=f"{path}.else")
@@ -498,6 +526,7 @@ def _case(
         branch = f"{path}.whens[{index}]"
         if not isinstance(item, dict) or "when" not in item or "then" not in item:
             raise SpecShapeError(f"{branch} must have when and then")
+        check_no_unknown_keys(item, _CASE_WHEN_KEYS, path=branch)
         _note_lit_type(item["then"], branch_types)
         if len(branch_types) > 1:
             raise SpecShapeError(f"{path}: case branches must share one result type")
