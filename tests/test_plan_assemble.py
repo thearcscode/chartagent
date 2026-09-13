@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from pydantic import ValidationError
 
 import chartagent
 from chartagent import InputFrame, bind
@@ -310,20 +311,19 @@ def test_chart_type_outside_the_48_is_a_schema_failure() -> None:
 
 
 def test_unrecognised_transform_slot_is_a_schema_failure() -> None:
-    with pytest.raises(SpecShapeError, match="unrecognised transform slot"):
-        assemble(_fragment(transform={"pivot": []}), _PROFILE)
+    # ADR-0023: the typed menu decodes this, so the failure is now at
+    # Fragment construction (a decode failure), never reaching assemble().
+    with pytest.raises(ValidationError, match="unrecognised transform slot"):
+        _fragment(transform={"pivot": []})
 
 
 def test_raw_sql_mixed_with_a_menu_slot_is_a_schema_failure() -> None:
-    with pytest.raises(SpecShapeError, match="raw_sql cannot mix with menu slots"):
-        assemble(
-            _fragment(
-                transform={
-                    "raw_sql": "SELECT 1 FROM source",
-                    "filter": {"kind": "lit", "value": True},
-                }
-            ),
-            _PROFILE,
+    with pytest.raises(ValidationError, match="raw_sql cannot mix with menu slots"):
+        _fragment(
+            transform={
+                "raw_sql": "SELECT 1 FROM source",
+                "filter": {"kind": "lit", "value": True},
+            }
         )
 
 

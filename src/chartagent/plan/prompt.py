@@ -19,8 +19,7 @@ from chartagent.plan.schema import Fragment
 from chartagent.profile.models import Profile, untrusted_paths
 from chartagent.transform.drift import referenced_source_columns
 from chartagent.transform.engine import open_connection
-from chartagent.transform.expr import EXPR_KINDS
-from chartagent.transform.menu import TRANSFORM_SLOTS
+from chartagent.transform.model import EXPR_KINDS, TRANSFORM_SLOTS, transform_mapping
 from chartagent.transform.raw_sql import sql_source_refs
 
 
@@ -148,7 +147,9 @@ def render_step2(
     nonce_value = _nonce(nonce)
     fragment_json = _dump(fragment.model_dump(mode="json", exclude_none=True))
     scoped = _user_turn(
-        nonce_value, _scoped_payload(profile, fragment.transform), instruction
+        nonce_value,
+        _scoped_payload(profile, transform_mapping(fragment.transform)),
+        instruction,
     )
     return Step2Prompt(
         system=_step2_system(),

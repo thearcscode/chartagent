@@ -24,6 +24,7 @@ from chartagent.frame._generated import (
     SemanticTypeName,
     ThemePresetName,
 )
+from chartagent.transform.model import DISCRIMINATOR_TAGS, TransformSpec
 
 Backend = Literal["vegalite", "echarts", "chartjs", "plotly", "excel"]
 
@@ -123,7 +124,7 @@ class XChartagent(BaseModel):
 
     model_config = ConfigDict(extra="allow")
     spec_version: str = "1.2"
-    transform: dict[str, Any] | None = None
+    transform: TransformSpec | None = None
     annotations: list[object] | None = None
     interactions: dict[str, object] | None = None
     source_schema: dict[str, SourceBucket] | None = None
@@ -193,6 +194,28 @@ def _locs_end_with(err: ErrorDetails, *names: str) -> bool:
     return bool(loc) and loc[-1] in names
 
 
+def _format_field_path(loc: tuple[object, ...]) -> str:
+    """A human field path from a pydantic ``loc`` tuple.
+
+    Drops the synthetic tag segment a callable discriminator inserts
+    (``menu``/``raw_sql`` for ``TransformSpec``, the arity-group name for
+    ``Expr`` — :data:`chartagent.transform.model.DISCRIMINATOR_TAGS`) since
+    none of those strings is ever a real field or slot name in this grammar.
+    """
+    parts: list[str] = []
+    for segment in loc:
+        if isinstance(segment, int):
+            if parts:
+                parts[-1] = f"{parts[-1]}[{segment}]"
+            else:
+                parts.append(f"[{segment}]")
+            continue
+        if segment in DISCRIMINATOR_TAGS:
+            continue
+        parts.append(str(segment))
+    return ".".join(parts)
+
+
 def _map_validation_error(exc: ValidationError) -> ChartAgentError:
     """First failing site wins — ADR-0009 Decision 11, backend-free steps."""
     errors = exc.errors()
@@ -206,6 +229,9 @@ def _map_validation_error(exc: ValidationError) -> ChartAgentError:
         err["loc"] == ("data",) and err["type"] == "extra_forbidden" for err in errors
     ):
         return SpecShapeError("input frame must not carry inline data")
+    for err in errors:
+        if err["loc"][:2] == ("x_chartagent", "transform"):
+            return SpecShapeError(f"{_format_field_path(err['loc'])}: {err['msg']}")
     if any(err["type"] == "extra_forbidden" and len(err["loc"]) == 1 for err in errors):
         return SpecShapeError("input frame is malformed")
     if any(
