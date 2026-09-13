@@ -1,0 +1,152 @@
+[
+  {
+    "id": "fa01",
+    "fixture": "sales.csv",
+    "instruction": "What's the total revenue across both quarters combined?",
+    "slots": ["aggregate"]
+  },
+  {
+    "id": "fa02",
+    "fixture": "sales.csv",
+    "instruction": "List each quarter's revenue, with the biggest quarter shown first.",
+    "slots": ["sort"]
+  },
+  {
+    "id": "fa03",
+    "fixture": "sales.csv",
+    "instruction": "Show me revenue for quarter one only.",
+    "slots": ["filter"]
+  },
+  {
+    "id": "fa04",
+    "fixture": "sales_by_region.csv",
+    "instruction": "Break down total revenue by region.",
+    "slots": ["group_by", "aggregate"]
+  },
+  {
+    "id": "fa05",
+    "fixture": "sales_by_region.csv",
+    "instruction": "Which region has sold the most units overall?",
+    "slots": ["group_by", "aggregate", "sort", "limit"]
+  },
+  {
+    "id": "fa06",
+    "fixture": "sales_by_region.csv",
+    "instruction": "Rank the regions from highest total revenue to lowest.",
+    "slots": ["group_by", "aggregate", "sort"]
+  },
+  {
+    "id": "fa07",
+    "fixture": "sales_by_region.csv",
+    "instruction": "Only show me entries where more than 15 units were sold.",
+    "slots": ["filter"]
+  },
+  {
+    "id": "fa08",
+    "fixture": "sales_by_region.csv",
+    "instruction": "For each quarter and region, work out revenue divided by units sold.",
+    "slots": ["derive"]
+  },
+  {
+    "id": "fa09",
+    "fixture": "sales_by_region.csv",
+    "instruction": "How many quarter-region combinations brought in less than 150 in revenue?",
+    "slots": ["filter", "aggregate"]
+  },
+  {
+    "id": "fa10",
+    "fixture": "sales_by_region.csv",
+    "instruction": "Show total units for each region, but leave out any region whose total is under 90.",
+    "slots": ["group_by", "aggregate", "having"]
+  },
+  {
+    "id": "fa11",
+    "fixture": "sales_by_region.csv",
+    "instruction": "What are the top 2 quarters by revenue?",
+    "slots": ["sort", "limit"]
+  },
+  {
+    "id": "fa12",
+    "fixture": "sales.parquet",
+    "instruction": "What's the combined revenue for both quarters?",
+    "slots": ["aggregate"]
+  },
+  {
+    "id": "fa13",
+    "fixture": "sales.parquet",
+    "instruction": "Show the two quarters ordered from least revenue to most.",
+    "slots": ["sort"]
+  },
+  {
+    "id": "fa14",
+    "fixture": "orders_dated.csv",
+    "instruction": "Add up the total order amount for each month.",
+    "slots": ["bin", "group_by", "aggregate"]
+  },
+  {
+    "id": "fa15",
+    "fixture": "orders_dated.csv",
+    "instruction": "Break the orders down by hour of day and count how many happened in each hour.",
+    "slots": ["bin", "group_by", "aggregate"]
+  },
+  {
+    "id": "fa16",
+    "fixture": "orders_dated.csv",
+    "instruction": "Show me only the orders placed on or after February 1st, 2024.",
+    "slots": ["filter"]
+  },
+  {
+    "id": "fa17",
+    "fixture": "orders_dated.csv",
+    "instruction": "How many orders were placed in March 2024?",
+    "slots": ["filter", "aggregate"]
+  },
+  {
+    "id": "fa18",
+    "fixture": "orders_dated.csv",
+    "instruction": "For each channel, how many different days did we get an order through it?",
+    "slots": ["group_by", "aggregate"]
+  },
+  {
+    "id": "fa19",
+    "fixture": "orders_dated.csv",
+    "instruction": "Count the orders for each channel, but only keep channels with more than five orders.",
+    "slots": ["group_by", "aggregate", "having"]
+  },
+  {
+    "id": "fa20",
+    "fixture": "orders_dated.csv",
+    "instruction": "Label each order 'big' if its amount is over 200, otherwise 'small', and tell me how many orders fall into each category.",
+    "slots": ["derive", "group_by", "aggregate"]
+  },
+  {
+    "id": "fa21",
+    "fixture": "orders_dated.csv",
+    "instruction": "Which orders are missing an amount?",
+    "slots": ["filter"]
+  },
+  {
+    "id": "fa22",
+    "fixture": "orders_dated.csv",
+    "instruction": "List the orders by amount from smallest to largest, and put the ones with no amount recorded at the very end.",
+    "slots": ["sort"]
+  },
+  {
+    "id": "fa23",
+    "fixture": "orders_dated.csv",
+    "instruction": "What are the top 3 highest order amounts?",
+    "slots": ["sort", "limit"]
+  },
+  {
+    "id": "fa24",
+    "fixture": "orders_dated.csv",
+    "instruction": "Show a running total of the order amounts as the days go by.",
+    "slots": ["raw_sql"]
+  },
+  {
+    "id": "fa25",
+    "fixture": "orders_dated.csv",
+    "instruction": "Work out how far each order's amount is above 150, and only keep the orders where that gap is more than 50.",
+    "slots": ["derive", "having"]
+  }
+]
