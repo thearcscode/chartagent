@@ -205,13 +205,19 @@ def test_missing_source_column_is_planner_failure_not_a_residual() -> None:
         "encodings": {"x": {"field": "quarter"}, "y": {"field": "revenue"}},
         "semantic_types": {"revenue": "Quantity"},
     }
-    _install(agent, ("Fragment", fragment), ("step2", {}))
+    _install(
+        agent,
+        ("Fragment", fragment),
+        ("step2", {}),
+        ("Fragment", fragment),
+        ("step2", {}),
+    )
     record = rc.attempt(agent, _SALES, "drop missing")
     assert record["rail"] is None
     assert record["miss_kind"] == "planner_failure"
     assert record["reason"] == "invalid_emit"
-    assert record["step1_calls"] == 1
-    assert record["step2_calls"] == 1
+    assert record["step1_calls"] == 2
+    assert record["step2_calls"] == 2
     assert "residual_error" not in record
     assert "escape_reason" not in record
     assert "bucket" not in record
