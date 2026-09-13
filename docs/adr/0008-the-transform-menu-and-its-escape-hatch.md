@@ -227,6 +227,16 @@ The schema read this decision already performs is also what fills
 `Envelope.source_schema` (ADR-0005 Decision 5's erratum) — the value was computed here and
 discarded until ADR-0010 gave it a consumer.
 
+**Erratum — 2026-09-13 ([#139](https://github.com/thearcscode/chartagent/issues/139),
+ADR-0023).** The *"Expr AST as a Pydantic discriminated union"* this ADR's Consequences
+obliged was never built; shape was checked by hand-written dict walkers after the fact. It is
+now one typed menu in `transform/`, used by both the planner's fragment and the stored frame.
+The **data-free** half of this decision's validation — closed slots and item keys, arity,
+`count` without `field`, `case` with `else` — is model validation, so a malformed stored
+transform fails when the frame is **parsed**, as `SpecShapeError` with a field path. The
+identifier allowlist and literal-versus-column compatibility stay here, in `bind`, because
+they need the source. This is not the full static type checker rejected above.
+
 Everything else surfaces as `TransformError` with DuckDB's message as `__cause__` and **our
 node path** attached by the compiler, which is free: we know which node was being compiled
 when it threw. A full type checker over 24 node kinds is a second binder that will disagree
@@ -464,6 +474,15 @@ unrecognised slot is `SpecShapeError` — never ignored. Adding `window` in P1 i
 `spec_version` MINOR bump, and an old reader meeting a new spec fails loudly at the unknown
 slot. This is worth stating because "ignore unknown keys" is the default instinct and it is
 exactly wrong here: a silently-dropped `filter` draws a chart over unfiltered data.
+
+**Erratum — 2026-09-13 ([#139](https://github.com/thearcscode/chartagent/issues/139),
+ADR-0023).** This decision closed the **slot** vocabulary and left the keys **inside** a slot's
+items open. Measured at P1 exit: 19 recorded runs carried sort items shaped `{field, order}`;
+the compiler read `dir` with a default of `asc` and ignored `order`, so 5 `descending` sorts
+were drawn ascending and counted as delivered. Unrecognised keys in `sort`, `aggregate`, `bin`,
+`derive` and `limit` items, and on any `Expr` node (Decision 3), are now `SpecShapeError` as
+well. No `spec_version` bump: the item shapes in Decision 2's table and the node shapes in
+Decision 3's were always closed; only enforcement was missing.
 
 ## What this amends
 
