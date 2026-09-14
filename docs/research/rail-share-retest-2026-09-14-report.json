@@ -1,0 +1,1757 @@
+{
+  "scored_at": "2026-09-14",
+  "tag": "corpus-prereg-v1",
+  "prereg_sha256": "e4372c8d9309440f0ba1d6d58db841cfda7ffd0b2003120d11f3b7b2aae84c79",
+  "decoding": {
+    "temperature": 0
+  },
+  "authoring_pin": {
+    "flint_version": "0.5.1",
+    "fixture_commit": "34ef451"
+  },
+  "scoring_pin": {
+    "flint_version": "0.5.1",
+    "bundle_sha256": "d82901aa5bf701f892e11b6e68b28cfc7ec6cd7ac8cac35bdf2e9a0248a23e06"
+  },
+  "backend_default_partition": {
+    "vegalite": 36,
+    "echarts": 8,
+    "plotly": 1,
+    "chartjs": 3,
+    "excel": 0,
+    "exactly_one_backend": 8
+  },
+  "rail_share": {
+    "k": 39,
+    "n": 50,
+    "wilson_95": {
+      "lower": 0.6475818431054045,
+      "upper": 0.8724621377569771
+    },
+    "gate_tripped": false,
+    "threshold": 0.6
+  },
+  "raw_sql_used": {
+    "pooled": {
+      "k": 4,
+      "n": 39
+    },
+    "common_path": {
+      "k": 2,
+      "n": 28,
+      "wilson_95": {
+        "lower": 0.019811647447770794,
+        "upper": 0.2264573842591786
+      }
+    },
+    "adversarial": {
+      "k": 2,
+      "n": 11,
+      "wilson_95": {
+        "lower": 0.05136660067100063,
+        "upper": 0.4769861375782448
+      }
+    }
+  },
+  "delivery_rate": {
+    "k": 37,
+    "n": 39,
+    "wilson_95": {
+      "lower": 0.8311406095436208,
+      "upper": 0.9858223423536004
+    },
+    "excluded": 11
+  },
+  "strata": {
+    "common_path": {
+      "k": 28,
+      "n": 30,
+      "wilson_95": {
+        "lower": 0.7867618227892791,
+        "upper": 0.9815233646723066
+      }
+    },
+    "adversarial": {
+      "k": 11,
+      "n": 20,
+      "wilson_95": {
+        "lower": 0.3420820083075997,
+        "upper": 0.7418049791429071
+      }
+    }
+  },
+  "cells": {
+    "0": {
+      "k": 22,
+      "n": 22
+    },
+    "1": {
+      "k": 3,
+      "n": 4
+    },
+    "2": {
+      "k": 5,
+      "n": 10
+    },
+    "3": {
+      "k": 5,
+      "n": 6
+    },
+    "4": {
+      "k": 4,
+      "n": 8
+    }
+  },
+  "two_one_counts": {
+    "rail": 4,
+    "raw_sql_used": 3,
+    "delivery": 4
+  },
+  "escape_reason_histogram": {
+    "1": 3,
+    "2": 4,
+    "3": 0,
+    "4": 0
+  },
+  "planner_failure_misses": 2,
+  "planner_failure_ids": [
+    "r35",
+    "r48"
+  ],
+  "unanswerable_instruction_misses": 2,
+  "unanswerable_instruction_ids": [
+    "r24",
+    "r41"
+  ],
+  "unattributed_misses": 0,
+  "unattributed_ids": [],
+  "reconciliation": {
+    "hits": 39,
+    "buckets": 7,
+    "planner_failure": 2,
+    "unanswerable_instruction": 2,
+    "unattributed": 0,
+    "n": 50,
+    "total": 50
+  },
+  "call_cost": {
+    "runs": 150,
+    "floor": 300,
+    "worst_case": 750,
+    "mean_calls_per_chart_floor": {
+      "hit": 2.0,
+      "miss": 1.0,
+      "weighted": 1.78
+    }
+  },
+  "cell_moves": [],
+  "genuine_bucket2_ids": [],
+  "facade_invalid_ids": [],
+  "bucket_confusion": {
+    "1": {
+      "2": 1
+    }
+  },
+  "requests": [
+    {
+      "id": "r01",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r02",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r03",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r04",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r05",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r06",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r07",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r08",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r09",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r10",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r11",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r12",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r13",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r14",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r15",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r16",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r17",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r18",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r19",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r20",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r21",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r22",
+      "stratum": "common_path",
+      "authoring_cell": 0,
+      "scoring_cell": 0,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r23",
+      "stratum": "common_path",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        false,
+        true
+      ],
+      "raw_sql_used": true,
+      "raw_sql_votes": [
+        true,
+        false,
+        true
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        false,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r24",
+      "stratum": "common_path",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": null,
+      "reported_miss_kind": "unanswerable_instruction",
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r25",
+      "stratum": "common_path",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        true
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        true
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": 2,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r26",
+      "stratum": "common_path",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": true,
+      "raw_sql_votes": [
+        true,
+        true,
+        true
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r27",
+      "stratum": "common_path",
+      "authoring_cell": 3,
+      "scoring_cell": 3,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        true,
+        false
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r28",
+      "stratum": "common_path",
+      "authoring_cell": 3,
+      "scoring_cell": 3,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r29",
+      "stratum": "common_path",
+      "authoring_cell": 4,
+      "scoring_cell": 4,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r30",
+      "stratum": "common_path",
+      "authoring_cell": 4,
+      "scoring_cell": 4,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r31",
+      "stratum": "adversarial",
+      "authoring_cell": 1,
+      "scoring_cell": 1,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": true,
+      "raw_sql_votes": [
+        false,
+        true,
+        true
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "miss",
+      "expected_bucket": 1,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": true,
+      "facade_invalid": false
+    },
+    {
+      "id": "r32",
+      "stratum": "adversarial",
+      "authoring_cell": 1,
+      "scoring_cell": 1,
+      "rail_hit": true,
+      "rail_votes": [
+        false,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        false,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "miss",
+      "expected_bucket": 1,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": true,
+      "facade_invalid": false
+    },
+    {
+      "id": "r33",
+      "stratum": "adversarial",
+      "authoring_cell": 1,
+      "scoring_cell": 1,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "miss",
+      "expected_bucket": 1,
+      "reported_outcome": "miss",
+      "reported_bucket": 2,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r34",
+      "stratum": "adversarial",
+      "authoring_cell": 1,
+      "scoring_cell": 1,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "miss",
+      "expected_bucket": 1,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": true,
+      "facade_invalid": false
+    },
+    {
+      "id": "r35",
+      "stratum": "adversarial",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": null,
+      "reported_miss_kind": "planner_failure",
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r36",
+      "stratum": "adversarial",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": 2,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r37",
+      "stratum": "adversarial",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r38",
+      "stratum": "adversarial",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": 2,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r39",
+      "stratum": "adversarial",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r40",
+      "stratum": "adversarial",
+      "authoring_cell": 2,
+      "scoring_cell": 2,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r41",
+      "stratum": "adversarial",
+      "authoring_cell": 3,
+      "scoring_cell": 3,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": null,
+      "reported_miss_kind": "unanswerable_instruction",
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r42",
+      "stratum": "adversarial",
+      "authoring_cell": 3,
+      "scoring_cell": 3,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r43",
+      "stratum": "adversarial",
+      "authoring_cell": 3,
+      "scoring_cell": 3,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r44",
+      "stratum": "adversarial",
+      "authoring_cell": 3,
+      "scoring_cell": 3,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r45",
+      "stratum": "adversarial",
+      "authoring_cell": 4,
+      "scoring_cell": 4,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": 1,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r46",
+      "stratum": "adversarial",
+      "authoring_cell": 4,
+      "scoring_cell": 4,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": 1,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r47",
+      "stratum": "adversarial",
+      "authoring_cell": 4,
+      "scoring_cell": 4,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": 1,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r48",
+      "stratum": "adversarial",
+      "authoring_cell": 4,
+      "scoring_cell": 4,
+      "rail_hit": false,
+      "rail_votes": [
+        false,
+        false,
+        false
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": false,
+      "delivery_votes": [
+        false,
+        false,
+        false
+      ],
+      "in_delivery_denominator": false,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "miss",
+      "reported_bucket": null,
+      "reported_miss_kind": "planner_failure",
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r49",
+      "stratum": "adversarial",
+      "authoring_cell": 4,
+      "scoring_cell": 4,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": true,
+      "raw_sql_votes": [
+        true,
+        true,
+        true
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    },
+    {
+      "id": "r50",
+      "stratum": "adversarial",
+      "authoring_cell": 4,
+      "scoring_cell": 4,
+      "rail_hit": true,
+      "rail_votes": [
+        true,
+        true,
+        true
+      ],
+      "raw_sql_used": false,
+      "raw_sql_votes": [
+        false,
+        false,
+        false
+      ],
+      "delivered": true,
+      "delivery_votes": [
+        true,
+        true,
+        true
+      ],
+      "in_delivery_denominator": true,
+      "expected_outcome": "hit",
+      "expected_bucket": null,
+      "reported_outcome": "hit",
+      "reported_bucket": null,
+      "reported_miss_kind": null,
+      "surprise_hit": false,
+      "facade_invalid": false
+    }
+  ]
+}
