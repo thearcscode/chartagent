@@ -273,15 +273,12 @@ def _apply_sort_limit(
     used: set[str] = set()
     if sorts is not None:
         assert isinstance(sorts, list)
-        for item in sorts:
+        for index, item in enumerate(sorts):
+            path = f"transform.sort[{index}]"
             field = item["field"]
             assert isinstance(field, str)
-            # A sort.field naming a column not in output scope is silently
-            # skipped, unchanged (ADR-0023 Decision 4 — bind-time scope
-            # needs rows; the typed model cannot make this refusal; its own
-            # later ticket).
             if field not in scope:
-                continue
+                raise SpecShapeError(f"{path}.field: unknown column {field!r}")
             direction = item["dir"]
             nulls = item["nulls"]
             expr = ColumnExpression(field)

@@ -11,6 +11,12 @@ from chartagent import bind
 from chartagent.bind import DataSource
 from chartagent.envelope import Envelope
 from chartagent.errors import SchemaDriftError, SpecShapeError
+from chartagent.transform.engine import (
+    describe_source,
+    open_connection,
+    register_source,
+)
+from chartagent.transform.menu import run_transform
 
 _ROWS = [
     {"quarter": "Q1", "revenue": 100},
@@ -199,6 +205,114 @@ def test_limit_over_ties_is_stable_across_two_binds() -> None:
     second = _bind(transform, rows).input["data"]["values"]
     assert first == second
     assert len(first) == 2
+
+
+# --- #156: sort.field outside output scope refuses at bind (ADR-0008
+# Decision 2's 2026-09-14 erratum, closing ADR-0023 Decision 4) --
+def test_sort_field_not_in_scope_is_a_spec_shape_error() -> None:
+    with pytest.raises(SpecShapeError, match=r"transform\.sort\[0\].*'bogus'"):
+        _bind({"sort": [{"field": "bogus", "dir": "asc", "nulls": "last"}]})
+
+
+def test_sort_field_dropped_by_an_earlier_group_by_is_a_spec_shape_error() -> None:
+    # "revenue" is a real source column, just no longer in scope once
+    # group_by/aggregate have collapsed it away — the silent `continue` used
+    # to let this through and draw an arbitrary-but-stable order.
+    with pytest.raises(SpecShapeError, match=r"transform\.sort\[0\].*'revenue'"):
+        _bind(
+            {
+                "group_by": ["quarter"],
+                "aggregate": [{"name": "revenue_sum", "op": "sum", "field": "revenue"}],
+                "sort": [{"field": "revenue", "dir": "asc", "nulls": "last"}],
+            }
+        )
+
+
+def test_sort_raises_on_the_first_offending_item_valid_then_invalid() -> None:
+    with pytest.raises(SpecShapeError, match=r"transform\.sort\[1\].*'bogus'"):
+        _bind(
+            {
+                "sort": [
+                    {"field": "quarter", "dir": "asc", "nulls": "last"},
+                    {"field": "bogus", "dir": "asc", "nulls": "last"},
+                ]
+            }
+        )
+
+
+def test_sort_raises_on_the_first_offending_item_invalid_then_valid() -> None:
+    # A naive collect-all reading would report "quarter" (the later,
+    # positionally-last item); the first offending item is "bogus".
+    with pytest.raises(SpecShapeError, match=r"transform\.sort\[0\].*'bogus'"):
+        _bind(
+            {
+                "sort": [
+                    {"field": "bogus", "dir": "asc", "nulls": "last"},
+                    {"field": "quarter", "dir": "asc", "nulls": "last"},
+                ]
+            }
+        )
+
+
+def test_sort_with_limit_raises_before_limit_is_applied() -> None:
+    # No silently-limited-but-unsorted result: the refusal fires before
+    # `limit` ever touches the relation.
+    with pytest.raises(SpecShapeError, match=r"transform\.sort\[0\].*'bogus'"):
+        _bind(
+            {
+                "sort": [{"field": "bogus", "dir": "asc", "nulls": "last"}],
+                "limit": {"count": 1},
+            }
+        )
+
+
+def test_sort_field_unknown_column_wording_does_not_drift_from_siblings() -> None:
+    # bin/aggregate/group_by's own "unknown column" faults are untouched by
+    # #156 — same class, same phrasing, same path spelling as before. Drive
+    # `run_transform` directly with a scope that omits a real column: going
+    # through `bind()` would have its schema-drift check intercept a wholly
+    # unknown field first (a different class, a different message) before
+    # the compiler's own defensive check ever ran.
+    connection = open_connection()
+    try:
+        register_source(connection, [{"quarter": "Q1", "revenue": 100}])
+        reported_types, source_schema = describe_source(connection)
+        source_types = {"quarter": reported_types["quarter"]}
+        schema = {"quarter": source_schema["quarter"]}
+        with pytest.raises(
+            SpecShapeError,
+            match=r"transform\.bin\[0\]\.field: unknown column 'revenue'",
+        ):
+            run_transform(
+                connection,
+                {"bin": [{"name": "b", "field": "revenue", "width": 1}]},
+                source_types=source_types,
+                source_schema=schema,
+                timeout=None,
+            )
+        with pytest.raises(
+            SpecShapeError,
+            match=r"transform\.aggregate\[0\]\.field: unknown column 'revenue'",
+        ):
+            run_transform(
+                connection,
+                {"aggregate": [{"name": "s", "op": "sum", "field": "revenue"}]},
+                source_types=source_types,
+                source_schema=schema,
+                timeout=None,
+            )
+        with pytest.raises(
+            SpecShapeError, match=r"transform\.group_by names unknown column\(s\)"
+        ):
+            run_transform(
+                connection,
+                {"group_by": ["revenue"]},
+                source_types=source_types,
+                source_schema=schema,
+                timeout=None,
+            )
+    finally:
+        connection.close()
 
 
 def test_concat_skips_nulls() -> None:

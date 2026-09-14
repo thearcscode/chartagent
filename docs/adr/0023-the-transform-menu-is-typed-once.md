@@ -100,6 +100,12 @@ today, against ADR-0008 Decision 2's *"must be an output column"*. It needs the 
 it is a bind-time refusal that the typed model cannot make; it is its own later ticket and
 blocks neither the measurement nor the typed menu.
 
+**Closed — 2026-09-14 ([#155](https://github.com/thearcscode/chartagent/issues/155)).** See
+ADR-0008's dated erratum to Decision 2: `bind` now refuses a `sort.field` outside output scope
+as `SpecShapeError`, mirroring `bin`/`aggregate`/`group_by`. No static pre-rollout scan is
+possible for this one, unlike Decision 5's parse-time `InputFrame.model_validate` sweep below —
+this fault needs rows, so it surfaces only at bind.
+
 The frozen score is **not** re-scored. The runs whose sort direction was ignored are disclosed
 in `corpus/report-notes.md` beside `corpus/report.md`, whose bytes are not touched.
 
