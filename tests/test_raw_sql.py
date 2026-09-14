@@ -121,6 +121,34 @@ def test_bare_file_path_is_a_foreign_relation() -> None:
     assert caught.value.reason == "foreign_relation"
 
 
+# --- #160: leftover placeholders read as "fixes" for the reserved relation
+# must stay rejected, and the message must not read as a placeholder to try
+# next (ADR-0008 Decision 7: the reserved relation is spelled source) --
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT quarter, revenue FROM data",
+        "SELECT quarter, revenue FROM df",
+        "SELECT quarter, revenue FROM __source__",
+        # {{source}} is not valid unquoted SQL, so a model spelling it as a
+        # quoted identifier is the only way it reaches Lock 2 at all -- an
+        # unquoted {{source}} fails to parse and is rejected as
+        # "unparseable" before Lock 2 ever runs.
+        'SELECT quarter, revenue FROM "{{source}}"',
+    ],
+)
+def test_placeholder_relations_are_still_foreign_relations(sql: str) -> None:
+    with pytest.raises(RawSqlRejectedError) as caught:
+        _bind({"raw_sql": sql})
+    assert caught.value.reason == "foreign_relation"
+
+
+def test_foreign_relation_message_names_the_identifier_source() -> None:
+    with pytest.raises(RawSqlRejectedError) as caught:
+        _bind({"raw_sql": "SELECT quarter, revenue FROM data"})
+    assert "identifier source" in str(caught.value)
+
+
 def test_read_csv_in_a_subquery_is_a_foreign_relation() -> None:
     with pytest.raises(RawSqlRejectedError) as caught:
         _bind({"raw_sql": ("SELECT (SELECT count(*) FROM read_csv('/etc/passwd'))")})

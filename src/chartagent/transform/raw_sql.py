@@ -137,7 +137,9 @@ def _lock_relations(connection: duckdb.DuckDBPyConnection, sql: str) -> None:
     allowed_tf = _table_functions(connection)
     if _has_foreign_relation(tree, allowed_ctes=set(), allowed_tf=allowed_tf):
         raise RawSqlRejectedError(
-            "raw_sql names a relation other than source", reason="foreign_relation"
+            "raw_sql names a relation other than source; "
+            "the only legal FROM is the identifier source",
+            reason="foreign_relation",
         )
 
 
