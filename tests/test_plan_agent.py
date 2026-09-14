@@ -765,6 +765,83 @@ def test_temporal_bin_repair_can_emit_a_usable_fragment() -> None:
     assert "transform.bin[0].unit" in retry
 
 
+# --- #160: raw_sql "fixed" to a placeholder relation (FROM data -> FROM
+# __source__) is the same class as first-ask fa24 (FROM orders) -- Lock 2
+# rejects it at step 1's assemble() pre-check, before step 2 ever runs, and
+# the checker message must name the identifier source, not read as a
+# placeholder to try next --
+_RAW_SQL_FROM_DATA_FRAGMENT: dict[str, Any] = {
+    "outcome": "fragment",
+    "chart_type": "Bar Chart",
+    "encodings": {"x": {"field": "quarter"}, "y": {"field": "revenue"}},
+    "transform": {"raw_sql": "SELECT quarter, revenue FROM data"},
+    "semantic_types": {"revenue": "Quantity"},
+    "requested_backend": None,
+}
+_RAW_SQL_FROM_SOURCE_FRAGMENT: dict[str, Any] = {
+    **_RAW_SQL_FROM_DATA_FRAGMENT,
+    "transform": {"raw_sql": "SELECT quarter, revenue FROM source"},
+}
+_RAW_SQL_PLACEHOLDER_FRAGMENT: dict[str, Any] = {
+    **_RAW_SQL_FROM_DATA_FRAGMENT,
+    "transform": {"raw_sql": "SELECT quarter, revenue FROM __source__"},
+}
+
+
+def test_raw_sql_foreign_relation_does_not_leak_duckdb() -> None:
+    agent = _agent()
+    calls = _install(
+        agent,
+        ("Fragment", _RAW_SQL_FROM_DATA_FRAGMENT),
+        ("Fragment", _RAW_SQL_FROM_DATA_FRAGMENT),
+    )
+    attempts = _observe(agent)
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert caught.value.reason == "invalid_emit"
+    assert not isinstance(caught.value, duckdb.Error)
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+    assert [(a.step, a.ask, a.outcome, a.emit) for a in attempts] == [
+        (1, 1, "assemble", None),
+        (1, 2, "assemble", None),
+    ]
+    for a in attempts:
+        assert a.checker is not None and "identifier source" in a.checker
+
+
+def test_raw_sql_repair_can_emit_a_usable_fragment() -> None:
+    agent = _agent()
+    calls = _install(
+        agent,
+        ("Fragment", _RAW_SQL_FROM_DATA_FRAGMENT),
+        ("Fragment", _RAW_SQL_FROM_SOURCE_FRAGMENT),
+        ("step2", {}),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert isinstance(result, ChartResult)
+    assert calls["model"] == 3
+    assert calls["step2"] == 1
+    retry = calls["user"][1]
+    assert "identifier source" in retry
+
+
+def test_raw_sql_placeholder_repair_still_fails() -> None:
+    # The extra ask "fixing" FROM data to FROM __source__ is still a
+    # foreign relation -- Lock 2 does not soften for a placeholder spelling.
+    agent = _agent()
+    calls = _install(
+        agent,
+        ("Fragment", _RAW_SQL_FROM_DATA_FRAGMENT),
+        ("Fragment", _RAW_SQL_PLACEHOLDER_FRAGMENT),
+    )
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_SALES, "revenue by quarter")
+    assert caught.value.reason == "invalid_emit"
+    assert calls["model"] == 2
+    assert calls["step2"] == 0
+
+
 def test_requested_backend_capability_miss_never_calls_step2() -> None:
     agent = _agent()
     calls = _install(agent, ("Fragment", _SANKEY))

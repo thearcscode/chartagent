@@ -19,6 +19,8 @@ A fragment names one chart type from that list, encodings that use only those ch
 
 UNPIVOT, window functions, and JSON extraction cannot be expressed by the transform menu — use raw_sql alone for those. having is the late filter, applied after group_by/aggregate, and may reference derived columns (bin/derive/aggregate output names), not only source columns.
 
+raw_sql must read the reserved relation named source (FROM source). Not the filename, not data, not df, not __source__, not {{source}}.
+
 Emit inexpressible with bucket 1 only when no chart type in the list can express the request.
 Emit inexpressible with bucket 2 only when the transform menu cannot express the needed transform.
 Emit unanswerable with kind missing_column or missing_role when the instruction does not make sense against the profile (a named column that is absent, or an absent source bucket). keys is empty for an unspecific missing_role ask.

@@ -398,12 +398,16 @@ def test_step1_system_requires_outcome_and_forbids_aggregate_on_encodings() -> N
 
 
 def test_step1_system_states_only_what_the_schema_cannot() -> None:
-    # ADR-0023 Decision 6: the two prose lines a JSON schema cannot state,
+    # ADR-0023 Decision 6: the prose lines a JSON schema cannot state,
     # each with its own enforcement test.
     system = render_step1(_PROFILE, _INSTRUCTION, nonce=_NONCE).system
     assert "raw_sql" in system and "UNPIVOT" in system
     assert "having is the late filter" in system
     assert "derived columns" in system
+    # #160: the reserved relation is spelled out (not a placeholder like
+    # __source__ or {{source}}), matching raw_sql's Lock 2 checker message.
+    assert "FROM source" in system
+    assert "__source__" in system and "{{source}}" in system
 
 
 def test_step1_system_names_vega_field_types_for_encoding_type() -> None:
