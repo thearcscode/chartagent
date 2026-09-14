@@ -137,6 +137,34 @@ Both route to `raw_sql` meanwhile, and that is a **feature of the evidence, not 
 concession**: a `raw_sql_used` rate concentrated on window functions is what decides P1's
 menu. See *What this feeds*.
 
+**Erratum — 2026-09-14 ([#155](https://github.com/thearcscode/chartagent/issues/155)).**
+The `sort` row's *"`field` must be an output column"* was never enforced. `_apply_sort_limit`
+read each item's `field` and silently `continue`d past one naming a column outside scope, so
+a stored spec sorting on a nonexistent field bound, drew an arbitrary-but-stable order, and
+raised no error and no advisory — a chart that looks fine and is wrong. ADR-0023 Decision 4
+named this its own later ticket, deliberately outside the typed menu, because it needs the
+rows' scope to detect.
+
+`bind` now refuses it: **the first `sort` item whose `field` is not in the pre-sort output
+scope raises `SpecShapeError`**, mirroring the identical fault in `bin`, `aggregate` and
+`group_by` — `f"{path}.field: unknown column {field!r}"` at `path =
+f"transform.sort[{index}]"` — rather than collecting every offending item into one message,
+because a `sort` item is addressed individually like a `bin`/`aggregate` item, not as one flat
+name list like `group_by`. No softer form survives: a per-item skip that raises only once
+every key in the list is bad would still silently drop one wrong key whenever another key in
+the same list happened to be valid, which is exactly the silent-drop shape Decision 13 exists
+to close. No `spec_version` bump — the grammar did not move, only where the already-stated
+requirement is enforced, the same reasoning as Decision 13's own erratum.
+
+This fault differs from Decision 13's in one respect worth stating plainly. Decision 13's
+`{field, order}` fault is data-free and is now caught when the frame is **parsed** (ADR-0023
+Decision 5), so Studio can sweep every persisted frame with `InputFrame.model_validate` ahead
+of rollout. This one needs the rows, so it is caught only at **bind**, and no equivalent
+static sweep exists — a stored frame carrying a bad `sort.field` surfaces this refusal only
+the next time it is actually bound or refreshed, with no way to find it ahead of that.
+Whether Studio builds anything in response — a re-bind sweep, a warning, nothing — is
+Studio's own call, the same split ADR-0023 Decision 5 already draws for its own scan.
+
 ### 3. One closed `Expr` AST, shared by `filter`, `having` and `derive`
 
 Twenty-four node kinds, a discriminated union on `kind`:

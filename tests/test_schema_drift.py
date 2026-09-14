@@ -353,8 +353,16 @@ def test_semantic_types_key_missing_from_output_is_transform_output_drift() -> N
     assert caught.value.drifted[0].name == "revenue"
 
 
-def test_menu_sort_key_missing_from_output_is_transform_output_drift() -> None:
-    with pytest.raises(SchemaDriftError) as caught:
+# #156 (ADR-0008 Decision 2's 2026-09-14 erratum): a menu `sort.field`
+# outside output scope used to slip past `_apply_sort_limit` (a silent
+# `continue`), execute, and only then get caught here as transform_output
+# drift. It is now refused inside the compiler itself, as `SpecShapeError`,
+# before this later output-stage check is ever reached — so for the menu
+# path this scenario is no longer schema drift at all. (`raw_sql` cannot
+# carry a `sort` key — see `test_encoding_field_missing_from_output_is_
+# transform_output_drift` above for output-stage drift that still applies.)
+def test_menu_sort_key_missing_from_output_is_now_a_spec_shape_error() -> None:
+    with pytest.raises(SpecShapeError, match=r"transform\.sort\[0\].*'revenue'"):
         _bind(
             _ROWS,
             transform={
@@ -364,10 +372,6 @@ def test_menu_sort_key_missing_from_output_is_transform_output_drift() -> None:
             },
             encodings={"x": {"field": "quarter"}, "y": {"field": "total"}},
         )
-    err = caught.value
-    assert err.stage == "transform_output"
-    assert err.drifted[0].name == "revenue"
-    assert err.drifted[0].kind == "dropped"
 
 
 def test_bind_does_not_copy_source_schema_onto_the_input() -> None:
