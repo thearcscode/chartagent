@@ -271,6 +271,29 @@ when it threw. A full type checker over 24 node kinds is a second binder that wi
 with DuckDB's at the edges — and disagreement means rejecting specs DuckDB would have run.
 That is the translation layer ADR-0002 exists to refuse, in miniature.
 
+**Erratum — 2026-09-14 ([#159](https://github.com/thearcscode/chartagent/issues/159)).** The
+"one narrow type rule" above was one node short: `bin`'s `unit` compiles straight to
+`date_trunc(unit, field)`, with no equivalent literal-vs-column check, so a temporal `unit` on
+a non-temporal source column (an integer `year`, a `VARCHAR`) reached DuckDB unchecked. Seen on
+the 2026-09-14 plumbing retest: `bin` with `unit: "year"` on a BIGINT `year` column raised
+`BinderException` straight through `create_chart`, which only wraps `SpecShapeError` and
+`SchemaDriftError` from `bind` — the same silent-leak shape as Decision 2's `sort.field`
+erratum above, and closed the same way. **Temporal `bin.unit` is legal only against `date`,
+`timestamp`, or `timestamptz` source-schema buckets**, refused at bind as `SpecShapeError`
+naming `transform.bin[{index}].unit`, on the first offending item. Numeric `bin` (`width` /
+`origin`, no `unit`) is untouched, including on a `number` column named `year` — the check
+reads the schema bucket, never the field's name. No `spec_version` bump; the grammar did not
+move.
+
+One local exception to *"everything else surfaces as `TransformError`"*, scoped to this one
+call site: `_apply_bin`'s `relation.project(...)` now also wraps any surviving `duckdb.Error`
+as `SpecShapeError` at the same `transform.bin[{index}]` path, not `TransformError`. Bind-time
+compile faults route to `TransformError` everywhere else in this file because nothing there
+catches it; `create_chart`'s repair loop specifically catches `SpecShapeError` and
+`SchemaDriftError` to retry step 1 (its own #137/#140 erratum, `plan/agent.py`), and does not
+catch `TransformError`. A `TransformError` here would still be the same undetected leak this
+erratum exists to close, just one layer down.
+
 ### 5. The menu compiles to DuckDB's relational API, not to SQL text
 
 PRD §8 says the menu is *"compiled by our code to the target engine's SQL"*. At v1 there is

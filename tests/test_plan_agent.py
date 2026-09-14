@@ -8,6 +8,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+import duckdb
 import pytest
 from pydantic_ai.messages import (
     ModelResponse,
@@ -691,6 +692,77 @@ def test_bind_wrap_repair_can_emit_a_usable_fragment() -> None:
     assert calls["model"] == 4
     assert calls["step2"] == 2
     assert "dropped" in calls["user"][2]
+
+
+# --- #159: temporal bin.unit on a non-temporal column is a bind-time leak
+# closed the same way as #137/#140's bind-wrap repair --
+_YEAR_ROWS: list[dict[str, Any]] = [
+    {"year": 2020, "revenue": 100},
+    {"year": 2021, "revenue": 200},
+]
+_BAD_YEAR_BIN_FRAGMENT: dict[str, Any] = {
+    "outcome": "fragment",
+    "chart_type": "Bar Chart",
+    "encodings": {"x": {"field": "year_bin"}, "y": {"field": "revenue_sum"}},
+    "transform": {
+        "bin": [{"name": "year_bin", "field": "year", "unit": "year"}],
+        "group_by": ["year_bin"],
+        "aggregate": [{"name": "revenue_sum", "op": "sum", "field": "revenue"}],
+    },
+    "semantic_types": {"revenue_sum": "Quantity"},
+    "requested_backend": None,
+}
+_LEGAL_YEAR_FRAGMENT: dict[str, Any] = {
+    "outcome": "fragment",
+    "chart_type": "Bar Chart",
+    "encodings": {"x": {"field": "year"}, "y": {"field": "revenue_sum"}},
+    "transform": {
+        "group_by": ["year"],
+        "aggregate": [{"name": "revenue_sum", "op": "sum", "field": "revenue"}],
+    },
+    "semantic_types": {"revenue_sum": "Quantity"},
+    "requested_backend": None,
+}
+
+
+def test_temporal_bin_on_an_integer_column_does_not_leak_duckdb() -> None:
+    # r27 run 3: bin.unit="year" on a BIGINT year column raised a raw
+    # BinderException that escaped create_chart. _apply_bin now refuses at
+    # bind as SpecShapeError, and create_chart's existing bind-wrap turns
+    # that into a step-1 invalid_emit repair, same as #137/#140.
+    agent = _agent()
+    calls = _install(
+        agent,
+        ("Fragment", _BAD_YEAR_BIN_FRAGMENT),
+        ("step2", {}),
+        ("Fragment", _BAD_YEAR_BIN_FRAGMENT),
+        ("step2", {}),
+    )
+    with pytest.raises(PlannerFailureError) as caught:
+        agent.create_chart(_YEAR_ROWS, "revenue by year")
+    assert caught.value.reason == "invalid_emit"
+    assert not isinstance(caught.value, SchemaDriftError)
+    assert not isinstance(caught.value, SpecShapeError)
+    assert not isinstance(caught.value, duckdb.Error)
+    assert calls["model"] == 4
+    assert calls["step2"] == 2
+
+
+def test_temporal_bin_repair_can_emit_a_usable_fragment() -> None:
+    agent = _agent()
+    calls = _install(
+        agent,
+        ("Fragment", _BAD_YEAR_BIN_FRAGMENT),
+        ("step2", {}),
+        ("Fragment", _LEGAL_YEAR_FRAGMENT),
+        ("step2", {}),
+    )
+    result = agent.create_chart(_YEAR_ROWS, "revenue by year")
+    assert isinstance(result, ChartResult)
+    assert calls["model"] == 4
+    assert calls["step2"] == 2
+    retry = calls["user"][2]
+    assert "transform.bin[0].unit" in retry
 
 
 def test_requested_backend_capability_miss_never_calls_step2() -> None:
