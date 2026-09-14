@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from datetime import date
 from typing import Any
 
+import duckdb
 import pyarrow as pa
 import pytest
 
@@ -313,6 +314,50 @@ def test_sort_field_unknown_column_wording_does_not_drift_from_siblings() -> Non
             )
     finally:
         connection.close()
+
+
+# --- #159: temporal bin.unit on a non-temporal column refuses at bind
+# (dated erratum on ADR-0008 Decision 4), mirroring #156's sort.field block --
+def test_temporal_bin_unit_on_a_number_column_is_a_spec_shape_error() -> None:
+    rows = [
+        {"year": 2020, "revenue": 100},
+        {"year": 2021, "revenue": 200},
+    ]
+    with pytest.raises(
+        SpecShapeError, match=r"transform\.bin\[0\]\.unit.*(number|'year')"
+    ) as caught:
+        _bind(
+            {"bin": [{"name": "year_bin", "field": "year", "unit": "year"}]},
+            rows,
+            encodings={"x": {"field": "year_bin"}, "y": {"field": "revenue"}},
+        )
+    assert not isinstance(caught.value, duckdb.Error)
+
+
+def test_numeric_bin_on_a_number_column_still_binds() -> None:
+    envelope = _bind(
+        {"bin": [{"name": "bucket", "field": "revenue", "width": 50, "origin": 0}]},
+        encodings={"x": {"field": "bucket"}, "y": {"field": "revenue"}},
+    )
+    values = envelope.input["data"]["values"]
+    assert [row["bucket"] for row in values] == [100, 200]
+
+
+def test_temporal_bin_raises_on_the_first_offending_bin_item() -> None:
+    with pytest.raises(SpecShapeError, match=r"transform\.bin\[1\]\.unit"):
+        _bind(
+            {
+                "bin": [
+                    {"name": "bucket", "field": "revenue", "width": 50, "origin": 0},
+                    {"name": "month", "field": "revenue", "unit": "month"},
+                ]
+            }
+        )
+
+
+def test_temporal_bin_unit_on_a_string_column_is_a_spec_shape_error() -> None:
+    with pytest.raises(SpecShapeError, match=r"transform\.bin\[0\]\.unit"):
+        _bind({"bin": [{"name": "month", "field": "quarter", "unit": "month"}]})
 
 
 def test_concat_skips_nulls() -> None:

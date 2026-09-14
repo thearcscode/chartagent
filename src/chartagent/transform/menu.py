@@ -157,8 +157,18 @@ def _apply_bin(
             raise SpecShapeError(f"{path}: colliding transform output name {name!r}")
         if field not in scope:
             raise SpecShapeError(f"{path}.field: unknown column {field!r}")
+        if item.get("unit") is not None:
+            bucket = schema.get(field)
+            if bucket not in {"date", "timestamp", "timestamptz"}:
+                raise SpecShapeError(
+                    f"{path}.unit: temporal bin requires a date, timestamp, or "
+                    f"timestamptz column, not {bucket!r}"
+                )
         expr = _bin_expr(item, field=field)
-        relation = relation.project(StarExpression(), expr.alias(name))
+        try:
+            relation = relation.project(StarExpression(), expr.alias(name))
+        except duckdb.Error as exc:
+            raise SpecShapeError(f"{path}: {exc}") from exc
         scope.add(name)
         if item.get("unit") is not None:
             schema[name] = "timestamp" if item["unit"] == "hour" else "date"
