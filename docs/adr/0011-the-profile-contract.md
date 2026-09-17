@@ -341,6 +341,18 @@ hold on a wide source.
   against a source-only profile**; group-key cardinality can. Those derived checks wait for
   an output-side profile, which belongs to the review gate — it already re-runs the
   transform for the data-truthfulness check.
+
+  **Erratum — 2026-09-17 ([#165](https://github.com/thearcscode/chartagent/issues/165),
+  [ADR-0025](0025-data-truthfulness-is-a-multiset-match-not-a-second-profile.md)).** Neither
+  half of the last sentence survived. **No output-side profile is built.** The
+  data-truthfulness check compares `getPlottedSeries()`'s declaration directly against
+  `BoundRecipe.rows` — literal values, not a `Profile`-shaped statistical summary, which is
+  the wrong artifact for a numeric-match comparison regardless of the transform that produced
+  the rows. **The gate does not re-run the transform for this check.** `bind_recipe`
+  (ADR-0018 Decision 5, written after this ADR) already produces `BoundRecipe.rows` once, to
+  populate the paint-time channel; the check reuses that result rather than re-deriving it.
+  Written before `bind_recipe`/`BoundRecipe` existed, superseded now that they do; ADR-0025
+  Decision 1 has the reasoning.
 - Profiling runs **in-process**, like `bind`. PRD §7.5's rule is about *model-authored*
   code; the profiler is ours, and it opens the same file with the same DuckDB that ADR-0005
   Decision 6 already accepted running in-process at P0. Sandboxing one and not the other
