@@ -13,9 +13,10 @@
   `not_checked` precedent, for the now-superseded matplotlib custom rail), ADR-0017 Decision 15
   (paint-time failures split between `RasterisationError` and `CheckResult`; the custom rail's
   boolean paint signal)
-- **Leaves open:** `data_truthfulness`'s internals on the custom rail (#165); the four checks
-  demoted to Tier-2's rubric (#167); escalation policy on a Tier-1 failure (#168); Phase-2
-  validation's actual thresholds (still fog on the map)
+- **Leaves open:** `data_truthfulness`'s internals on the custom rail (#165); escalation
+  policy on a Tier-1 failure (#168); Phase-2 validation's actual thresholds (still fog on the
+  map). *The four checks demoted to Tier-2's rubric (#167) were settled by
+  [ADR-0026](0026-tier-2-is-five-defect-checks-and-the-critique-is-a-leaf-call.md) on 2026-09-18.*
 
 ## Context
 
@@ -80,6 +81,19 @@ A permanently-omitted check reported as forever-`not_checked` would be decoratio
 would see `not_checked` and wonder what would need to change for it to ever resolve, and the
 honest answer is nothing.
 
+**Erratum — 2026-09-18 ([#167](https://github.com/thearcscode/chartagent/issues/167),
+[ADR-0026](0026-tier-2-is-five-defect-checks-and-the-critique-is-a-leaf-call.md)).** Three
+corrections, none of which touches a Tier-1 check. **The dividing line holds fixed more than
+rail and backend:** Tier-2's items vary per *chart* — a bar baseline on a line chart — so where
+the host holds the chart spec (Flint) a check is omitted when it can never resolve for this
+**(rail, backend, chart spec)**, decided by a hand-authored table before the call. **On the
+custom rail `not_checked` also means the critic declined or judged an item not applicable** —
+this run, not *never applies* — because a recipe has no chart spec and the critic must not be
+able to drop a check; the *Avoid* clause on `not_checked` stands wherever the host can know.
+**`passed` refuses a vacuous pass:** a tier in `tiers_run` that resolved no check is not a pass,
+so `passed` is false for an inconclusive Tier 2; `not_checked` and omission still stay outside
+pass/fail otherwise. Tier 1 cannot hit this, since `injection_pattern` always resolves.
+
 ### 4. The Tier-1 check list
 
 Four names survive, against the PRD's eight:
@@ -126,6 +140,11 @@ frozen protocol doesn't expose on either rail — custom-rail documents are hand
 compiled-option equivalent at all, and Flint's compiled option isn't exposed through
 `Rasteriser`'s bytes-only return. PRD's Tier-2 rubric already covers "readability," which
 subsumes all four. They feed #167 as VLM rubric items, not as Tier-1 lints.
+
+**Settled — 2026-09-18 ([#167](https://github.com/thearcscode/chartagent/issues/167),
+[ADR-0026](0026-tier-2-is-five-defect-checks-and-the-critique-is-a-leaf-call.md)).** Tier 2 is
+these four plus `marks_present` — the answer to the non-painting boxplots Decision 4 leaves to
+the VLM — one `CheckResult` each. Aesthetics and chart-type appropriateness are not judged.
 
 ### 6. `code_executed` is dropped
 
