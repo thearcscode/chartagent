@@ -129,6 +129,14 @@ public protocol, in an optional extra, for the review gate.**
    passes lint + VLM critique + interactivity review **does not hold for the Excel backend**,
    which receives Tier-1 lints only. Tier-1 is pure Python and always runs, image or no image.
 
+**Erratum — 2026-09-18 ([#167](https://github.com/thearcscode/chartagent/issues/167),
+[ADR-0026](0026-tier-2-is-five-defect-checks-and-the-critique-is-a-leaf-call.md)).**
+**unavailable** is *an input not supplied*, not only *the extra is not present*. Tier 2 needs a
+picture **and** a critique model, so no `critique_model` skips it with the same value a missing
+`Rasteriser` does; a `Rasteriser` alone still serves Tier 1's image checks. The line stays where
+the caller *asked*: a `critique_model` naming an extra that is not installed **raises at
+construction** rather than skipping, since a silent skip would hide the misconfiguration.
+
 8. **The Node-sidecar rejection still holds for compile.** ADR-0001 rejected `flint-chart-mcp`
    as a library runtime because it adds a second runtime to *every* deployment. Decision 2
    keeps that intact: a caller who never runs the review gate never installs a browser, and the

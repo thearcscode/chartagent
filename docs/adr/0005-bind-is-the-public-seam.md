@@ -398,6 +398,16 @@ checks: tuple[CheckResult, ...]
 `CheckResult` is **named here and defined by the review-gate tier ticket**. The attribute
 is `review`, matching PRD §7.8.
 
+**Erratum — 2026-09-18 ([#167](https://github.com/thearcscode/chartagent/issues/167),
+[ADR-0026](0026-tier-2-is-five-defect-checks-and-the-critique-is-a-leaf-call.md)). Additive.**
+`tiers_skipped`'s literal gains **`blocked`** — a Tier-1 `fail` stopped Tier 2 — and is now
+`Literal["unavailable", "unsupported", "blocked"]`; nothing here could say that before. An
+**inconclusive** tier (it ran, every check `not_checked`) is *not* a skip value: it stays in
+`tiers_run` with its checks listed, so `tiers_run` and `tiers_skipped` stay disjoint. `passed`
+is scoped to tiers run **and is false for a run tier that resolved nothing** — a vacuous pass is
+refused — so `passed=False` can occur with no `fail` in `checks`. `unavailable` also covers an
+input not supplied (ADR-0003 Decision 7, same date).
+
 ### 10. Errors are ours, flat, and `pydantic.ValidationError` never crosses the seam
 
 A flat `errors.py` (#19's layout), base `ChartAgentError`. P0:
