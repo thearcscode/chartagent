@@ -344,6 +344,12 @@ bake-off is where that is measured.
 - **Two rubrics may drift.** The gate's five items and the benchmark judge's rubric (PRD Goal 2)
   are separate; this ADR does not align them.
 
+  **Erratum — 2026-09-20 ([#170](https://github.com/thearcscode/chartagent/issues/170),
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md)).** Alignment is settled: the
+  judge is deliberately **wider** — the five defects plus chart-type appropriateness,
+  never aesthetics, never a read of `ReviewReport`. Per-item `not_checked` is published
+  for the judge too. The bake-off's **outcome** is still open.
+
 ## Alternatives rejected
 
 - **A single `vlm_critique` `CheckResult`** — Decision 1. Hides which item failed, which a repair
@@ -390,6 +396,9 @@ bake-off is where that is measured.
   [#177](https://github.com/thearcscode/chartagent/issues/177).
 - **The eval benchmark** inherits the pre-registered bake-off, the per-item `not_checked` rate,
   and the judge-family constraint.
+  **Settled — 2026-09-20 ([#170](https://github.com/thearcscode/chartagent/issues/170),
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md)).** Bake-off **outcome** still
+  open.
 - **The reference `Rasteriser`** owns its default size and scale, which set the image-token cost
   (research §4.2).
 - **Studio** renders a Tier-2 `note` as text.
@@ -435,6 +444,8 @@ bake-off is where that is measured.
   [#168](https://github.com/thearcscode/chartagent/issues/168) /
   [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md),
   [#169](https://github.com/thearcscode/chartagent/issues/169) /
-  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md).
+  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md),
+  [#170](https://github.com/thearcscode/chartagent/issues/170) /
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md).
 - `CONTEXT.md` gains **Critique**, **Critic seam** and **Applicability**, and amends
   **CheckResult** and **ReviewReport**.

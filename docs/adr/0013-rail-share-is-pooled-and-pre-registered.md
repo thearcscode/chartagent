@@ -152,6 +152,12 @@ tagging schema** (intents, dataset shapes, stress cell). The 50 is scored once a
 every release, so a 50 nested inside the 150 would be re-scored continuously and tuned
 against — pre-registration would die at the first look.
 
+**Note, 2026-09-20 ([#170](https://github.com/thearcscode/chartagent/issues/170),
+[ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md)).** The 150's matrix is **not** 3×
+the 50's: strata 120/30, cell-1 = 4, cell-3 = 2 silent row-drop only. Goal 2's 95% is
+every-request executable-output; 85% is judge pass on executable hits. The freeze lives
+at `eval/`, tag `eval-benchmark-v1`.
+
 ### 8. Pooled 50, with the mixture pre-registered
 
 The gate is scored on the **pooled 50**, not on the 30-request representative stratum.

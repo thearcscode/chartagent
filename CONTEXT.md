@@ -91,20 +91,44 @@ Choosing the deterministic rail or the custom-code rail for a request (PRD §7.3
 _Avoid_: "router" unqualified, conflating it with backend selection
 
 **Rail share**:
-The fraction of corpus requests served by the deterministic rail. Denominator is every request; custom rail, refusal, planner failure and *nothing in the 48 fits* all count against. A `raw_sql` chart is **in** the numerator (no codegen, no sandbox, `$0.00` refresh); the `raw_sql_used` rate is published beside it. Gated once at P1 exit on the pooled 50-request corpus, when the Wilson 95% lower bound falls below 60% (ADR-0013).
+The fraction of corpus requests served by the deterministic rail. Denominator is every request; custom rail, refusal, planner failure and *nothing in the 48 fits* all count against. A `raw_sql` chart is **in** the numerator (no codegen, no sandbox, `$0.00` refresh); the `raw_sql_used` rate is published beside it. Gated once at P1 exit on the pooled 50-request corpus, when the Wilson 95% lower bound falls below 60% (ADR-0013). Published per release on the **eval benchmark** as a target with an interval, not a gate.
 _Avoid_: measuring it against the chosen backend rather than the union, a rubric or human-labelled share before the planner exists, folding `raw_sql_used` or delivery rate into it
 
 **Delivery rate**:
-Whether a chart actually painted **and** the compiled row count equals the bound row count — the second number beside rail share, never merged with it. Where realised-capability failures land: Excel refusing on empty rows, the pyramid two-groups rule, the 17 non-painting ECharts boxplots, and Flint's silent layout row-drop (ADR-0014). The rail is chosen before anything compiles, so none of these is a rail-share miss. Its denominator is requests that emitted a compilable artefact, and the excluded count is published beside it.
-_Avoid_: charging realised capability to the rail share, or dropping it and letting the share stand for what users received; treating a painted chart missing rows as delivered; minting a combined end-to-end figure
+Whether a chart actually painted **and** the compiled row count equals the bound row count — the second number beside rail share, never merged with it. Where realised-capability failures land: Excel refusing on empty rows, the pyramid two-groups rule, the 17 non-painting ECharts boxplots, and Flint's silent layout row-drop (ADR-0014). The rail is chosen before anything compiles, so none of these is a rail-share miss. Its denominator is requests that emitted a compilable artefact, and the excluded count is published beside it. On the eval benchmark it stays this served-only number, beside the every-request **executable-output rate**, never multiplied into an end-to-end figure.
+_Avoid_: charging realised capability to the rail share, or dropping it and letting the share stand for what users received; treating a painted chart missing rows as delivered; minting a combined end-to-end figure; aliasing it to executable-output rate
+
+**Eval benchmark**:
+The tagged, hash-asserted public 150 (`eval-benchmark-v1`, under `eval/`, disjoint from `corpus/`) scored every release for Goal 2 and Goal 3's working targets. Disjoint (instruction text, dataset sha256) from `corpus-prereg-v1`, the first-ask set, and the injection suite; shares the tagging schema (intents, shapes, stress cell). Strata 120/30. Membership is frozen; scoring is not.
+_Avoid_: nesting the frozen 50 inside it, calling it the pressure corpus, re-scoring `corpus-prereg-v1`, rotating the published membership, folding community cases into the frozen tag, `corpus/eval/`, reusing `corpus/data/`
+
+**Executable-output rate**:
+Whether an eval-benchmark request produced a picture with its rows. Flint (non-Excel): `painted` pass and compiled row count equals bound row count. Custom rail: `Rasteriser` bytes the harness finds non-blank — not a `painted` `CheckResult` (omitted on that rail, ADR-0024). Denominator is every request; raises, blank canvas, and raster/assemble throws miss. `marks_present`, `data_truthfulness`, and `review.passed` are not this number. A Flint `painted: not_checked` is a harness misconfig, not an outcome. Excel-named requests are an authoring fault on this set — ranking never picks Excel, and `painted` is omitted there.
+_Avoid_: aliasing it to delivery rate, a `painted` CheckResult on the custom rail or Excel, requiring the gate to pass
+
+**Rubric pass rate**:
+The fraction of eval-benchmark **executable hits** on which the benchmark judge passes every sent item (five defects plus chart-type appropriateness; `not_checked` on a sent item fails that case). Raises, blanks, and raster/assemble throws are out of the denominator; that excluded count is published beside it.
+_Avoid_: every-request denominator, reading `ReviewReport`, aesthetics, failing a case on an omitted inapplicable Flint defect
+
+**Hold-out**:
+An extra unpublished pool beside the eval benchmark, starting at 30, rotated per release by a pre-registered permutation, never used for prompt, model, or few-shot work. Scored the same way as the public set; committed under `eval/holdout/`, not published as Goal 2. Community cases append here, never into the frozen 150.
+_Avoid_: a slice of the public 150, rotating the published 150, landing community cases in the frozen tag
+
+**Smoke subset**:
+Thirty frozen IDs from the public 150 (never the hold-out) that run on prompt/model-touching CI at `balanced`, executable-output only — no judge, no fast/best table.
+_Avoid_: a fresh random 30, cell-0 only, committing smoke as Goal 2
+
+**Benchmark judge**:
+The independent model that scores an eval-benchmark picture on the five Tier-2 defects plus chart-type appropriateness, never aesthetics. Distinct family from the critic; working reference is `gemini-3.8-flash` while the critic is Anthropic. It sees the PNG and renderer-fenced context, never `ReviewReport`, the critic note, or custom-rail `module`.
+_Avoid_: the critic's family, reading the gate, a taste rubric, sending inapplicable Flint defects and failing `not_checked` on them
 
 **Common-path stratum**:
-The 30 requests of the pressure corpus that carry the common-majority *story* — not an unstressed set. Twenty-two are unstressed (cell 0); the other eight are pre-registered stress that belongs on the common path, because ordinary traffic contains it: four menu-miss/`raw_sql`-hit, two silent-row-drop, and two ambiguity (ADR-0014 D2). Reported beside the pooled 50, never gated on its own. It is where the `raw_sql_used` figure that carries menu-coverage meaning is measured.
+The requests that carry the common-majority *story* — not an unstressed set. On the pressure corpus: 30 of 50 (22 cell 0; eight pre-registered stresses that belong on ordinary traffic). On the eval benchmark: 120 of 150. Reported beside the pooled number, never gated on its own. It is where the `raw_sql_used` figure that carries menu-coverage meaning is measured.
 _Avoid_: **representative** (it claims an external population no available request corpus supplies), gating on it alone, reading its `raw_sql_used` quota as the measured rate
 
 **Adversarial stratum**:
-The 20 requests of the pressure corpus that carry a pre-registered stress, budgeted across four cells: *no intent in the 48*, *menu-miss and `raw_sql`-hit*, *realised-capability risk*, and *expressible but hostile* (ADR-0014). Its difficulty is frozen with the ratio, because on the gate's arithmetic difficulty is what decides the outcome.
-_Avoid_: **nasty** as a single undifferentiated bucket, tuning difficulty after seeing scores, putting a shape `raw_sql` cannot carry in the menu-miss cell
+The requests that carry a pre-registered stress, budgeted across cells 1–4. On the pressure corpus: 20 of 50. On the eval benchmark: 30 of 150. Difficulty is frozen with the ratio on each instrument.
+_Avoid_: **nasty** as a single undifferentiated bucket, tuning difficulty after seeing scores, putting a shape `raw_sql` cannot carry in the menu-miss cell, 3× the 50's matrix onto the 150
 
 **Backend selection**:
 Choosing which of Flint's five backends a frame is bound for — the planner filling `bind`'s required `backend` kwarg. A **filter** over declared capability, never a runtime fallback. Two tiers (ADR-0021): **`requested_backend`** first — an extraction-only field on step 1's output, closed-enum typed, filled iff the instruction names a backend (never a chart judgement, never stored on the frame) — checked against the declared-capability filter on its own; if it fails, `BackendCapabilityError` raises right there, between step 1 and step 2, no retry and no fall-through to the ranking. Otherwise the **fixed default ranking** among filter survivors decides: `vegalite > echarts > plotly > chartjs > excel`. **Excel is never chosen by the ranking**, only by `requested_backend`. **Studio carries no standing target** — it is a plain caller like every other, and gets the same ranking a script would (ADR-0021; corrects the PRD's "ECharts remains the default web target", never an ADR decision). Exclusive types need no special case — the filter leaves one candidate and the ranking never runs (ADR-0019). The order lives once, as `BACKEND_RANKING` beside `Backend` in `frame/input.py` — never hand-copied.
@@ -171,8 +195,8 @@ The closed grammar of `x_chartagent.transform`: eight slots in one canonical ord
 _Avoid_: a step-1-only transform schema (a third grammar), prose rules the schema could state, a chartagent-owned planner skill, calling data-free shape checking a type checker
 
 **First-ask legality**:
-Whether step 1's **first** ask emits a legal fragment, before any repair. Measured on a from-scratch instruction set over existing fixtures, never on `corpus-prereg-v1` or anything adapted from it. Distinct from repair success, which is what the extra ask buys (#139, #140). **Prompted, not enforced**: the typed menu guides the model and rejects an illegal emit at decode, but no vendor constrains generation to it, so legality is an observed rate and never a guarantee.
-_Avoid_: reading the gated rail share as this measurement, re-scoring the frozen 50 to move it
+Whether step 1's **first** ask emits a legal fragment, before any repair. Measured on a from-scratch instruction set over existing fixtures, never on `corpus-prereg-v1`, the eval benchmark, or anything adapted from them. Distinct from repair success, which is what the extra ask buys (#139, #140). **Prompted, not enforced**: the typed menu guides the model and rejects an illegal emit at decode, but no vendor constrains generation to it, so legality is an observed rate and never a guarantee.
+_Avoid_: reading the gated rail share as this measurement, re-scoring the frozen 50 to move it, using first-ask fixtures as eval-benchmark datasets
 
 **Inexpressible request**:
 A request the planner cannot express as an input frame at P1, raised as `InexpressibleRequestError` carrying `bucket: 1 | 2`. Distinct from `UnanswerableInstructionError`, which is a request that makes no sense against the data — a different fault with a different lever, fenced on **column existence**: every referenced concept maps to a real column but the grammar can't shape it (inexpressible), versus a named or implied column that genuinely isn't there (unanswerable). There is no custom rail at P1, so the library raises rather than escapes (ADR-0019).
