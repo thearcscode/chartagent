@@ -18,12 +18,13 @@
   ADR-0025 *Leaves open* (`data_truthfulness` escalation); ADR-0026 *Leaves open* (repair
   counts, inconclusive retry, `marks_present` hop, critic-as-subagent, `quality=` /
   `rasteriser=` wiring). Dated errata in place, listed under *What this amends*.
-- **Leaves open:** the eval benchmark ([#170](https://github.com/thearcscode/chartagent/issues/170));
-  `generate_recipe`’s prompt and first `ChartDocument` ([#175](https://github.com/thearcscode/chartagent/issues/175)
+- **Leaves open:** `generate_recipe`’s prompt and first `ChartDocument` ([#175](https://github.com/thearcscode/chartagent/issues/175)
   — minted with this ADR); the python widening ([#176](https://github.com/thearcscode/chartagent/issues/176));
   harness + `history=` / VFS + skills ([#177](https://github.com/thearcscode/chartagent/issues/177));
   Tier-3; the reference `Rasteriser`’s default size and scale.
-  *What `fast`/`balanced`/`best` cost and take in wall-clock was settled by
+  *The eval benchmark was settled by
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md) on 2026-09-20.
+  What `fast`/`balanced`/`best` cost and take in wall-clock was settled by
   [ADR-0028](0028-quality-dials-cost-and-latency-targets.md) on 2026-09-20.
   Counts, wiring, `budget_exhausted`, and “fast never escalates” stay
   **closed here** and must not be reopened.*
@@ -245,8 +246,10 @@ Changed-checks-only patch review is the history/patch surface on
   [ADR-0028](0028-quality-dials-cost-and-latency-targets.md)** — cost and latency
   targets, settled. Counts, wiring, `budget_exhausted`, and “fast never escalates”
   stay closed here.
-- **[#170](https://github.com/thearcscode/chartagent/issues/170)** inherits `balanced` as
+- **[#170](https://github.com/thearcscode/chartagent/issues/170) /
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md)** inherits `balanced` as
   0-or-1 review repair plus a possible hop only on Flint `marks_present`.
+  **Settled — 2026-09-20.**
 - **[#175](https://github.com/thearcscode/chartagent/issues/175)** inherits `generate_recipe`,
   the patch prompt, carry-over fields, and the planner-miss (buckets 1–3) wiring.
 - **[#176](https://github.com/thearcscode/chartagent/issues/176)** inherits ADR-0015 as the
@@ -273,6 +276,7 @@ Changed-checks-only patch review is the history/patch surface on
 
 - [#168](https://github.com/thearcscode/chartagent/issues/168) — the grilling this settles.
 - ADR-0013, ADR-0016, ADR-0018, ADR-0020, ADR-0024, ADR-0025, ADR-0026,
-  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md).
+  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md),
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md).
 - `CONTEXT.md` gains **Escalation**, **Review repair**, **Quality**, and rewrites **Chart
   agent** and **Chart result**.

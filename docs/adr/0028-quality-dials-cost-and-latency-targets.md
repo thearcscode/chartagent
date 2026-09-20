@@ -15,14 +15,16 @@
   latency lines; ADR-0020 Decision 5's leftover pointer; ADR-0026's "$0.05 is finalised
   from measured token counts in P2"; ADR-0027 *Leaves open*, consequence, and feed for
   #169. Dated errata in place, listed under *What this amends*.
-- **Leaves open:** the eval benchmark's cases, judge, and hold-out
-  ([#170](https://github.com/thearcscode/chartagent/issues/170) — this ADR feeds the
-  measurement rule, not the set); whether `fast` still raises on planner buckets 1–3
+- **Leaves open:** whether `fast` still raises on planner buckets 1–3
   ([#175](https://github.com/thearcscode/chartagent/issues/175); ADR-0027's "fast never
   buys codegen" stays closed); the reference `Rasteriser`'s default size and scale; a
   `ChartResult` cost field and a `ModelClient` usage return (neither is this ticket).
-  The first #170 table may reprice a working target; that is the named review, not a
-  silent edit of this ADR.
+  *The eval benchmark's cases, judge, and hold-out were settled by
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md) on 2026-09-20.
+  Decision 9's report artifact is `eval/report.md` + `eval/report-notes.md`.*
+  The first #170 table may reprice a working **cost** target; that is the named
+  review, not a silent edit of this ADR. Lowering Goal 2's 95% or 85% needs a
+  new ADR.
 
 ## Context
 
@@ -242,12 +244,15 @@ Wiring usage is #170's harness, not a `ChartResult` field, not a
 
 ## What this feeds
 
-- **[#170](https://github.com/thearcscode/chartagent/issues/170)** inherits
+- **[#170](https://github.com/thearcscode/chartagent/issues/170) /
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md)** inherits
   usage wiring (fail the row or the run if usage is absent), three quality
   runs, Decision 3's sample and raise counts, Decision 5's companion line,
-  the p50/p95 table, and Decision 9's note location in the committed report.
+  the p50/p95 table, and Decision 9's note location in
+  `eval/report.md` / `eval/report-notes.md`.
   It also inherits `balanced` as 0-or-1 review repair plus a possible hop
   only on Flint `marks_present` (ADR-0027).
+  **Settled — 2026-09-20.**
 - **[#175](https://github.com/thearcscode/chartagent/issues/175)** inherits
   that buckets 1–3 enter the $0.05 sample only as returned ChartResults, and
   that whether `fast` still raises on 1–3 is not settled here.
@@ -273,6 +278,7 @@ Wiring usage is #170's harness, not a `ChartResult` field, not a
 
 - [#169](https://github.com/thearcscode/chartagent/issues/169) — the grilling
   this settles.
-- ADR-0013, ADR-0019, ADR-0020, ADR-0026, ADR-0027.
+- ADR-0013, ADR-0019, ADR-0020, ADR-0026, ADR-0027,
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md).
 - `CONTEXT.md` **Quality** was updated in the grilling (typical cost; worst
   case; Avoid: cheaper at the median).

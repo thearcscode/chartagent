@@ -594,6 +594,10 @@ benchmark have *"different n, different composition and different purposes"* and
 relation between them open. Decision 17 above fixes it: **disjoint request sets, shared
 tagging schema.**
 
+**Dated note, 2026-09-20 (#170,
+[ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md)).** Decision 17's disjointness
+stands. The 150's **mix** is ADR-0029's 120/30 matrix, not 3× this ADR's table.
+
 ## Consequences
 
 **The corpus, not the planner, sets most of the gate's difficulty — and that is now written
@@ -740,6 +744,8 @@ Every number in this ADR is reproducible. Probes were run at Flint `0.5.1` / fix
   work without knowing where the value is written (Decision 16).
 - **The ≥150-case benchmark** (P0.10) inherits the tagging schema and the disjointness rule
   (Decision 17).
+  **Settled — 2026-09-20 ([#170](https://github.com/thearcscode/chartagent/issues/170),
+  [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md)).**
 - **`pivot` and `window` graduation** (map fog) is fed by the common-path `raw_sql_used` figure
   (Decision 10), which Decision 15 names as the menu lever's only evidence.
 
