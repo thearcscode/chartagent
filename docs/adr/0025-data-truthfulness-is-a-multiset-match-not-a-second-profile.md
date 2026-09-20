@@ -16,7 +16,10 @@
   reserved as a custom-rail-only name)
 - **Amends:** ADR-0011's *Consequences* — recorded as a dated erratum in place and listed
   under *What this amends*
-- **Leaves open:** escalation policy on a `data_truthfulness` fail ([#168](https://github.com/thearcscode/chartagent/issues/168)); `CheckResult.detail`'s exact payload for this check, which is an implementation choice and not an architectural one
+- **Leaves open:** `CheckResult.detail`'s exact payload for this check, which is an
+  implementation choice and not an architectural one.
+  *Escalation policy on a `data_truthfulness` fail was settled by
+  [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) on 2026-09-20.*
 
 ## Context
 
@@ -218,9 +221,11 @@ the check sees them.
 
 ## What this feeds
 
-- **Escalation** ([#168](https://github.com/thearcscode/chartagent/issues/168)) inherits
-  `data_truthfulness: fail` as one of the Tier-1 trigger signals, alongside
-  `injection_pattern`, `painted`, and `colorblind_safe_palette` (ADR-0024).
+- **Escalation** ([#168](https://github.com/thearcscode/chartagent/issues/168)) inherited
+  `data_truthfulness: fail` as one of the Tier-1 trigger signals. **Settled — 2026-09-20
+  ([ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)):** it does not
+  hop (already custom rail); it spends the review-repair budget via the patch prompt, then
+  fail-closes.
 - **Tier-2 critique** ([#166](https://github.com/thearcscode/chartagent/issues/166),
   [#167](https://github.com/thearcscode/chartagent/issues/167)) inherits the named, accepted
   weakness: a self-reported declaration can omit a fabricated mark entirely, and the VLM
@@ -242,4 +247,6 @@ the check sees them.
   reads.
 - ADR-0024 — `CheckResult`'s shape, the `not_checked`-versus-omission rule, and
   `data_truthfulness` reserved as a custom-rail-only name.
+- [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) — a
+  `data_truthfulness` fail spends review-repair budget, then fail-closes; it does not hop.
 - [#165](https://github.com/thearcscode/chartagent/issues/165) — the ticket.

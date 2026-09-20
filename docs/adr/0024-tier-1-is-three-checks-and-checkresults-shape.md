@@ -13,10 +13,12 @@
   `not_checked` precedent, for the now-superseded matplotlib custom rail), ADR-0017 Decision 15
   (paint-time failures split between `RasterisationError` and `CheckResult`; the custom rail's
   boolean paint signal)
-- **Leaves open:** `data_truthfulness`'s internals on the custom rail (#165); escalation
-  policy on a Tier-1 failure (#168); Phase-2 validation's actual thresholds (still fog on the
-  map). *The four checks demoted to Tier-2's rubric (#167) were settled by
-  [ADR-0026](0026-tier-2-is-five-defect-checks-and-the-critique-is-a-leaf-call.md) on 2026-09-18.*
+- **Leaves open:** `data_truthfulness`'s internals on the custom rail (#165); Phase-2
+  validation's actual thresholds (still fog on the map). *The four checks demoted to
+  Tier-2's rubric (#167) were settled by
+  [ADR-0026](0026-tier-2-is-five-defect-checks-and-the-critique-is-a-leaf-call.md) on
+  2026-09-18. Escalation policy on a Tier-1 failure (#168) was settled by
+  [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) on 2026-09-20.*
 
 ## Context
 
@@ -240,9 +242,12 @@ Phase-2 or lives to be reviewed; never both.
 - **Tier-2 critique** (#167) inherits four named rubric items — `axis_labels_present`,
   `legend_presence`, `label_overlap`, `bar_chart_y_axis_baseline` — demoted here for a stated
   reason, plus the shared `CheckResult` shape (Decision 1) to reuse rather than reinvent.
-- **Escalation** (#168) inherits a Tier-1 `fail` on `injection_pattern`, `painted`, or
-  `colorblind_safe_palette` as the trigger set for whatever "fails review, moves to custom rail"
-  policy it designs.
+- **Escalation** (#168) inherited a Tier-1 `fail` on `injection_pattern`, `painted`, or
+  `colorblind_safe_palette` as candidate triggers. **Settled — 2026-09-20
+  ([ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)):** none of
+  these three hops. `injection_pattern` fail-closes (taint is in the data). `painted`
+  fail-closes (blank canvas stays on-rail; ADR-0024's block rule is not reopened).
+  `colorblind_safe_palette` spends the review-repair budget, then fail-closes.
 - **`ReviewReport`'s `passed` computation** inherits the general rule that `not_checked` and
   omission both stay outside pass/fail — `passed` is computed only over checks that resolved to
   `pass` or `fail`, on the precedent ADR-0016 Decision 10 set for one check and generalised here
@@ -260,3 +265,5 @@ Phase-2 or lives to be reviewed; never both.
 - ADR-0016 Decision 10, ADR-0017 Decisions 13/15 — the `not_checked` precedent and the paint-time
   failure split this ADR generalises from one check to the whole tier.
 - `CONTEXT.md` gains **`CheckResult`** and **`ReviewReport`**.
+- [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) — Tier-1
+  escalation policy.
