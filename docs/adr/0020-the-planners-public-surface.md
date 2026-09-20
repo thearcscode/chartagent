@@ -14,8 +14,11 @@
   elsewhere" is discharged here.
 - **Leaves open:** `create_chart_agent`/`create_chart` themselves — signatures only, no
   implementation, pending #92's planner. `history=` and conversational refinement (needs a
-  VFS, P2). `quality` (needs the P2 review gate). Where a caller-supplied `backend=` override
-  enters the call — [#93](https://github.com/thearcscode/chartagent/issues/93).
+  VFS, P2). Where a caller-supplied `backend=` override enters the call —
+  [#93](https://github.com/thearcscode/chartagent/issues/93).
+  *`quality` (Decision 5) and `ChartResult`'s envelope-only shape (Decision 2) were settled
+  by [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) on 2026-09-20.
+  Decision 1's factory kwargs grew in the same ADR.*
 
 ## Context
 
@@ -52,6 +55,14 @@ below. **`backend=` is deliberately absent too** — a caller override is real (
 Decision 3: "a backend named in the instruction wins over the list"), but *where* it enters
 the call is #93's question, not this one's, and adding a placeholder kwarg here would answer
 it by accident.
+
+**Erratum — 2026-09-20 ([#168](https://github.com/thearcscode/chartagent/issues/168),
+[ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)).** P2 adds
+`rasteriser=`, `critique_model=`, and `quality=` to this factory, with `quality=` also
+accepted per call on `create_chart` (default `balanced`). `sandbox=` and `outputs=` stay
+absent. `history=` stays absent until a VFS exists
+([#177](https://github.com/thearcscode/chartagent/issues/177)). `generate_recipe` is an
+internal seam, not a factory kwarg.
 
 **`create_chart` plans and binds in one call.** It profiles the source, runs both planner
 steps, picks a backend, and calls `bind` itself — a caller gets a compiled-ready chart back,
@@ -96,6 +107,14 @@ frame `bind` returned already carries bound rows at `input["data"]`
 a hypothetical one. **Returns a new `ChartResult`**; the original is untouched. No
 `instruction=` parameter — there is nothing to re-plan — and no in-place mutation, matching
 every other frozen-ish object in this codebase (`Advisory`, `DriftedField`).
+
+**Erratum — 2026-09-20 ([#168](https://github.com/thearcscode/chartagent/issues/168),
+[ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)).** At P2
+`ChartResult` is one type with an XOR payload: exactly one of `envelope` / `recipe` is set,
+plus `review: ReviewReport | None`. No `kind` field; do not flatten either payload.
+`create_chart` always sets `review` for the returned artifact. `refresh` still re-binds only
+(`bind` or `bind_recipe`) and sets `review=None`. Tests that constructed
+`ChartResult(envelope=…)` grow `review=`.
 
 ### 3. `UnanswerableInstructionError`, and the fence that keeps it out of bucket 1
 
@@ -171,6 +190,13 @@ design" is still fog on the map). Omitted entirely rather than accepted as a res
 no-op — a kwarg that silently does nothing reads as "it works, I just haven't tuned it,"
 which is worse than a clean `TypeError` when P2 adds it for real.
 
+**Erratum — 2026-09-20 ([#168](https://github.com/thearcscode/chartagent/issues/168),
+[ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)).** P1 omission
+stands. P2 adds `quality=` as a real kwarg (factory default `balanced`, overridable per
+call): `fast` 0 review repairs and never codegen, `balanced` 1, `best` 2. Not a reserved
+no-op that silently did nothing. Cost and latency targets remain
+[#169](https://github.com/thearcscode/chartagent/issues/169).
+
 ### 6. Implementation scope: what ships in this PR, and where it lives
 
 `ChartResult.refresh()` only needs `bind` (already public); the three errors are typed
@@ -212,9 +238,9 @@ prompt) and stay signatures-only until #92.
   post-step-2 `assemble`/`bind` call now wraps `SpecShapeError`/`SchemaDriftError` into
   `PlannerFailureError`; `bind` called directly, and `ChartResult.refresh`, are still the
   no-wrapping path this consequence described.
-- **History and quality are named absences, not silent ones.** A caller reading this ADR
-  knows `history=`/`quality=` are coming at P2, rather than discovering their omission by
-  trial and error.
+- **History is a named absence, not a silent one.** A caller reading this ADR knows
+  `history=` is coming at P2, rather than discovering its omission by trial and error.
+  **Erratum — 2026-09-20:** `quality=` is no longer an absence; ADR-0027 Decision 8 added it.
 
 ## Alternatives rejected
 
@@ -266,3 +292,5 @@ prompt) and stay signatures-only until #92.
   `plan/` and implements `create_chart_agent`/`create_chart` against this contract.
 - [#93](https://github.com/thearcscode/chartagent/issues/93) — backend ranking; now
   unblocked, and owns where a caller's `backend=` override enters the call.
+- [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) — P2 factory
+  kwargs, XOR `ChartResult`, `quality=`.

@@ -15,13 +15,13 @@
 - **Amends:** ADR-0024 Decision 3 (and a pointer at Decision 5), ADR-0005 Decision 9
   (`tiers_skipped` gains `blocked`), ADR-0003 Decision 7 (`unavailable` covers an input not
   supplied), PRD §7.3's Tier-2 bullet — dated errata in place, listed under *What this amends*
-- **Leaves open:** repair counts and budgets, whether an inconclusive Tier 2 retries, and what
-  a Flint `marks_present` fail escalates to (all [#168](https://github.com/thearcscode/chartagent/issues/168));
-  whether #168's orchestrator calls the critic as plain code or wraps it as a subagent; the
-  `quality=` / `rasteriser=` wiring on `create_chart_agent`; the reference `Rasteriser`'s default
-  size and scale; the applicability table's cells (the build ticket's — this ADR fixes the rules
-  and the tests); the OpenAI image-plus-schema live probe; the bake-off's outcome; the cap on a
-  critique note
+- **Leaves open:** the reference `Rasteriser`'s default size and scale; the applicability
+  table's cells (the build ticket's — this ADR fixes the rules and the tests); the OpenAI
+  image-plus-schema live probe; the bake-off's outcome; the cap on a critique note.
+  *Repair counts and budgets, whether an inconclusive Tier 2 retries, what a Flint
+  `marks_present` fail escalates to, whether the orchestrator wraps the critic as a
+  subagent, and the `quality=` / `rasteriser=` wiring were settled by
+  [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) on 2026-09-20.*
 
 ## Context
 
@@ -160,11 +160,22 @@ up as a number.
 An inconclusive tier is **not a repair trigger** — there is no failing name to send. Whether it
 retries is #168's.
 
+**Erratum — 2026-09-20 ([#168](https://github.com/thearcscode/chartagent/issues/168),
+[ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)).** It does not
+retry. Fail-closed. `budget_exhausted` stays false.
+
 ### 6. A failed critique repairs, bounded; report-only is budget 0
 
 A Tier-2 `fail` is **repairable input** to the planner. Report-only is not a second mode: it is a
 repair budget of **0** (a `quality="fast"`-style setting). The counts are #168's, and it fits
 ADR-0016 Decision 12 — the gate owns whether to repair; the rail owns both prompts.
+
+**Erratum — 2026-09-20 ([#168](https://github.com/thearcscode/chartagent/issues/168),
+[ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)).** Review-repair
+counts are `fast=0`, `balanced=1`, `best=2`, same on both rails, separate from the planner's
+1/2/5 emit cap. A Flint `marks_present` fail still consumes zero repairs and hops only at
+`balanced`/`best`; `fast` never escalates. `budget_exhausted` is true iff a repairable fail
+was present and remaining budget was 0.
 
 **What a repair may change.**
 
@@ -244,6 +255,12 @@ references to base64 in long conversations. Structured output on a subagent exis
 call it as plain code; nothing here forecloses either. If #168 replaces pydantic-ai, only the
 widening is redone, behind the seam.
 
+**Erratum — 2026-09-20 ([#168](https://github.com/thearcscode/chartagent/issues/168),
+[ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)).** The orchestrator
+calls this seam as plain code, not a subagent. pydantic-ai stays the client. Deepagents is
+not under this loop — that question moves to
+[#177](https://github.com/thearcscode/chartagent/issues/177).
+
 ### 9. `critique_model` has no default and no fallback
 
 The critic's model is a caller-supplied vendor-prefixed string, `critique_model`, on the same
@@ -263,6 +280,11 @@ convention as `model` (ADR-0022 Decision 9).
   erratum on ADR-0003 Decision 7).
 
 The `quality=` and `rasteriser=` wiring on `create_chart_agent` is #168's.
+
+**Erratum — 2026-09-20 ([#168](https://github.com/thearcscode/chartagent/issues/168),
+[ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)).** `rasteriser=`
+and `critique_model=` are factory-only and construction-checked (this Decision 9 stands).
+`quality=` is per request; the factory default is `balanced`.
 
 ### 10. Sonnet 5 is the documented reference critic, not a pin; a bake-off decides
 
@@ -347,16 +369,20 @@ bake-off is where that is measured.
   untrusted text the picture already summarises.
 - **A default critique model, or falling back to `model`** — Decision 9.
 - **Skipping Tier 2 silently when a named model's extra is missing** — Decision 9.
-- **Making the critic a deepagents subagent now** — Decision 8. #168 has not settled the framework,
-  and the seam keeps both options open.
+- **Making the critic a deepagents subagent now** — Decision 8. The seam kept both options
+  open for #168. **Erratum — 2026-09-20:** ADR-0027 kept the leaf call. The framework
+  question for a harness is [#177](https://github.com/thearcscode/chartagent/issues/177),
+  not this seam.
 
 ## What this feeds
 
-- **Escalation ([#168](https://github.com/thearcscode/chartagent/issues/168))** inherits: repair
-  counts and budgets; whether an inconclusive Tier 2 retries; a Flint `marks_present` `fail` as an
-  escalation signal (the bucket-4 trigger, alongside ADR-0024 and ADR-0025's Tier-1 triggers);
-  the choice of plain call versus subagent for the seam; the `quality=` / `rasteriser=` /
-  `critique_model=` wiring; and light-mode re-review.
+- **Escalation ([#168](https://github.com/thearcscode/chartagent/issues/168))** inherited:
+  repair counts and budgets; whether an inconclusive Tier 2 retries; a Flint `marks_present`
+  `fail` as an escalation signal; the choice of plain call versus subagent; the `quality=` /
+  `rasteriser=` / `critique_model=` wiring; and light-mode re-review.
+  **Settled — 2026-09-20 ([ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)).**
+  Light-mode changed-checks-only review remains
+  [#177](https://github.com/thearcscode/chartagent/issues/177).
 - **The eval benchmark** inherits the pre-registered bake-off, the per-item `not_checked` rate,
   and the judge-family constraint.
 - **The reference `Rasteriser`** owns its default size and scale, which set the image-token cost
@@ -401,6 +427,7 @@ bake-off is where that is measured.
 - ADR-0025 — the accepted omission weakness.
 - [#166](https://github.com/thearcscode/chartagent/issues/166),
   [#167](https://github.com/thearcscode/chartagent/issues/167),
-  [#168](https://github.com/thearcscode/chartagent/issues/168).
+  [#168](https://github.com/thearcscode/chartagent/issues/168) /
+  [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md).
 - `CONTEXT.md` gains **Critique**, **Critic seam** and **Applicability**, and amends
   **CheckResult** and **ReviewReport**.
