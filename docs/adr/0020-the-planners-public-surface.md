@@ -197,6 +197,11 @@ call): `fast` 0 review repairs and never codegen, `balanced` 1, `best` 2. Not a 
 no-op that silently did nothing. Cost and latency targets remain
 [#169](https://github.com/thearcscode/chartagent/issues/169).
 
+**Erratum — 2026-09-20 ([#169](https://github.com/thearcscode/chartagent/issues/169),
+[ADR-0028](0028-quality-dials-cost-and-latency-targets.md)).** Cost and latency
+targets are working published claims on the documented reference stack, not a
+gate, measured on #170. Discharges the pointer above.
+
 ### 6. Implementation scope: what ships in this PR, and where it lives
 
 `ChartResult.refresh()` only needs `bind` (already public); the three errors are typed
@@ -294,3 +299,5 @@ prompt) and stay signatures-only until #92.
   unblocked, and owns where a caller's `backend=` override enters the call.
 - [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) — P2 factory
   kwargs, XOR `ChartResult`, `quality=`.
+- [ADR-0028](0028-quality-dials-cost-and-latency-targets.md) — cost and latency working
+  targets; discharges Decision 5's leftover #169 pointer.

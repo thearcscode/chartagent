@@ -18,13 +18,15 @@
   ADR-0025 *Leaves open* (`data_truthfulness` escalation); ADR-0026 *Leaves open* (repair
   counts, inconclusive retry, `marks_present` hop, critic-as-subagent, `quality=` /
   `rasteriser=` wiring). Dated errata in place, listed under *What this amends*.
-- **Leaves open:** what `fast`/`balanced`/`best` cost and take in wall-clock ( [#169](https://github.com/thearcscode/chartagent/issues/169)
-  — counts, wiring, `budget_exhausted`, and “fast never escalates” are **closed here** and
-  must not be reopened); the eval benchmark ([#170](https://github.com/thearcscode/chartagent/issues/170));
+- **Leaves open:** the eval benchmark ([#170](https://github.com/thearcscode/chartagent/issues/170));
   `generate_recipe`’s prompt and first `ChartDocument` ([#175](https://github.com/thearcscode/chartagent/issues/175)
   — minted with this ADR); the python widening ([#176](https://github.com/thearcscode/chartagent/issues/176));
   harness + `history=` / VFS + skills ([#177](https://github.com/thearcscode/chartagent/issues/177));
   Tier-3; the reference `Rasteriser`’s default size and scale.
+  *What `fast`/`balanced`/`best` cost and take in wall-clock was settled by
+  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md) on 2026-09-20.
+  Counts, wiring, `budget_exhausted`, and “fast never escalates” stay
+  **closed here** and must not be reopened.*
 
 ## Context
 
@@ -201,7 +203,11 @@ Changed-checks-only patch review is the history/patch surface on
 
 - **Bucket 4 is rare on purpose.** A stricter VLM does not move rail share except on
   chrome-without-marks at `balanced`/`best`.
-- **`fast` is actually cheap.** One critic call, no hop, no patch.
+- **`fast` caps the worst case: one critic call, no hop, no patch. Typical inference cost matches `balanced` on a first-round pass.**
+
+  **Erratum — 2026-09-20 ([#169](https://github.com/thearcscode/chartagent/issues/169),
+  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md)).** Replaces “`fast` is
+  actually cheap.” True as a cap; false as typical cost.
 - **`ChartResult.review` is optional on the type** so `refresh` can say *we did not look*
   without minting a skip report.
 - **`generate_recipe` is unbuildable until #175.** The hop is specified; the fail-closed
@@ -235,8 +241,10 @@ Changed-checks-only patch review is the history/patch surface on
 
 ## What this feeds
 
-- **[#169](https://github.com/thearcscode/chartagent/issues/169)** inherits cost and latency
-  targets only. Counts, wiring, `budget_exhausted`, and “fast never escalates” are closed.
+- **[#169](https://github.com/thearcscode/chartagent/issues/169) /
+  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md)** — cost and latency
+  targets, settled. Counts, wiring, `budget_exhausted`, and “fast never escalates”
+  stay closed here.
 - **[#170](https://github.com/thearcscode/chartagent/issues/170)** inherits `balanced` as
   0-or-1 review repair plus a possible hop only on Flint `marks_present`.
 - **[#175](https://github.com/thearcscode/chartagent/issues/175)** inherits `generate_recipe`,
@@ -264,6 +272,7 @@ Changed-checks-only patch review is the history/patch surface on
 ## Related
 
 - [#168](https://github.com/thearcscode/chartagent/issues/168) — the grilling this settles.
-- ADR-0013, ADR-0016, ADR-0018, ADR-0020, ADR-0024, ADR-0025, ADR-0026.
+- ADR-0013, ADR-0016, ADR-0018, ADR-0020, ADR-0024, ADR-0025, ADR-0026,
+  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md).
 - `CONTEXT.md` gains **Escalation**, **Review repair**, **Quality**, and rewrites **Chart
   agent** and **Chart result**.

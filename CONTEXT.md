@@ -159,8 +159,8 @@ An extra model ask after a failed review, charged to the per-request `quality=` 
 _Avoid_: sharing a cap with emit repairs; treating report-only as a second mode rather than budget 0; calling a `marks_present` fail a repair; raising a review fail
 
 **Quality**:
-The per-request review-repair dial on `create_chart`: `fast` | `balanced` | `best`. It is 0, 1 or 2 review repairs. `fast` skips presentational revises and never buys codegen.
-_Avoid_: using it to skip Tier 1; folding emit retries into it; treating `fast` as skipping the critic call
+The per-request review-repair-and-hop dial on `create_chart`: `fast` | `balanced` | `best`. It is 0, 1 or 2 review repairs. `fast` skips presentational revises and never buys codegen. Typical inference cost at `fast` and `balanced` is the same; `fast` caps the worst case.
+_Avoid_: using it to skip Tier 1; folding emit retries into it; treating `fast` as skipping the critic call; reading `fast` as cheaper at the median
 
 **Planner step 1 / step 2**:
 The planner's two model calls (ADR-0019, ADR-0020). **Step 1** returns a **three-member tagged union** — a backend-free fragment (`chartType`, encodings, `transform`, `semantic_types`, plus an optional `requested_backend`), an inexpressible verdict carrying bucket 1 or 2, or an unanswerable-instruction verdict (`kind`, `keys`) — ADR-0020 Decision 3 grew the union by the third member after ADR-0019 shipped with two. **Code** then runs backend selection over a Fragment. **Step 2** fills `chartProperties` against one of the 151 generated models, and does not resend `sample_rows`. The emitted input frame stays **backend-free**; the backend is returned beside it, never stored on it. Budgets are 1 retry at step 1, 2 at step 2, a 5-call cap; a well-formed inexpressible or unanswerable verdict is never retried. An extra ask is an **emit repair**: the next user turn includes the rejected emit and the checker error (ADR-0019 Decision 6 erratum, 2026-09-13). Distinct from a **review repair**, which is the gate's extra ask after a failed check.

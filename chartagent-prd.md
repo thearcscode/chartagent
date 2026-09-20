@@ -110,9 +110,11 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 
 - As a SaaS engineer, I want to call `agent.create_chart(data, instruction)` and receive ECharts JSON, so that I can render the chart in my existing web frontend with one `<div>`.
 - As a SaaS engineer, I want to re-render a saved ChartSpec against fresh data with a single no-LLM call, so that my dashboards refresh on schedule at zero inference cost.
-- As a SaaS engineer, I want a `quality` knob per request, so that I can serve free-tier users cheaply and premium users with the full review loop.
+- As a SaaS engineer, I want a `quality` knob per request, so that I can cap review-repair and codegen spend for free-tier users and allow the full review loop for premium users.
 - As a SaaS engineer, I want to register my brand palette and style rules once, so that every chart my users generate is on-brand without per-request prompting.
 - As a SaaS engineer, I want to persist a chart's spec and re-render it identically at any time, so that my product behaves predictably even as models and prompts evolve.
+
+> **Erratum — 2026-09-20 ([#169](https://github.com/thearcscode/chartagent/issues/169), [ADR-0028](docs/adr/0028-quality-dials-cost-and-latency-targets.md)).** The previous reading — *"serve free-tier users cheaply and premium users with the full review loop"* — treated `quality=` as cheaper typical cost. `fast` still runs the critic; typical inference cost at `fast` and `balanced` is the same. Pillar 4's first sentence (review-loop budget) stands.
 
 **P2 — Data platform engineer**
 
@@ -141,9 +143,11 @@ Explicitly **not** a target: the individual analyst doing ad-hoc exploration in 
 
 1. **Time-to-first-chart under 15 minutes** from `pip install chartagent` to a rendered chart from a natural-language instruction (measured via docs quickstart user testing).
 2. **≥ 95% executable-output rate and ≥ 85% rubric pass rate** on the public eval benchmark (≥ 150 cases, see P0.10) at `quality="balanced"`, scored by an **independent judge** — a model distinct from both the planner and the in-loop critique VLM, calibrated against human double-scoring each release (LLM judges measurably favor their own generations; see §14). At n = 150, the 95% confidence interval on a 95% rate is roughly ±3.5 pp — narrow enough to publish; at n = 30 it would be ±8 pp, which is not. (LIDA's ~3.5% visualization error rate is directional prior art only — its metric and task definition differ, so we cite it as context, not as a head-to-head comparison.)
-3. **≥ 75% of benchmark requests served by the deterministic rail** — a **target reported with a confidence interval, not a pass/fail criterion**: separating 75% from the ~80% hypothesis it tests needs n ≈ 440 at 80% power, and the benchmark is ≥150 cases, so it cannot be evaluated as a gate at any planned n (the gate is §11's <60%, affordable because 60-vs-80 needs only n ≈ 33). Goal 2 above already applies this discipline; **ADR-0013** applies it here —, keeping **median cost per chart ≤ $0.05 at** `balanced` (provisional target assuming a Sonnet-class planner and small critique model; finalized from measured token counts in Phase 2 and published with the benchmark); **refresh of an existing chart costs zero LLM tokens**.
+3. **≥ 75% of benchmark requests served by the deterministic rail** — a **target reported with a confidence interval, not a pass/fail criterion**: separating 75% from the ~80% hypothesis it tests needs n ≈ 440 at 80% power, and the benchmark is ≥150 cases, so it cannot be evaluated as a gate at any planned n (the gate is §11's <60%, affordable because 60-vs-80 needs only n ≈ 33). Goal 2 above already applies this discipline; **ADR-0013** applies it here —, keeping **median cost per chart ≤ $0.05 at** `balanced` (working published target on the documented reference planner and critic (Sonnet 4.6 / Sonnet 5); measured on the eval benchmark and published with it — [ADR-0028](docs/adr/0028-quality-dials-cost-and-latency-targets.md)); **refresh of an existing chart costs zero LLM tokens**.
 4. **Handle a 10 GB Parquet source with < 500 MB peak agent-process memory** — proof of the profile-don't-load architecture.
 5. **Adoption:** 1,000 GitHub stars / 10k monthly PyPI downloads within 6 months of v1.0 (proxy for "the default chart agent" positioning).
+
+> **Erratum — 2026-09-20 ([#169](https://github.com/thearcscode/chartagent/issues/169), [ADR-0028](docs/adr/0028-quality-dials-cost-and-latency-targets.md)).** Goal 3's cost assumption is no longer *"provisional … Sonnet-class planner and small critique model; finalized from measured token counts in Phase 2"*. It is a working published target on the documented reference planner and critic (Sonnet 4.6 / Sonnet 5). ADR-0026 Decision 9 (no critique default) and the risk-table mitigation that a caller may still pass a small critic are not rewritten.
 
 ---
 
@@ -432,8 +436,10 @@ The library returns this inside an **envelope** — `{ flint_version, backend, i
 - Quickstart completion: ≥ 60% of docs-quickstart sessions reach a rendered chart (target: < 15 min).
 - Benchmark executable-output rate ≥ 95%; rubric pass ≥ 85% at `balanced` (full ≥ 150-case set, independent judge + human calibration per P0.10; measured in CI, published with confidence intervals).
 - Deterministic-rail share ≥ 75% on benchmark, **reported with a confidence interval** (a target, not a pass/fail — ADR-0013); custom-rail reasons logged 100%, in ADR-0013's three-bucket vocabulary. Published alongside it and never folded into it: the **`raw_sql_used` rate** (menu coverage) and the **delivery rate** (did a chart actually paint).
-- Median cost per chart ≤ $0.05 at `balanced` (provisional, per Goal 3; finalized and published in Phase 2).
-- Median latency: deterministic rail < 10 s; custom rail < 60 s at `balanced`; refresh < 2 s (measurement: benchmark harness, p50/p95).
+- Median cost per chart ≤ $0.05 at `balanced` (working published target, per Goal 3 / [ADR-0028](docs/adr/0028-quality-dials-cost-and-latency-targets.md); p50 of returned ChartResults on the eval benchmark, p95 beside; not a gate).
+- Median latency: deterministic rail < 10 s; custom rail < 60 s at `balanced`; refresh < 2 s (harness targets, p50/p95; `create_chart` does not abort at those walls; custom 60 s omitted while recipe n=0).
+
+> **Erratum — 2026-09-20 ([#169](https://github.com/thearcscode/chartagent/issues/169), [ADR-0028](docs/adr/0028-quality-dials-cost-and-latency-targets.md)).** The cost and latency lines are working published targets, not gates, measured as p50 of returned `ChartResult`s from `create_chart` on the eval benchmark (#170), with p95 beside. §10 never contained "small critique model"; that strike is Goal 3 only. Refresh < 2 s is unchanged (zero-LLM, not this dial).
 
 **Lagging (weeks–months)**
 
