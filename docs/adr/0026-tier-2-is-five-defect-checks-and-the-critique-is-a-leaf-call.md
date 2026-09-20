@@ -334,8 +334,13 @@ bake-off is where that is measured.
 - **The applicability table is a maintained artifact.** A Flint bump can trip its second test,
   deliberately.
 - **A revise round exceeds the illustrative headroom regardless of critic** (research §4.4). The
-  ≤ $0.05 *median* holds only if most charts clear the first round. Recorded, not resolved — PRD
-  Goal 3 is finalised from measured token counts in P2.
+  ≤ $0.05 *median* holds only if most charts clear the first round.
+
+  **Erratum — 2026-09-20 ([#169](https://github.com/thearcscode/chartagent/issues/169),
+  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md)).** That arithmetic is a
+  **floor**, not a forecast. $0.05 is a working published target, not a gate; the first
+  #170 table is what would justify a change. Goal 3 is not “finalised from measured
+  token counts” in this ADR — tokens are still unmeasured.
 - **Two rubrics may drift.** The gate's five items and the benchmark judge's rubric (PRD Goal 2)
   are separate; this ADR does not align them.
 
@@ -428,6 +433,8 @@ bake-off is where that is measured.
 - [#166](https://github.com/thearcscode/chartagent/issues/166),
   [#167](https://github.com/thearcscode/chartagent/issues/167),
   [#168](https://github.com/thearcscode/chartagent/issues/168) /
-  [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md).
+  [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md),
+  [#169](https://github.com/thearcscode/chartagent/issues/169) /
+  [ADR-0028](0028-quality-dials-cost-and-latency-targets.md).
 - `CONTEXT.md` gains **Critique**, **Critic seam** and **Applicability**, and amends
   **CheckResult** and **ReviewReport**.
