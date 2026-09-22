@@ -202,6 +202,17 @@ rail's patch prompt, not the next critique. **No PNG goes to the planner.**
 stays **false when no repair was attempted** — a `marks_present` fail on Flint is unrepairable,
 which is not the same as exhausted.
 
+**Erratum — 2026-09-23 ([#175](https://github.com/thearcscode/chartagent/issues/175),
+[ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)).** "Every failing
+item may repair" on custom rail includes `marks_present` — it carries **no** Flint-style
+unrepairable/round-suppressing carve-out there, because a code patch is a plausible fix for the
+exact failure that carve-out exists to call unfixable on Flint. A round with several failing
+items is **one patch-prompt call naming all of them**, not one call per name — otherwise "one
+review repair is one... patch-prompt call" (ADR-0027 Decision 3) breaks the moment two items
+fail together. `budget_exhausted`'s "false... a `marks_present` fail on Flint is unrepairable"
+is Flint-scoped: on custom rail `marks_present` is repairable, so at remaining budget 0 it sets
+`budget_exhausted=true` like any other exhausted custom-rail repair.
+
 ### 7. The picture is untrusted: a static line, closed output, and no cells
 
 What ADR-0022 carries over: the **static system-prompt line** that text inside the image is data,

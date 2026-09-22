@@ -18,16 +18,19 @@
   ADR-0025 *Leaves open* (`data_truthfulness` escalation); ADR-0026 *Leaves open* (repair
   counts, inconclusive retry, `marks_present` hop, critic-as-subagent, `quality=` /
   `rasteriser=` wiring). Dated errata in place, listed under *What this amends*.
-- **Leaves open:** `generate_recipe`’s prompt and first `ChartDocument` ([#175](https://github.com/thearcscode/chartagent/issues/175)
-  — minted with this ADR); the python widening ([#176](https://github.com/thearcscode/chartagent/issues/176));
+- **Leaves open:** the python widening ([#176](https://github.com/thearcscode/chartagent/issues/176));
   harness + `history=` / VFS + skills ([#177](https://github.com/thearcscode/chartagent/issues/177));
   Tier-3; the reference `Rasteriser`’s default size and scale.
   *The eval benchmark was settled by
   [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md) on 2026-09-20.
   What `fast`/`balanced`/`best` cost and take in wall-clock was settled by
   [ADR-0028](0028-quality-dials-cost-and-latency-targets.md) on 2026-09-20.
-  Counts, wiring, `budget_exhausted`, and “fast never escalates” stay
-  **closed here** and must not be reopened.*
+  `generate_recipe`’s prompts and first `ChartDocument`
+  ([#175](https://github.com/thearcscode/chartagent/issues/175) — minted with this ADR)
+  were settled by [ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)
+  on 2026-09-23, which also scopes `budget_exhausted`’s `marks_present` exemption to Flint
+  only — custom rail's is repairable. The repair counts (`fast=0`/`balanced=1`/`best=2`), the
+  wiring, and “fast never escalates” stay **closed here** and must not be reopened.*
 
 ## Context
 
@@ -125,6 +128,15 @@ until #175 implements `generate_recipe` and wires those buckets. Until #175 ship
 `marks_present` at `balanced`/`best` **fail-closes on-rail like `fast`** (`passed=False`, no
 hop, no new error).
 
+**Erratum — 2026-09-23 ([#175](https://github.com/thearcscode/chartagent/issues/175),
+[ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)).** `generate_recipe`
+is implemented and both callers are wired: the hop above, and a planner miss (bucket 1 or 2)
+at `balanced`/`best`, which now calls the same seam instead of raising. The fail-closed
+stand-in in this Decision is retired as the default path — it is now only what a *terminal*
+`generate_recipe` failure (codegen or library resolution exhausted) falls back to, on either
+caller. `fast` is unchanged: a well-formed inexpressible verdict still raises there, and
+`generate_recipe` is unreachable from either caller at `fast`.
+
 ### 7. Best-so-far is the last `passed=True` snapshot, else the first emit of the current rail
 
 After a hop, “first emit” is the first recipe. Not last-attempt (a repair can worsen the
@@ -213,6 +225,10 @@ Changed-checks-only patch review is the history/patch surface on
   without minting a skip report.
 - **`generate_recipe` is unbuildable until #175.** The hop is specified; the fail-closed
   stand-in keeps `create_chart` returning a Flint `ChartResult` until the seam exists.
+
+  **Settled — 2026-09-23 ([#175](https://github.com/thearcscode/chartagent/issues/175),
+  [ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)).** Built. The
+  stand-in is now the terminal-failure fallback, not the default.
 - **Core stays LLM-free.** pydantic-ai remains the vendor extra. No deepagents in the base
   wheel from this ticket.
 
@@ -252,6 +268,7 @@ Changed-checks-only patch review is the history/patch surface on
   **Settled — 2026-09-20.**
 - **[#175](https://github.com/thearcscode/chartagent/issues/175)** inherits `generate_recipe`,
   the patch prompt, carry-over fields, and the planner-miss (buckets 1–3) wiring.
+  **Settled — 2026-09-23 ([ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)).**
 - **[#176](https://github.com/thearcscode/chartagent/issues/176)** inherits ADR-0015 as the
   contract, still not the P2 web rail.
 - **[#177](https://github.com/thearcscode/chartagent/issues/177)** inherits the 2026-09-15
