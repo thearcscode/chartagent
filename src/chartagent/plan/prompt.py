@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import secrets
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
 from importlib.resources import files
 from pathlib import Path
 from string import Template
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from chartagent.errors import RawSqlRejectedError
 from chartagent.frame._generated import CHANNELS, SEMANTIC_TYPES, GeneratedProperties
@@ -21,6 +22,9 @@ from chartagent.transform.drift import referenced_source_columns
 from chartagent.transform.engine import open_connection
 from chartagent.transform.model import EXPR_KINDS, TRANSFORM_SLOTS, transform_mapping
 from chartagent.transform.raw_sql import sql_source_refs
+
+if TYPE_CHECKING:
+    from chartagent.plan.recipe import DocumentDraft, EscapeReason
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,13 @@ class Step2Prompt:
     system: str
     user: str
     output_type: type[GeneratedProperties]
+
+
+@dataclass(frozen=True)
+class DocumentPrompt:
+    system: str
+    user: str
+    output_type: type[DocumentDraft]
 
 
 def _read_template(name: str) -> str:
@@ -155,4 +166,56 @@ def render_step2(
         system=_step2_system(),
         user=f"{fragment_json}\n\n{scoped}",
         output_type=properties_model(backend, fragment.chart_type),
+    )
+
+
+_LIBRARY_RULE = (
+    "Only `libraries=()` is legal this run: write the module from scratch, "
+    "with no library, and emit `libraries` as an empty list."
+)
+
+_ESCAPE_CONTEXT = {
+    1: "Why this document exists: the request named a chart type that "
+    "the deterministic rail does not have (bucket 1).",
+    2: "Why this document exists: the deterministic rail's transform menu "
+    "cannot express the request (bucket 2).",
+    3: "Why this document exists: the request was expressible on the "
+    "deterministic rail but was escaped anyway (bucket 3).",
+    4: "Why this document exists: the deterministic rail painted the "
+    "chart's chrome (axes, titles, legend) but its marks did not paint "
+    "(bucket 4).",
+}
+
+
+@cache
+def _document_system() -> str:
+    return Template(_read_template("document.system.md")).substitute(
+        LIBRARY_RULE=_LIBRARY_RULE,
+    )
+
+
+def render_document(
+    profile: Profile,
+    instruction: str,
+    escape_reason: EscapeReason,
+    semantic_types: Mapping[str, str],
+    *,
+    nonce: str | None = None,
+) -> DocumentPrompt:
+    """First-generation document prompt. Column names and ``semantic_types``
+    only — never ``sample_rows`` or any cell value (ADR-0030 Decision 4)."""
+    from chartagent.plan.recipe import DocumentDraft
+
+    payload = {
+        "columns": [column.name for column in profile.columns],
+        "semantic_types": dict(semantic_types),
+    }
+    user = "\n\n".join(
+        (
+            _ESCAPE_CONTEXT[escape_reason.bucket],
+            _user_turn(_nonce(nonce), payload, instruction),
+        )
+    )
+    return DocumentPrompt(
+        system=_document_system(), user=user, output_type=DocumentDraft
     )
