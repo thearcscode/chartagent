@@ -174,6 +174,14 @@ _LIBRARY_RULE = (
     "with no library, and emit `libraries` as an empty list."
 )
 
+_LIBRARY_RULE_RESOLVER = (
+    "You may either write the module from scratch and emit `libraries` as an "
+    "empty list (`libraries=()`), or name packages. To name a package, add "
+    '`{"name": ..., "version": ...}` to `libraries` with an exact version; '
+    "the host resolves and pins each one, and loads them in the order you list "
+    "them, before your module runs. Name a package only when it earns its weight."
+)
+
 _ESCAPE_CONTEXT = {
     1: "Why this document exists: the request named a chart type that "
     "the deterministic rail does not have (bucket 1).",
@@ -188,9 +196,9 @@ _ESCAPE_CONTEXT = {
 
 
 @cache
-def _document_system() -> str:
+def _document_system(resolver_set: bool) -> str:
     return Template(_read_template("document.system.md")).substitute(
-        LIBRARY_RULE=_LIBRARY_RULE,
+        LIBRARY_RULE=_LIBRARY_RULE_RESOLVER if resolver_set else _LIBRARY_RULE,
         UNTRUSTED_PATHS=", ".join(untrusted_paths()),
     )
 
@@ -201,6 +209,7 @@ def render_document(
     escape_reason: EscapeReason,
     semantic_types: Mapping[str, str],
     *,
+    resolver_set: bool = False,
     nonce: str | None = None,
 ) -> DocumentPrompt:
     """First-generation document prompt. Column names and ``semantic_types``
@@ -218,5 +227,5 @@ def render_document(
         )
     )
     return DocumentPrompt(
-        system=_document_system(), user=user, output_type=DocumentDraft
+        system=_document_system(resolver_set), user=user, output_type=DocumentDraft
     )

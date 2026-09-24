@@ -26,6 +26,7 @@ from chartagent.plan.recipe import (
     EscapeReason,
     LibraryPin,
     LibraryRequest,
+    LibraryResolutionFailed,
     generate_recipe,
 )
 from chartagent.profile.models import (
@@ -243,3 +244,83 @@ def test_hop_and_miss_context_sit_outside_the_fence() -> None:
 def test_pin_carries_identity_only() -> None:
     assert LibraryPin.__dataclass_fields__.keys() == {"name", "version", "sha256"}
     assert set(LibraryRequest.model_fields) == {"name", "version"}
+
+
+_D3 = {"name": "d3", "version": "7.9.0"}
+_TOPO = {"name": "topojson", "version": "3.0.2"}
+
+
+def _resolver(calls: list[tuple[str, str]]) -> Callable[[str, str], tuple[str, bytes]]:
+    def resolve(name: str, version: str) -> tuple[str, bytes]:
+        calls.append((name, version))
+        return f"sha-{name}", b"BYTES"
+
+    return resolve
+
+
+def test_resolver_yields_resolved_pins_in_load_order() -> None:
+    calls: list[tuple[str, str]] = []
+    client, _ = _client({"module": _MODULE, "libraries": [_TOPO, _D3]})
+    document = _generate(client, resolver=_resolver(calls))
+    assert document.libraries == (
+        LibraryPin("topojson", "3.0.2", "sha-topojson"),
+        LibraryPin("d3", "7.9.0", "sha-d3"),
+    )
+    assert calls == [("topojson", "3.0.2"), ("d3", "7.9.0")]
+
+
+def test_no_bytes_on_the_returned_document() -> None:
+    client, _ = _client({"module": _MODULE, "libraries": [_D3]})
+    document = _generate(client, resolver=_resolver([]))
+    assert "BYTES" not in repr(document)
+    assert not any(isinstance(v, bytes) for v in vars(document).values())
+    assert not any(
+        isinstance(v, bytes) for pin in document.libraries for v in vars(pin).values()
+    )
+
+
+def test_empty_libraries_make_zero_resolver_calls() -> None:
+    calls: list[tuple[str, str]] = []
+    client, _ = _client({"module": _MODULE, "libraries": []})
+    assert _generate(client, resolver=_resolver(calls)).libraries == ()
+    assert calls == []
+
+
+def test_resolver_failure_is_terminal_with_no_second_ask() -> None:
+    def broken(name: str, version: str) -> tuple[str, bytes]:
+        raise TimeoutError("registry down")
+
+    client, seen = _client(
+        {"module": _MODULE, "libraries": [_D3]},
+        {"module": _MODULE, "libraries": []},
+    )
+    with pytest.raises(LibraryResolutionFailed):
+        _generate(client, resolver=broken)
+    assert len(seen["user"]) == 1
+
+
+def test_prompt_offers_libraries_only_when_a_resolver_is_set() -> None:
+    def system(resolver_set: bool) -> str:
+        return render_document(
+            _PROFILE,
+            _INSTRUCTION,
+            EscapeReason(bucket=4),
+            _SEMANTIC,
+            resolver_set=resolver_set,
+            nonce=_NONCE,
+        ).system
+
+    assert "Only `libraries=()` is legal" in system(False)
+    assert "Only `libraries=()` is legal" not in system(True)
+    assert "exact version" in system(True)
+
+
+def test_agent_resolver_is_private_and_unset_by_default() -> None:
+    import inspect
+
+    from chartagent.plan.agent import ChartAgent, create_chart_agent
+
+    assert list(inspect.signature(create_chart_agent).parameters) == ["model"]
+    agent = ChartAgent.__new__(ChartAgent)
+    ChartAgent.__init__(agent, model="test")
+    assert agent._library_resolver is None
