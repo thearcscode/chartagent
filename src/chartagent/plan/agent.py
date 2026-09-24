@@ -11,6 +11,8 @@ failures happen in here, not in ``ModelClient``, so a caller that wants a
 per-ask journal (the corpus recorder) installs an observer at
 ``ChartAgent._attempt_observer`` — the same private-seam convention as
 ``agent._client``. Left unset, behaviour is unchanged.
+``ChartAgent._library_resolver`` (ADR-0030 Decision 6) follows the same
+convention: unset by default, not in ``__all__``, not a factory kwarg.
 """
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ from chartagent.plan.assemble import assemble
 from chartagent.plan.client import ModelClient
 from chartagent.plan.emit import _EmitFailed, _with_repair
 from chartagent.plan.prompt import Step1Prompt, Step2Prompt, render_step1, render_step2
+from chartagent.plan.recipe import LibraryResolver
 from chartagent.plan.schema import Fragment, Inexpressible, Step1Result, Unanswerable
 from chartagent.plan.select import select_backend
 from chartagent.profile.models import Profile
@@ -116,6 +119,7 @@ class ChartAgent:
         self._model = model
         self._client = ModelClient(model)
         self._attempt_observer: AttemptObserver | None = None
+        self._library_resolver: LibraryResolver | None = None
 
     def create_chart(self, data: DataSource, instruction: str) -> ChartResult:
         profile = profile_source(data)
