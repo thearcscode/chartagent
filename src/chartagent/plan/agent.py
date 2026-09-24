@@ -15,10 +15,9 @@ per-ask journal (the corpus recorder) installs an observer at
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
-from dataclasses import dataclass, replace
-from typing import Any, Literal, TypeVar, cast
+from dataclasses import dataclass
+from typing import Any, Literal, cast
 
 from chartagent.bind import DataSource, bind
 from chartagent.errors import (
@@ -34,6 +33,7 @@ from chartagent.errors import (
 from chartagent.frame.input import Backend
 from chartagent.plan.assemble import assemble
 from chartagent.plan.client import ModelClient
+from chartagent.plan.emit import _EmitFailed, _with_repair
 from chartagent.plan.prompt import Step1Prompt, Step2Prompt, render_step1, render_step2
 from chartagent.plan.schema import Fragment, Inexpressible, Step1Result, Unanswerable
 from chartagent.plan.select import select_backend
@@ -44,8 +44,6 @@ from chartagent.result import ChartResult
 _STEP1_RETRIES = 1
 _STEP2_RETRIES = 2
 _CALL_CAP = 5
-
-_Prompt = TypeVar("_Prompt", Step1Prompt, Step2Prompt)
 
 
 @dataclass(frozen=True)
@@ -74,42 +72,6 @@ class Attempt:
 
 
 AttemptObserver = Callable[[Attempt], None]
-
-
-class _EmitFailed(Exception):
-    """The model returned nothing, or output that failed a step check."""
-
-    def __init__(
-        self,
-        reason: Literal["empty_response", "invalid_emit"],
-        *,
-        rejected: Any = None,
-        checker: str = "",
-    ) -> None:
-        super().__init__(reason)
-        self.reason = reason
-        self.rejected = rejected
-        self.checker = checker
-
-
-def _repair_user(user: str, rejected: Any, checker: str) -> str:
-    parts = [user]
-    if rejected is not None:
-        parts.append(
-            "Rejected emit:\n"
-            + json.dumps(rejected, separators=(",", ":"), default=str)
-        )
-    if checker:
-        parts.append(f"Checker:\n{checker}")
-    return "\n\n".join(parts)
-
-
-def _with_repair(prompt: _Prompt, repair: _EmitFailed | None) -> _Prompt:
-    if repair is None or (repair.rejected is None and not repair.checker):
-        return prompt
-    return replace(
-        prompt, user=_repair_user(prompt.user, repair.rejected, repair.checker)
-    )
 
 
 def _dump_emit(value: Any) -> Any:

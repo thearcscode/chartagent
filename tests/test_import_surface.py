@@ -3,6 +3,8 @@ from __future__ import annotations
 import subprocess
 import sys
 
+import chartagent
+
 _FORBIDDEN = (
     "langgraph",
     "deepagents",
@@ -31,3 +33,15 @@ loaded = [
 assert not loaded, loaded
 """
     subprocess.run([sys.executable, "-c", script], check=True)
+
+
+def test_generate_recipe_names_stay_internal() -> None:
+    for name in (
+        "generate_recipe",
+        "ChartDocument",
+        "LibraryPin",
+        "LibraryRequest",
+        "DocumentDraft",
+    ):
+        assert name not in chartagent.__all__
+        assert not hasattr(chartagent, name)
