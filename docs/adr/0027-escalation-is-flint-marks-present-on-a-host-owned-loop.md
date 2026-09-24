@@ -112,6 +112,13 @@ Including every repairable fail at `fast`. False for `marks_present` and for an 
 Tier 2. [#169](https://github.com/thearcscode/chartagent/issues/169) must not redefine this
 bit.
 
+**Erratum — 2026-09-24 ([#175](https://github.com/thearcscode/chartagent/issues/175),
+[ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)).** "False for
+`marks_present`" is Flint-scoped: a Flint `marks_present` fail is unrepairable (the hop
+signal) and does not set `budget_exhausted`. On custom rail `marks_present` is repairable,
+so remaining budget 0 sets `budget_exhausted=true`, `passed=False`, no patch attempted —
+the general repairable-fail rule. Inconclusive Tier 2 is unchanged (stays false).
+
 ### 6. After the trigger: `generate_recipe(...)`, carry-over, remaining budget, no second hop
 
 This ADR **names** the seam; [#175](https://github.com/thearcscode/chartagent/issues/175)
