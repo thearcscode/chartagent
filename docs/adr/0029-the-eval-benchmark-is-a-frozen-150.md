@@ -22,8 +22,12 @@
   datasets) — this ADR freezes the rules, not the 180 requests; the critic
   bake-off's **outcome** (ADR-0026 Decision 10; named run on this set); the
   OpenAI image-plus-schema probe (blocking only if that bake-off flips the critic
-  to Gemini); whether `fast` still raises on planner buckets 1–3 (#175);
-  `generate_recipe` (#175); the reference `Rasteriser`'s default size and scale.
+  to Gemini); the reference `Rasteriser`'s default size and scale.
+  *Whether `fast` still raises on planner buckets 1–2, and `generate_recipe`'s
+  seam, were settled by
+  [ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)
+  on 2026-09-23. The era-conditional cell-1 reading (Decision 8) still flips
+  when the seam is in the wheel, not when the grilling ticket closed.*
   Quality counts, wiring, `fast` never escalates, the `$0.05` sample, and the
   billed-token rule stay **closed** on ADR-0027 / ADR-0028.
 
@@ -359,6 +363,9 @@ fresh draw.
 - **[#175](https://github.com/thearcscode/chartagent/issues/175)** inherits the
   cell-1 reading rule (Decision 8) and that buckets 1–3 enter the `$0.05`
   sample only as returned `ChartResult`s (ADR-0028).
+  **Settled — 2026-09-23 ([ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)).**
+  Design closed; the executable-era flip still waits on the seam shipping in
+  the wheel.
 - **The critic bake-off** inherits this set, five-defect humans, named one-shot
   (Decision 10). Outcome still open.
 - **Studio** inherits nothing new on the public surface; this is a harness.

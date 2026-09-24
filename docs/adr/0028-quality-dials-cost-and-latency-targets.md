@@ -15,10 +15,11 @@
   latency lines; ADR-0020 Decision 5's leftover pointer; ADR-0026's "$0.05 is finalised
   from measured token counts in P2"; ADR-0027 *Leaves open*, consequence, and feed for
   #169. Dated errata in place, listed under *What this amends*.
-- **Leaves open:** whether `fast` still raises on planner buckets 1–3
-  ([#175](https://github.com/thearcscode/chartagent/issues/175); ADR-0027's "fast never
-  buys codegen" stays closed); the reference `Rasteriser`'s default size and scale; a
+- **Leaves open:** the reference `Rasteriser`'s default size and scale; a
   `ChartResult` cost field and a `ModelClient` usage return (neither is this ticket).
+  *Whether `fast` still raises on planner buckets 1–2 was settled by
+  [ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md) on 2026-09-23:
+  it does. Bucket 3 was never a raise.*
   *The eval benchmark's cases, judge, and hold-out were settled by
   [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md) on 2026-09-20.
   Decision 9's report artifact is `eval/report.md` + `eval/report-notes.md`.*
@@ -93,6 +94,13 @@ share's every-request denominator.
 
 After #175, buckets 1–3 enter this sample only if they return a `ChartResult`.
 Whether `fast` still raises on 1–3 is #175.
+
+**Erratum — 2026-09-24 ([#175](https://github.com/thearcscode/chartagent/issues/175),
+[ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)).** `fast` still
+raises on a well-formed inexpressible (buckets 1–2). At `balanced`/`best`, those buckets
+return a `ChartResult` (a recipe) unless `generate_recipe` itself exhausts, in which case
+the miss path still raises. Bucket 3 was never a raise. The `$0.05` sample is unchanged:
+returned `ChartResult`s in, raises counted beside.
 
 Refresh is not `create_chart` and is not this sample. Rasteriser default size
 is not this ticket.
@@ -256,6 +264,9 @@ Wiring usage is #170's harness, not a `ChartResult` field, not a
 - **[#175](https://github.com/thearcscode/chartagent/issues/175)** inherits
   that buckets 1–3 enter the $0.05 sample only as returned ChartResults, and
   that whether `fast` still raises on 1–3 is not settled here.
+  **Settled — 2026-09-23 ([ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)).**
+  `fast` still raises; `balanced`/`best` miss paths return a `ChartResult` unless
+  codegen/resolution exhausts.
 - **Studio** inherits the user-story reading: `quality=` caps review-repair
   and codegen, not typical inference cost.
 
