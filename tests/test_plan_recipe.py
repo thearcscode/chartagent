@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from pydantic_ai.messages import (
@@ -173,13 +173,13 @@ def test_absent_transform_is_not_this_tracer() -> None:
         _generate(client, transform=None)
 
 
-def _prompt(bucket: int = 4) -> Any:
+def _prompt(bucket: Literal[1, 2, 3, 4] = 4) -> Any:
     return render_document(
         _PROFILE,
         _INSTRUCTION,
         EscapeReason(bucket=bucket),
         _SEMANTIC,
-        nonce=_NONCE,  # type: ignore[arg-type]
+        nonce=_NONCE,
     )
 
 
