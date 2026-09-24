@@ -35,6 +35,7 @@ from chartagent.profile.models import (
     StringColumn,
     StringStats,
     TopValue,
+    untrusted_paths,
 )
 from chartagent.transform.model import Menu
 
@@ -163,7 +164,8 @@ def test_named_library_without_a_resolver_is_a_decode_failure() -> None:
 
 def test_supplied_transform_is_never_reasked() -> None:
     client, _ = _client({"module": _MODULE, "libraries": []})
-    assert set(DocumentDraft.model_fields) == {"module", "styles", "libraries"}
+    assert "transform" not in DocumentDraft.model_fields
+    assert _prompt().output_type is DocumentDraft
     _generate(client)
 
 
@@ -198,7 +200,7 @@ def test_prompt_carries_no_cell_values() -> None:
     text = prompt.system + prompt.user
     assert _SECRET_CELL not in text
     assert "4242" not in text
-    assert "sample_rows" not in text
+    assert "sample_rows" not in prompt.user
 
 
 def test_prompt_carries_names_and_semantic_types_in_the_fence() -> None:
@@ -218,6 +220,11 @@ def test_prompt_delivers_theme_through_css_custom_properties() -> None:
     system = _prompt().system
     assert "CSS custom properties" in system
     assert "never hardcode" in system.lower()
+
+
+def test_prompt_lists_untrusted_paths_from_the_manifest() -> None:
+    for path in untrusted_paths():
+        assert path in _prompt().system
 
 
 def test_prompt_states_the_library_constraint() -> None:

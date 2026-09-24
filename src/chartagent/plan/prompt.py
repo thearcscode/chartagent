@@ -191,6 +191,7 @@ _ESCAPE_CONTEXT = {
 def _document_system() -> str:
     return Template(_read_template("document.system.md")).substitute(
         LIBRARY_RULE=_LIBRARY_RULE,
+        UNTRUSTED_PATHS=", ".join(untrusted_paths()),
     )
 
 

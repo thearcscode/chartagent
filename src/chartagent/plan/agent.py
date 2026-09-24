@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal, TypeVar, cast
+from typing import Any, Literal, cast
 
 from chartagent.bind import DataSource, bind
 from chartagent.errors import (
@@ -44,8 +44,6 @@ from chartagent.result import ChartResult
 _STEP1_RETRIES = 1
 _STEP2_RETRIES = 2
 _CALL_CAP = 5
-
-_Prompt = TypeVar("_Prompt", Step1Prompt, Step2Prompt)
 
 
 @dataclass(frozen=True)
