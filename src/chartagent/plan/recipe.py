@@ -127,9 +127,12 @@ def generate_recipe(
 def _resolve(
     requests: tuple[LibraryRequest, ...], resolver: LibraryResolver | None
 ) -> tuple[LibraryPin, ...]:
+    if not requests:
+        return ()
+    if resolver is None:
+        raise DocumentGenerationFailed("libraries named with no resolver set")
     pins: list[LibraryPin] = []
     for request in requests:
-        assert resolver is not None
         try:
             sha256, _bytes = resolver(request.name, request.version)
         except Exception as exc:

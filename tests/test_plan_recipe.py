@@ -274,6 +274,9 @@ def test_no_bytes_on_the_returned_document() -> None:
     document = _generate(client, resolver=_resolver([]))
     assert "BYTES" not in repr(document)
     assert not any(isinstance(v, bytes) for v in vars(document).values())
+    assert not any(
+        isinstance(v, bytes) for pin in document.libraries for v in vars(pin).values()
+    )
 
 
 def test_empty_libraries_make_zero_resolver_calls() -> None:
