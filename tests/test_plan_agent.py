@@ -286,6 +286,17 @@ def test_fragment_tool_call_omitting_outcome_is_not_invalid_emit() -> None:
     assert calls["step2"] == 1
 
 
+def test_create_chart_always_returns_a_tier_one_review() -> None:
+    agent = _agent()
+    _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert result.recipe is None
+    assert result.review is not None
+    assert result.review.tiers_run == (1,)
+    assert result.review.passed is True
+    assert result.review.checks[0].name == "injection_pattern"
+
+
 _MEASURED_LIVE_STEP1: dict[str, Any] = {
     "chart_type": "Bar Chart",
     "encodings": {

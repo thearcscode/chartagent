@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 from pydantic import BaseModel, ConfigDict
 
@@ -24,6 +24,7 @@ from chartagent.plan.assemble import _source_refs
 from chartagent.plan.emit import _EmitFailed, _with_repair
 from chartagent.plan.prompt import render_document
 from chartagent.profile.models import Profile
+from chartagent.recipe import ChartDocument, EscapeReason, LibraryPin
 from chartagent.transform.model import Menu, RawSql, TransformSpec, transform_mapping
 
 LibraryResolver = Callable[[str, str], tuple[str, bytes]]
@@ -31,33 +32,6 @@ LibraryResolver = Callable[[str, str], tuple[str, bytes]]
 hand-off; they never land on ``ChartDocument``."""
 
 _DECODE_RETRIES = 1
-_CONTRACT_VERSION = 1
-
-
-@dataclass(frozen=True)
-class EscapeReason:
-    """Why a request left the deterministic rail (CONTEXT.md, four buckets)."""
-
-    bucket: Literal[1, 2, 3, 4]
-
-
-@dataclass(frozen=True)
-class LibraryPin:
-    """A library's identity, never its bytes (ADR-0017 Decision 8)."""
-
-    name: str
-    version: str
-    sha256: str
-
-
-@dataclass(frozen=True)
-class ChartDocument:
-    """What you store; the module, its CSS and the pinned libraries."""
-
-    module: str
-    styles: str | None
-    libraries: tuple[LibraryPin, ...]
-    contract_version: int = _CONTRACT_VERSION
 
 
 class LibraryRequest(BaseModel):

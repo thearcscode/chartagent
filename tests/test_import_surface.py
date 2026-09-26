@@ -38,8 +38,6 @@ assert not loaded, loaded
 def test_generate_recipe_names_stay_internal() -> None:
     for name in (
         "generate_recipe",
-        "ChartDocument",
-        "LibraryPin",
         "LibraryRequest",
         "DocumentDraft",
     ):

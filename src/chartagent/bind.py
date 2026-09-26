@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from os import PathLike
-from typing import Any, Protocol, TypeAlias, get_args
+from typing import Any, NamedTuple, Protocol, TypeAlias, get_args
 
 from pydantic import ValidationError
 
@@ -23,7 +23,7 @@ from chartagent.frame.capability import (
     declared_backends,  # noqa: F401 — imported so bind defines none of the four
     properties_model,
 )
-from chartagent.frame.input import Backend, InputFrame, _omit_nulls
+from chartagent.frame.input import Backend, InputFrame, SourceBucket, _omit_nulls
 from chartagent.frame.vocabulary import vocabulary
 from chartagent.transform.drift import (
     check_output_stage,
@@ -78,33 +78,16 @@ def bind(
         else transform_mapping(frame.x_chartagent.transform)
     )
     baseline = None if frame.x_chartagent is None else frame.x_chartagent.source_schema
-    connection = open_connection(memory_limit=memory_limit)
     started = time.perf_counter()
-    try:
-        register_source(connection, data)
-        reported_types, source_schema = describe_source(connection)
-        refs, star = _source_refs(connection, transform)
-        if star:
-            seen_schema = None
-        else:
-            seen_schema = check_source_stage(
-                refs, source_schema, reported_types, baseline
-            )
-        table, output_types = run_transform(
-            connection,
-            transform,
-            source_types=reported_types,
-            source_schema=source_schema,
-            timeout=timeout,
-            memory_limit=memory_limit,
-        )
-    finally:
-        connection.close()
+    stage = _run_source_stage(
+        data, transform, baseline, timeout=timeout, memory_limit=memory_limit
+    )
+    refs, star, table = stage.refs, stage.star, stage.table
     needed = output_references(
         frame.chart_spec.encodings, frame.semantic_types, transform
     )
     check_output_stage(needed, set(table.column_names))
-    rows, advisories = serialize_rows(table, output_types)
+    rows, advisories = serialize_rows(table, stage.output_types)
     warnings = _advisories(
         frame=frame,
         backend=backend,
@@ -132,8 +115,50 @@ def bind(
         row_count=len(rows),
         elapsed=elapsed,
         warnings=warnings,
-        source_schema=seen_schema,
+        source_schema=stage.seen_schema,
     )
+
+
+class _SourceStage(NamedTuple):
+    refs: frozenset[str]
+    star: bool
+    seen_schema: dict[str, SourceBucket] | None
+    table: Any
+    output_types: Any
+
+
+def _run_source_stage(
+    data: DataSource,
+    transform: dict[str, Any] | None,
+    baseline: dict[str, Any] | None,
+    *,
+    timeout: float | None,
+    memory_limit: str | None,
+) -> _SourceStage:
+    """Register the source, drift-check it, run the transform. Shared by
+    ``bind`` and ``bind_recipe`` so the two rails cannot diverge (ADR-0018)."""
+    connection = open_connection(memory_limit=memory_limit)
+    try:
+        register_source(connection, data)
+        reported_types, source_schema = describe_source(connection)
+        refs, star = _source_refs(connection, transform)
+        if star:
+            seen_schema = None
+        else:
+            seen_schema = check_source_stage(
+                refs, source_schema, reported_types, baseline
+            )
+        table, output_types = run_transform(
+            connection,
+            transform,
+            source_types=reported_types,
+            source_schema=source_schema,
+            timeout=timeout,
+            memory_limit=memory_limit,
+        )
+    finally:
+        connection.close()
+    return _SourceStage(refs, star, seen_schema, table, output_types)
 
 
 def _source_refs(
