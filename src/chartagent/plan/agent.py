@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Literal, cast
+from typing import Any, Literal, cast, get_args
 
 from chartagent.bind import DataSource, bind
 from chartagent.errors import (
@@ -114,21 +114,48 @@ def _reject(
     return _EmitFailed(reason, rejected=rejected, checker=checker)
 
 
-def create_chart_agent(*, model: str) -> ChartAgent:
-    """Factory. Raises at construction if the model-vendor extra is missing."""
-    return ChartAgent(model=model)
+Quality = Literal["fast", "balanced", "best"]
+_QUALITIES: tuple[str, ...] = get_args(Quality)
+
+
+def _check_quality(quality: object) -> Quality:
+    if quality not in _QUALITIES:
+        raise ValueError(f"quality must be one of {_QUALITIES}, got {quality!r}")
+    return cast(Quality, quality)
+
+
+def create_chart_agent(*, model: str, quality: Quality = "balanced") -> ChartAgent:
+    """Factory. Raises at construction if the model-vendor extra is missing.
+
+    ``quality`` is the default for requests that omit it (ADR-0027
+    Decision 8); ``create_chart(quality=...)`` overrides it per request.
+    """
+    return ChartAgent(model=model, quality=quality)
 
 
 class ChartAgent:
     """Holds the model string and one client. No per-request mutable state."""
 
-    def __init__(self, *, model: str) -> None:
+    def __init__(self, *, model: str, quality: Quality = "balanced") -> None:
         self._model = model
+        self._quality = _check_quality(quality)
         self._client = ModelClient(model)
         self._attempt_observer: AttemptObserver | None = None
         self._library_resolver: LibraryResolver | None = None
 
-    def create_chart(self, data: DataSource, instruction: str) -> ChartResult:
+    def _resolve_quality(self, quality: Quality | None) -> Quality:
+        return self._quality if quality is None else _check_quality(quality)
+
+    def create_chart(
+        self,
+        data: DataSource,
+        instruction: str,
+        *,
+        quality: Quality | None = None,
+    ) -> ChartResult:
+        # The dial is validated and resolved here so later tickets can gate
+        # on it; nothing consumes it yet (behaviour is identical at every value).
+        self._resolve_quality(quality)
         profile = profile_source(data)
         calls = 0
         step1_asks = 0
