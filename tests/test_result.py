@@ -33,6 +33,7 @@ _NEW_ROWS = [
 def test_refresh_rebinds_against_new_rows_with_the_same_backend() -> None:
     result = ChartResult(envelope=bind(_FRAME, _ROWS, backend="echarts"))
     refreshed = result.refresh(_NEW_ROWS)
+    assert refreshed.envelope is not None
     assert refreshed.envelope.input["data"]["values"] == _NEW_ROWS
     assert refreshed.envelope.backend == "echarts"
     assert refreshed.envelope.row_count == 3
@@ -42,6 +43,7 @@ def test_refresh_returns_a_new_result_and_leaves_the_original_untouched() -> Non
     result = ChartResult(envelope=bind(_FRAME, _ROWS, backend="echarts"))
     refreshed = result.refresh(_NEW_ROWS)
     assert refreshed is not result
+    assert result.envelope is not None
     assert result.envelope.input["data"]["values"] == _ROWS
     assert result.envelope.row_count == 2
 

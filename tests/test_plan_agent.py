@@ -527,6 +527,7 @@ def test_vega_encoding_types_still_return_a_chart_result() -> None:
     calls = _install(agent, ("Fragment", fragment), ("step2", {}))
     result = agent.create_chart(_SALES, "revenue by quarter")
     assert isinstance(result, ChartResult)
+    assert result.envelope is not None
     encodings = result.envelope.input["chart_spec"]["encodings"]
     assert encodings["x"]["type"] == "nominal"
     assert encodings["y"]["type"] == "quantitative"
@@ -605,6 +606,7 @@ def test_happy_path_over_committed_csv_then_zero_llm_refresh() -> None:
     result = agent.create_chart(_SALES, "revenue by quarter")
     assert vars(agent) == snapshot
     assert isinstance(result, ChartResult)
+    assert result.envelope is not None
     input_frame = result.envelope.input
     assert "backend" not in input_frame
     assert input_frame["x_chartagent"]["spec_version"] == "1.2"
@@ -627,6 +629,7 @@ def test_happy_path_over_committed_csv_then_zero_llm_refresh() -> None:
         ]
     )
     assert calls["model"] == planned_calls
+    assert refreshed.envelope is not None
     assert refreshed.envelope.row_count == 3
     assert refreshed is not result
 
