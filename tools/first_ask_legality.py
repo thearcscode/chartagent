@@ -136,7 +136,7 @@ def attempt(agent: ChartAgent, data: Any, instruction: str) -> dict[str, Any]:
     attempts: list[dict[str, Any]] = []
     agent._attempt_observer = lambda record: attempts.append(_attempt_row(record))
     try:
-        agent.create_chart(data, instruction)
+        agent.create_chart(data, instruction, quality="fast")
     except InexpressibleRequestError as exc:
         outcome: dict[str, Any] = {
             "rail": None,

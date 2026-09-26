@@ -33,7 +33,7 @@ from chartagent.errors import (
     UnanswerableInstructionError,
 )
 from chartagent.frame.input import Backend
-from chartagent.plan.assemble import assemble
+from chartagent.plan.assemble import _SPEC_VERSION, assemble
 from chartagent.plan.client import ModelClient
 from chartagent.plan.emit import _EmitFailed, _with_repair
 from chartagent.plan.prompt import (
@@ -43,11 +43,16 @@ from chartagent.plan.prompt import (
     render_step1,
     render_step2,
 )
-from chartagent.plan.recipe import LibraryResolver
+from chartagent.plan.recipe import (
+    DocumentGenerationFailed,
+    LibraryResolver,
+    generate_recipe,
+)
 from chartagent.plan.schema import Fragment, Inexpressible, Step1Result, Unanswerable
 from chartagent.plan.select import select_backend
 from chartagent.profile.models import Profile
 from chartagent.profile.source import profile_source
+from chartagent.recipe import ChartRecipe, EscapeReason
 from chartagent.result import ChartResult
 from chartagent.review import tier1_review
 
@@ -153,9 +158,7 @@ class ChartAgent:
         *,
         quality: Quality | None = None,
     ) -> ChartResult:
-        # The dial is validated and resolved here so later tickets can gate
-        # on it; nothing consumes it yet (behaviour is identical at every value).
-        self._resolve_quality(quality)
+        resolved_quality = self._resolve_quality(quality)
         profile = profile_source(data)
         calls = 0
         step1_asks = 0
@@ -234,6 +237,12 @@ class ChartAgent:
         for _ in range(_STEP1_RETRIES + 1):
             try:
                 fragment = _step1_attempt(profile, instruction, invoke, repair, observe)
+            except InexpressibleRequestError as miss:
+                # Bucket 1/2 is an answer, not a retry. At ``fast`` it stays a
+                # raise; above it the miss is authored into a recipe (ADR-0030).
+                if resolved_quality == "fast":
+                    raise
+                return self._author_miss(profile, instruction, miss, invoke)
             except _EmitFailed as exc:
                 last = exc.reason
                 repair = exc
@@ -276,6 +285,46 @@ class ChartAgent:
         raise PlannerFailureError(
             "step 1 did not emit a usable fragment",
             reason=last or "invalid_emit",
+        )
+
+    def _author_miss(
+        self,
+        profile: Profile,
+        instruction: str,
+        miss: InexpressibleRequestError,
+        invoke: Any,
+    ) -> ChartResult:
+        """Bucket 1/2 at balanced/best: author a recipe instead of raising.
+
+        ``theme_spec`` is absent — ``create_chart`` takes no theme. ``review``
+        is Tier 1 over the profiled data only; there is no rasteriser here. A
+        terminal authoring or resolution failure re-raises the original bucket.
+        """
+        reason = EscapeReason(bucket=miss.bucket)
+        try:
+            generated = generate_recipe(
+                profile,
+                instruction,
+                reason,
+                transform=None,
+                resolver=self._library_resolver,
+                invoke=invoke,
+            )
+        except DocumentGenerationFailed as exc:
+            raise InexpressibleRequestError(
+                f"request is inexpressible (bucket {miss.bucket})",
+                bucket=miss.bucket,
+            ) from exc
+        return ChartResult(
+            recipe=ChartRecipe(
+                spec_version=_SPEC_VERSION,
+                transform=generated.transform,
+                source_schema=generated.source_schema,
+                escape_reason=reason,
+                theme_spec=None,
+                document=generated.document,
+            ),
+            review=tier1_review(profile, backend=None),
         )
 
 
