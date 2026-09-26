@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-20
+- **Errata:** 2026-09-26 ([#189](https://github.com/thearcscode/chartagent/issues/189)) —
+  Decision 9 gains `bound`, recorded in place.
 - **Settled on:** [#168](https://github.com/thearcscode/chartagent/issues/168)
 - **Builds on:** ADR-0013 Decision 6 (a review fail that does not escalate stays
   deterministic; an escalation scores custom), ADR-0015 (python `SandboxBackend` is a later
@@ -200,6 +202,14 @@ discriminator. Do not flatten either type onto `ChartResult`. `review` is the re
 `create_chart` always sets `review` (Tier 1 always runs). `refresh` re-binds only
 (`bind` or `bind_recipe`) and sets `review=None`. Do not copy a stale report, do not fake
 Tier 1, do not forbid refresh. Callers who want a gate run `create_chart` again.
+
+**Erratum — 2026-09-26 ([#189](https://github.com/thearcscode/chartagent/issues/189)).**
+`ChartResult` gains `bound: BoundRecipe | None`. A `ChartRecipe` stores no rows, so a
+recipe refresh has nowhere else to put them; an envelope refresh's rows stay inside the
+new envelope, and `bound` is `None` on an envelope result. `bound` set without a `recipe`
+is impossible. `BoundRecipe` still has no wire format (ADR-0018 Decision 5). An envelope
+result serialises through `.envelope.to_dict()`; a recipe result has no envelope, and
+`ChartResult` itself still never goes on the wire.
 
 ### 10. Light-mode is not this loop
 

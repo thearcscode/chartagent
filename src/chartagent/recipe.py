@@ -54,9 +54,10 @@ class ChartRecipe:
     """A custom-rail result (ADR-0018 Decision 2): six fields, no ``mode``,
     ``library``, ``runtime_profile`` or annotations.
 
-    ``theme_spec`` is carried and never validated against the pin (Decision 3),
-    so it is typed ``str`` for a preset name: a retired preset must not make a
-    stored recipe unbindable."""
+    ``theme_spec`` is ``str | ThemeSpec | None`` and is never validated against
+    the pin (ADR-0018 Decision 3). ``str`` rather than ``ThemePresetName`` so a
+    retired preset stays constructable and cannot make a stored recipe
+    unbindable."""
 
     spec_version: str
     transform: Menu | RawSql
