@@ -21,12 +21,9 @@ from chartagent.plan.client import ModelClient
 from chartagent.plan.emit import _EmitFailed
 from chartagent.plan.prompt import render_document
 from chartagent.plan.recipe import (
-    ChartDocument,
     DocumentDraft,
     DocumentGenerationFailed,
-    EscapeReason,
     GeneratedRecipe,
-    LibraryPin,
     LibraryRequest,
     LibraryResolutionFailed,
     RecipeDraft,
@@ -41,6 +38,7 @@ from chartagent.profile.models import (
     TopValue,
     untrusted_paths,
 )
+from chartagent.recipe import ChartDocument, EscapeReason, LibraryPin
 from chartagent.transform.model import Menu
 
 _NONCE = "aaaabbbbccccdddd"

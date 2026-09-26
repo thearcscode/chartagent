@@ -33,6 +33,7 @@ _NEW_ROWS = [
 def test_refresh_rebinds_against_new_rows_with_the_same_backend() -> None:
     result = ChartResult(envelope=bind(_FRAME, _ROWS, backend="echarts"))
     refreshed = result.refresh(_NEW_ROWS)
+    assert refreshed.envelope is not None
     assert refreshed.envelope.input["data"]["values"] == _NEW_ROWS
     assert refreshed.envelope.backend == "echarts"
     assert refreshed.envelope.row_count == 3
@@ -42,6 +43,7 @@ def test_refresh_returns_a_new_result_and_leaves_the_original_untouched() -> Non
     result = ChartResult(envelope=bind(_FRAME, _ROWS, backend="echarts"))
     refreshed = result.refresh(_NEW_ROWS)
     assert refreshed is not result
+    assert result.envelope is not None
     assert result.envelope.input["data"]["values"] == _ROWS
     assert result.envelope.row_count == 2
 
@@ -77,3 +79,72 @@ def test_refresh_still_raises_schema_drift_on_genuinely_new_rows() -> None:
     with pytest.raises(SchemaDriftError) as caught:
         result.refresh(dropped_column)
     assert caught.value.stage == "source"
+
+
+# --- XOR payload, review, and the recipe rail (ADR-0027 Decision 9) ---------
+
+from chartagent import (  # noqa: E402
+    ChartDocument,
+    ChartRecipe,
+    EscapeReason,
+    ReviewReport,
+)
+from chartagent.transform.model import Menu  # noqa: E402
+
+_RECIPE = ChartRecipe(
+    spec_version="1.2",
+    transform=Menu.model_validate(
+        {
+            "group_by": ["quarter"],
+            "aggregate": [{"name": "total", "op": "sum", "field": "revenue"}],
+        }
+    ),
+    source_schema={"quarter": "string", "revenue": "number"},
+    escape_reason=EscapeReason(bucket=4),
+    theme_spec=None,
+    document=ChartDocument(module="export default () => {}", styles=None, libraries=()),
+)
+_REPORT = ReviewReport(
+    tiers_run=(1,),
+    tiers_skipped={2: "unavailable"},
+    passed=True,
+    budget_exhausted=False,
+    checks=(),
+)
+
+
+def test_a_result_with_both_payloads_is_impossible() -> None:
+    envelope = bind(_FRAME, _ROWS, backend="echarts")
+    with pytest.raises(ValueError):
+        ChartResult(envelope=envelope, recipe=_RECIPE)
+
+
+def test_a_result_with_neither_payload_is_impossible() -> None:
+    with pytest.raises(ValueError):
+        ChartResult()
+
+
+def test_refresh_on_an_envelope_result_sets_review_to_none() -> None:
+    result = ChartResult(
+        envelope=bind(_FRAME, _ROWS, backend="echarts"), review=_REPORT
+    )
+    refreshed = result.refresh(_NEW_ROWS)
+    assert result.review is _REPORT
+    assert refreshed.review is None
+
+
+def test_refresh_on_a_recipe_result_rebinds_and_sets_review_to_none() -> None:
+    result = ChartResult(recipe=_RECIPE, review=_REPORT)
+    refreshed = result.refresh(_NEW_ROWS)
+    assert refreshed is not result
+    assert refreshed.review is None
+    assert refreshed.envelope is None
+    assert refreshed.recipe is _RECIPE
+    assert refreshed.bound is not None
+    assert refreshed.bound.row_count == 3
+
+
+def test_recipe_refresh_fails_on_drift_like_bind() -> None:
+    result = ChartResult(recipe=_RECIPE, review=_REPORT)
+    with pytest.raises(SchemaDriftError):
+        result.refresh([{"quarter": "Q3"}])

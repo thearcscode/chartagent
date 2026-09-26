@@ -41,6 +41,7 @@ def test_live_create_chart_returns_a_chart_result(instruction: str) -> None:
         result = agent.create_chart(_SALES, instruction)
     assert isinstance(result, ChartResult)
     envelope = result.envelope
+    assert envelope is not None
     assert envelope.backend
     assert envelope.row_count > 0
     assert envelope.input["data"]["values"]

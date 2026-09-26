@@ -29,7 +29,8 @@ from chartagent.transform.model import EXPR_KINDS, TRANSFORM_SLOTS, transform_ma
 from chartagent.transform.raw_sql import sql_source_refs
 
 if TYPE_CHECKING:
-    from chartagent.plan.recipe import DocumentDraft, EscapeReason, RecipeDraft
+    from chartagent.plan.recipe import DocumentDraft, RecipeDraft
+    from chartagent.recipe import EscapeReason
 
 
 @dataclass(frozen=True)

@@ -49,6 +49,7 @@ from chartagent.plan.select import select_backend
 from chartagent.profile.models import Profile
 from chartagent.profile.source import profile_source
 from chartagent.result import ChartResult
+from chartagent.review import tier1_review
 
 _STEP1_RETRIES = 1
 _STEP2_RETRIES = 2
@@ -241,7 +242,10 @@ class ChartAgent:
                 )
                 continue
             observe(2, step2_ask, "ok")
-            return ChartResult(envelope=envelope)
+            return ChartResult(
+                envelope=envelope,
+                review=tier1_review(profile, backend=backend),
+            )
         raise PlannerFailureError(
             "step 1 did not emit a usable fragment",
             reason=last or "invalid_emit",

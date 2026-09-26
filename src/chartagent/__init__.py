@@ -16,7 +16,16 @@ from chartagent.frame import (
 from chartagent.frame._generated import *  # noqa: F403
 from chartagent.frame._generated import __all__ as _GENERATED_ALL
 from chartagent.plan.agent import ChartAgent, create_chart_agent
+from chartagent.recipe import (
+    BoundRecipe,
+    ChartDocument,
+    ChartRecipe,
+    EscapeReason,
+    LibraryPin,
+    bind_recipe,
+)
 from chartagent.result import ChartResult
+from chartagent.review import CheckResult, ReviewReport
 
 _GENERATED_MODELS = tuple(
     name
@@ -30,8 +39,16 @@ del _name
 
 __all__ = [
     "bind",
+    "bind_recipe",
+    "ChartRecipe",
+    "BoundRecipe",
+    "ChartDocument",
+    "LibraryPin",
+    "EscapeReason",
     "Envelope",
     "ChartResult",
+    "ReviewReport",
+    "CheckResult",
     "create_chart_agent",
     "ChartAgent",
     "DataSource",
