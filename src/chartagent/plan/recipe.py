@@ -75,12 +75,15 @@ class DocumentDraft(BaseModel):
 
 
 class RecipeDraft(BaseModel):
-    """The miss path's first-generation decode target: a transform and its
-    document in one ask (ADR-0030 Decision 5). No field carries
+    """The miss path's first-generation decode target: a transform, its
+    freshly authored ``semantic_types`` and its document in one ask (ADR-0030
+    Decision 5, widened by ``semantic_types`` so "authored fresh" has somewhere
+    to land). No field carries
     ``source_schema`` — code computes it (Decision 2)."""
 
     model_config = ConfigDict(extra="forbid")
     transform: TransformSpec
+    semantic_types: dict[str, str]
     document: DocumentDraft
 
 
@@ -92,6 +95,7 @@ class GeneratedRecipe:
 
     document: ChartDocument
     transform: Menu | RawSql
+    semantic_types: Mapping[str, str]
     source_schema: dict[str, SourceBucket]
 
 
@@ -133,10 +137,9 @@ def generate_recipe(
             repair,
         )
         try:
-            if authoring and attempt == 0:
-                draft, _ask = invoke(prompt.output_type, prompt, counted=False)
-            else:
-                draft, _ask = invoke(prompt.output_type, prompt)
+            draft, _ask = invoke(
+                prompt.output_type, prompt, counted=not (authoring and attempt == 0)
+            )
             document = draft.document if authoring else draft
             if document.libraries and resolver is None:
                 raise _EmitFailed(
@@ -160,6 +163,11 @@ def generate_recipe(
                 libraries=_resolve(document.libraries, resolver),
             ),
             transform=chosen,
+            semantic_types=(
+                draft.semantic_types
+                if isinstance(draft, RecipeDraft)
+                else dict(semantic_types or {})
+            ),
             source_schema=source_schema,
         )
     raise DocumentGenerationFailed("document did not decode within its retry budget")

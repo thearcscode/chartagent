@@ -342,6 +342,11 @@ _AUTHORED = {
     "aggregate": [{"name": "total", "op": "sum", "field": "revenue"}],
 }
 _DOC = {"module": _MODULE, "libraries": []}
+_MISS = {
+    "transform": _AUTHORED,
+    "semantic_types": {"total": "Quantity"},
+    "document": _DOC,
+}
 
 
 def _author(client: ModelClient, bucket: int = 1, **kw: Any) -> GeneratedRecipe:
@@ -349,7 +354,7 @@ def _author(client: ModelClient, bucket: int = 1, **kw: Any) -> GeneratedRecipe:
 
 
 def test_miss_returns_authored_transform_and_document_from_one_ask() -> None:
-    client, seen = _client({"transform": _AUTHORED, "document": _DOC})
+    client, seen = _client(_MISS)
     recipe = _author(client)
     assert recipe.transform == _TRANSFORM
     assert recipe.document.module == _MODULE
@@ -358,7 +363,11 @@ def test_miss_returns_authored_transform_and_document_from_one_ask() -> None:
 
 def test_miss_decodes_into_recipe_draft() -> None:
     assert _miss_prompt(1).output_type is RecipeDraft
-    assert set(RecipeDraft.model_fields) == {"transform", "document"}
+    assert set(RecipeDraft.model_fields) == {
+        "transform",
+        "semantic_types",
+        "document",
+    }
 
 
 def _miss_prompt(bucket: Literal[1, 2, 3, 4]) -> Any:
@@ -376,6 +385,7 @@ def test_bucket_two_prompt_frames_raw_sql_and_bucket_one_does_not() -> None:
     assert "raw_sql" in _miss_prompt(2).system
     assert "already failed the eight-slot menu" in _miss_prompt(2).system
     assert "already failed" not in _miss_prompt(1).system
+    assert "expect to use" not in _miss_prompt(1).system
     assert "escape valve" not in _miss_prompt(1).system
 
 
@@ -386,7 +396,7 @@ def test_miss_prompt_never_copies_semantic_types_from_the_profile() -> None:
 
 
 def test_source_schema_is_computed_by_code_for_authored_and_supplied() -> None:
-    client, _ = _client({"transform": _AUTHORED, "document": _DOC})
+    client, _ = _client(_MISS)
     assert _author(client).source_schema == {"quarter": "string", "revenue": "number"}
     client, _ = _client(_DOC)
     assert _generated(client).source_schema == {
@@ -398,8 +408,8 @@ def test_source_schema_is_computed_by_code_for_authored_and_supplied() -> None:
 
 
 def test_authored_raw_sql_violating_the_locks_is_retried_once_then_terminal() -> None:
-    bad = {"transform": {"raw_sql": "DROP TABLE source"}, "document": _DOC}
-    client, seen = _client(bad, {"transform": _AUTHORED, "document": _DOC})
+    bad = {**_MISS, "transform": {"raw_sql": "DROP TABLE source"}}
+    client, seen = _client(bad, _MISS)
     assert _author(client, 2).transform == _TRANSFORM
     assert "Rejected emit" in seen["user"][1]
     client, seen = _client(bad, bad)
@@ -408,8 +418,20 @@ def test_authored_raw_sql_violating_the_locks_is_retried_once_then_terminal() ->
     assert len(seen["user"]) == 2
 
 
+def test_authored_raw_sql_reading_a_foreign_relation_is_rejected() -> None:
+    bad = {**_MISS, "transform": {"raw_sql": "SELECT * FROM read_csv('/etc/passwd')"}}
+    client, _ = _client(bad, bad)
+    with pytest.raises(DocumentGenerationFailed):
+        _author(client, 2)
+
+
+def test_authored_semantic_types_are_returned_from_the_draft() -> None:
+    client, _ = _client({**_MISS, "semantic_types": {"total": "Currency"}})
+    assert _author(client).semantic_types == {"total": "Currency"}
+
+
 def test_authored_transform_naming_a_missing_column_counts_as_decode_failure() -> None:
-    bad = {"transform": {"raw_sql": "SELECT nope FROM source"}, "document": _DOC}
+    bad = {**_MISS, "transform": {"raw_sql": "SELECT nope FROM source"}}
     client, _ = _client(bad, bad)
     with pytest.raises(DocumentGenerationFailed):
         _author(client, 2)
@@ -417,7 +439,7 @@ def test_authored_transform_naming_a_missing_column_counts_as_decode_failure() -
 
 def test_valid_raw_sql_is_accepted() -> None:
     sql = "SELECT quarter, sum(revenue) AS total FROM source GROUP BY quarter"
-    client, _ = _client({"transform": {"raw_sql": sql}, "document": _DOC})
+    client, _ = _client({**_MISS, "transform": {"raw_sql": sql}})
     assert _author(client, 2).source_schema == {
         "quarter": "string",
         "revenue": "number",
@@ -426,7 +448,7 @@ def test_valid_raw_sql_is_accepted() -> None:
 
 def test_miss_first_call_is_uncounted_and_the_retry_is_counted() -> None:
     uncounted: list[Any] = []
-    client, _ = _client({"transform": 3}, {"transform": _AUTHORED, "document": _DOC})
+    client, _ = _client({"transform": 3}, _MISS)
     _author(client, invoke=_invoke(client, uncounted))
     assert uncounted == [RecipeDraft]
 
