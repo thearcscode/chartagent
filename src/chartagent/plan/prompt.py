@@ -13,7 +13,12 @@ from string import Template
 from typing import TYPE_CHECKING, Any
 
 from chartagent.errors import RawSqlRejectedError
-from chartagent.frame._generated import CHANNELS, SEMANTIC_TYPES, GeneratedProperties
+from chartagent.frame._generated import (
+    CHANNELS,
+    SEMANTIC_TYPES,
+    GeneratedProperties,
+    SemanticTypeName,
+)
 from chartagent.frame.capability import properties_model
 from chartagent.frame.input import Backend
 from chartagent.plan.schema import Fragment
@@ -201,9 +206,11 @@ _EMIT_DOCUMENT = (
 )
 
 _EMIT_RECIPE = (
-    "Emit a JSON object with two keys: `transform` and `document`. `document` is "
-    "a JSON object with `module` (JavaScript source), `styles` (CSS source, or "
-    "null when you write none) and `libraries`."
+    "Emit a JSON object with three keys: `transform`, `semantic_types` and "
+    "`document`. `semantic_types` maps each output column to one name from the "
+    "closed list in the transform section. `document` is a JSON object with "
+    "`module` (JavaScript source), `styles` (CSS source, or null when you write "
+    "none) and `libraries`."
 )
 
 _RAW_SQL_FRAMING = (
@@ -218,7 +225,9 @@ def _transform_section(bucket: int | None) -> str:
     if bucket is None:
         return ""
     section = Template(_read_template("transform.section.md")).substitute(
-        SLOTS=", ".join(TRANSFORM_SLOTS), EXPR_KINDS=", ".join(sorted(EXPR_KINDS))
+        SLOTS=", ".join(TRANSFORM_SLOTS),
+        EXPR_KINDS=", ".join(sorted(EXPR_KINDS)),
+        SEMANTIC_TYPES=", ".join(SEMANTIC_TYPES),
     )
     return f"{section}\n{_RAW_SQL_FRAMING}\n" if bucket == 2 else section
 
@@ -237,7 +246,7 @@ def render_document(
     profile: Profile,
     instruction: str,
     escape_reason: EscapeReason,
-    semantic_types: Mapping[str, str] | None,
+    semantic_types: Mapping[str, SemanticTypeName] | None,
     *,
     resolver_set: bool = False,
     author_transform: bool = False,

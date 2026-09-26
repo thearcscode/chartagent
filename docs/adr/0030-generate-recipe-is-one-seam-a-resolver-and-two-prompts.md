@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-23
+- **Errata:** 2026-09-26 ([#186](https://github.com/thearcscode/chartagent/issues/186)) —
+  Decisions 1, 5 and 9, recorded in place.
 - **Settled on:** [#175](https://github.com/thearcscode/chartagent/issues/175)
 - **Builds on:** ADR-0008 (the transform menu; `raw_sql` as the menu's own escape valve),
   ADR-0016 Decisions 12–13 (the rail owns both prompt shapes as one competence; one
@@ -106,6 +108,16 @@ caller passed to `create_chart`, or absent — the same "caller, or omitted" rul
 already has). Internal, not `__all__`, not a factory kwarg — unchanged from ADR-0027 Decision
 6.
 
+**Erratum — 2026-09-26 ([#186](https://github.com/thearcscode/chartagent/issues/186)).**
+The signature above returns a `ChartDocument`. That cannot carry a transform this call
+just authored, nor the `source_schema` Decision 2 computes inside the seam, back to the
+caller who still assembles the `ChartRecipe`. The seam returns an internal
+`GeneratedRecipe`: `document`, `transform` (supplied or authored), `semantic_types`, and
+`source_schema`. Codegen still does not write a `ChartRecipe`. The document inside the
+carrier is still the only code the model wrote. `semantic_types` stay on the carrier.
+`ChartRecipe` does not gain a field for them: a patch in the same request reads them off
+the carrier, and a later `bind_recipe` does not re-prompt.
+
 ### 2. `source_schema` stays code's, not a third model field
 
 Exactly ADR-0019 Decision 2's existing rule: `source_schema` is computed from the transform's
@@ -164,6 +176,15 @@ shared shape both prompts resend in full: the hop's first-generation call and *b
 patch calls all use it. Only the miss path's first-generation call widens to `RecipeDraft`,
 because only there is `transform` still undecided (Decision 1). This is the same "one seam, two
 calling shapes" idea from Decision 1, expressed at the type level rather than invented twice.
+
+**Erratum — 2026-09-26 ([#186](https://github.com/thearcscode/chartagent/issues/186)).**
+`RecipeDraft` is three fields: `transform`, `semantic_types`, `document`. Decision 4
+already required a miss to author `semantic_types` fresh and never copy them from the
+profile. The two-field sketch had nowhere to put them, so the prompt would have asked
+for a value the type forbids. The values are the closed `SemanticTypeName` list step 1
+already uses (ADR-0009 Decision 8). A name outside that list is a decode failure and
+consumes the one retry. The prompt states the list; the model does not discover it by
+failing.
 
 **Full resend, never a diff, on both prompts.** PRD language about "targeted code edits, not
 rewrite" describes how ADR-0018 Decision 9's review UI diffs two *stored* versions as text
@@ -256,6 +277,16 @@ the recipe has re-entered the loop and failed something there, spends the dial.
 **The miss path's first call is uncounted against ADR-0019's 5-call cap.** It replaces a raise
 rather than extending step 1/step 2's judgement loop — the same treatment the hop's free first
 call already gets, restated for the other caller.
+
+**Erratum — 2026-09-26 ([#186](https://github.com/thearcscode/chartagent/issues/186)).**
+"Uncounted" is the miss path's **first** ask only. Its one decode retry stays on
+ADR-0019's 5-call cap. A retry when that cap is already spent raises
+`PlannerFailureError` (`retries_exhausted`), not `DocumentGenerationFailed`. The
+decode-retry budget is still its own line: it is not step 1's one retry or step 2's
+two, and it does not spend the review-repair dial. Every ask, counted or not, still
+lands on ADR-0028's invoice. The uncounted first ask is off `Attempt` as well.
+`Attempt.step` is 1 or 2, and this ask is neither, so a decode failure on it is not
+journaled there.
 
 ### 10. `quality="fast"` never reaches `generate_recipe`, from either caller
 
@@ -355,7 +386,8 @@ prompt exactly as ADR-0017 Decision 7 froze it — restated here, not reinvented
 - **`CONTEXT.md`** — **Escalation** drops the "until `generate_recipe` exists" stand-in language
   now that it exists; **Escape reason** gains the P2 era, where a well-formed bucket 1/2/4 does
   construct a `ChartRecipe`; **Review repair** is corrected to scope "a... `marks_present` fail
-  consumes none" to Flint (Decision 12).
+  consumes none" to Flint (Decision 12). The 2026-09-26 erratum amends **`generate_recipe`**
+  (the seam returns a `GeneratedRecipe`) and **Chart recipe** (no `semantic_types` field).
 
 ## Consequences
 

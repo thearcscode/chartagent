@@ -1,10 +1,12 @@
 """``generate_recipe`` — the custom rail's document seam (ADR-0030).
 
-Internal — not in ``__all__``, not a factory kwarg. First-generation only,
-for a supplied ``transform``. Library identity comes from a private resolver
-(ADR-0030 Decision 6): every ``LibraryRequest`` is resolved synchronously
-before returning, so no unresolved pin ever leaves this seam. With no
-resolver, only ``libraries=()`` is legal and a model naming one fails decode.
+Internal — not in ``__all__``, not a factory kwarg. Returns a
+``GeneratedRecipe``; the caller assembles the ``ChartRecipe``. A supplied
+``transform`` is carried over; ``None`` authors one. Library identity comes
+from a private resolver (ADR-0030 Decision 6): every ``LibraryRequest`` is
+resolved synchronously before returning, so no unresolved pin ever leaves
+this seam. With no resolver, only ``libraries=()`` is legal and a model
+naming one fails decode.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from typing import Any, Literal, cast
 from pydantic import BaseModel, ConfigDict
 
 from chartagent.errors import ChartAgentError
+from chartagent.frame._generated import SemanticTypeName
 from chartagent.frame.input import SourceBucket
 from chartagent.plan.assemble import _source_refs
 from chartagent.plan.emit import _EmitFailed, _with_repair
@@ -77,25 +80,25 @@ class DocumentDraft(BaseModel):
 class RecipeDraft(BaseModel):
     """The miss path's first-generation decode target: a transform, its
     freshly authored ``semantic_types`` and its document in one ask (ADR-0030
-    Decision 5, widened by ``semantic_types`` so "authored fresh" has somewhere
-    to land). No field carries
-    ``source_schema`` — code computes it (Decision 2)."""
+    Decision 5). Values are the closed ``SemanticTypeName`` list, the same
+    one step 1 uses. No field carries ``source_schema`` — code computes it
+    (Decision 2)."""
 
     model_config = ConfigDict(extra="forbid")
     transform: TransformSpec
-    semantic_types: dict[str, str]
+    semantic_types: dict[str, SemanticTypeName]
     document: DocumentDraft
 
 
 @dataclass(frozen=True)
 class GeneratedRecipe:
     """What ``generate_recipe`` hands the caller, who assembles the
-    ``ChartRecipe``: the document, the transform (supplied or authored) and
-    the code-computed ``source_schema``."""
+    ``ChartRecipe``. ``semantic_types`` stay here; ``ChartRecipe`` does not
+    gain a field for them (ADR-0030 Decision 1 erratum)."""
 
     document: ChartDocument
     transform: Menu | RawSql
-    semantic_types: Mapping[str, str]
+    semantic_types: Mapping[str, SemanticTypeName]
     source_schema: dict[str, SourceBucket]
 
 
@@ -113,7 +116,7 @@ def generate_recipe(
     escape_reason: EscapeReason,
     *,
     transform: Menu | RawSql | None,
-    semantic_types: Mapping[str, str] | None = None,
+    semantic_types: Mapping[str, SemanticTypeName] | None = None,
     resolver: LibraryResolver | None = None,
     invoke: Any,
 ) -> GeneratedRecipe:

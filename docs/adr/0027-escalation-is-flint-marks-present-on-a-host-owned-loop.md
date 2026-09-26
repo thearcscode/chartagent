@@ -144,6 +144,13 @@ stand-in in this Decision is retired as the default path — it is now only what
 caller. `fast` is unchanged: a well-formed inexpressible verdict still raises there, and
 `generate_recipe` is unreachable from either caller at `fast`.
 
+**Erratum — 2026-09-26 ([#186](https://github.com/thearcscode/chartagent/issues/186),
+[ADR-0030](0030-generate-recipe-is-one-seam-a-resolver-and-two-prompts.md)).** "Codegen
+writes only `ChartDocument`" means the model does not write a `ChartRecipe`. The seam
+returns an internal `GeneratedRecipe` (`document`, `transform`, `semantic_types`,
+`source_schema`); the caller still assembles the recipe. ADR-0030 Decision 1's erratum
+is the statement.
+
 ### 7. Best-so-far is the last `passed=True` snapshot, else the first emit of the current rail
 
 After a hop, “first emit” is the first recipe. Not last-attempt (a repair can worsen the
