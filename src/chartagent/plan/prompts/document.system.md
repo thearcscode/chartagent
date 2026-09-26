@@ -1,7 +1,8 @@
 You write the chart document for chartagent's custom rail: an interactive web document that a host-owned shell runs in a sandboxed iframe with the bound rows. The deterministic rail could not serve this request; your document must not be a downgrade from it.
 
-Emit a JSON object with `module` (JavaScript source), `styles` (CSS source, or null when you write none) and `libraries`.
+$EMIT_SHAPE
 
+$TRANSFORM_SECTION
 ## The two-symbol contract
 
 The module defines exactly two symbols the host calls:

@@ -24,7 +24,7 @@ from chartagent.transform.model import EXPR_KINDS, TRANSFORM_SLOTS, transform_ma
 from chartagent.transform.raw_sql import sql_source_refs
 
 if TYPE_CHECKING:
-    from chartagent.plan.recipe import DocumentDraft, EscapeReason
+    from chartagent.plan.recipe import DocumentDraft, EscapeReason, RecipeDraft
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class Step2Prompt:
 class DocumentPrompt:
     system: str
     user: str
-    output_type: type[DocumentDraft]
+    output_type: type[DocumentDraft] | type[RecipeDraft]
 
 
 def _read_template(name: str) -> str:
@@ -195,9 +195,39 @@ _ESCAPE_CONTEXT = {
 }
 
 
+_EMIT_DOCUMENT = (
+    "Emit a JSON object with `module` (JavaScript source), `styles` (CSS source, "
+    "or null when you write none) and `libraries`."
+)
+
+_EMIT_RECIPE = (
+    "Emit a JSON object with two keys: `transform` and `document`. `document` is "
+    "a JSON object with `module` (JavaScript source), `styles` (CSS source, or "
+    "null when you write none) and `libraries`."
+)
+
+_RAW_SQL_FRAMING = (
+    "This request already failed the eight-slot menu, so the menu cannot state "
+    "its shape. `raw_sql` is the escape valve for exactly that: expect to use "
+    "`raw_sql` for the transform rather than straining the slots a second time."
+)
+
+
 @cache
-def _document_system(resolver_set: bool) -> str:
+def _transform_section(bucket: int | None) -> str:
+    if bucket is None:
+        return ""
+    section = Template(_read_template("transform.section.md")).substitute(
+        SLOTS=", ".join(TRANSFORM_SLOTS), EXPR_KINDS=", ".join(sorted(EXPR_KINDS))
+    )
+    return f"{section}\n{_RAW_SQL_FRAMING}\n" if bucket == 2 else section
+
+
+@cache
+def _document_system(resolver_set: bool, author_bucket: int | None) -> str:
     return Template(_read_template("document.system.md")).substitute(
+        EMIT_SHAPE=_EMIT_DOCUMENT if author_bucket is None else _EMIT_RECIPE,
+        TRANSFORM_SECTION=_transform_section(author_bucket),
         LIBRARY_RULE=_LIBRARY_RULE_RESOLVER if resolver_set else _LIBRARY_RULE,
         UNTRUSTED_PATHS=", ".join(untrusted_paths()),
     )
@@ -207,19 +237,22 @@ def render_document(
     profile: Profile,
     instruction: str,
     escape_reason: EscapeReason,
-    semantic_types: Mapping[str, str],
+    semantic_types: Mapping[str, str] | None,
     *,
     resolver_set: bool = False,
+    author_transform: bool = False,
     nonce: str | None = None,
 ) -> DocumentPrompt:
     """First-generation document prompt. Column names and ``semantic_types``
-    only — never ``sample_rows`` or any cell value (ADR-0030 Decision 4)."""
-    from chartagent.plan.recipe import DocumentDraft
+    only — never ``sample_rows`` or any cell value (ADR-0030 Decision 4).
+    ``author_transform`` widens the emit to a ``RecipeDraft`` (the miss path);
+    bucket 2 alone gets the ``raw_sql`` framing (Decision 3)."""
+    from chartagent.plan.recipe import DocumentDraft, RecipeDraft
 
-    payload = {
-        "columns": [column.name for column in profile.columns],
-        "semantic_types": dict(semantic_types),
-    }
+    payload: dict[str, Any] = {"columns": [column.name for column in profile.columns]}
+    if not author_transform:
+        payload["semantic_types"] = dict(semantic_types or {})
+    author_bucket = escape_reason.bucket if author_transform else None
     user = "\n\n".join(
         (
             _ESCAPE_CONTEXT[escape_reason.bucket],
@@ -227,5 +260,7 @@ def render_document(
         )
     )
     return DocumentPrompt(
-        system=_document_system(resolver_set), user=user, output_type=DocumentDraft
+        system=_document_system(resolver_set, author_bucket),
+        user=user,
+        output_type=RecipeDraft if author_transform else DocumentDraft,
     )

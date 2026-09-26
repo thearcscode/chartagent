@@ -36,7 +36,13 @@ from chartagent.frame.input import Backend
 from chartagent.plan.assemble import assemble
 from chartagent.plan.client import ModelClient
 from chartagent.plan.emit import _EmitFailed, _with_repair
-from chartagent.plan.prompt import Step1Prompt, Step2Prompt, render_step1, render_step2
+from chartagent.plan.prompt import (
+    DocumentPrompt,
+    Step1Prompt,
+    Step2Prompt,
+    render_step1,
+    render_step2,
+)
 from chartagent.plan.recipe import LibraryResolver
 from chartagent.plan.schema import Fragment, Inexpressible, Step1Result, Unanswerable
 from chartagent.plan.select import select_backend
@@ -151,22 +157,29 @@ class ChartAgent:
             )
 
         def invoke(
-            output_type: Any, prompt: Step1Prompt | Step2Prompt
+            output_type: Any,
+            prompt: Step1Prompt | Step2Prompt | DocumentPrompt,
+            *,
+            counted: bool = True,
         ) -> tuple[Any, int]:
             nonlocal calls, step1_asks, step2_asks
-            if calls >= _CALL_CAP:
-                raise PlannerFailureError(
-                    "planner call cap reached",
-                    reason="retries_exhausted",
-                )
-            calls += 1
+            # A miss's authoring ask replaces a raise: off the 5-call cap and
+            # off the step 1/2 ask counts (ADR-0030 Decision 9).
             step: Literal[1, 2] = 1 if output_type is Step1Result else 2
-            if step == 1:
-                step1_asks += 1
-                ask = step1_asks
-            else:
-                step2_asks += 1
-                ask = step2_asks
+            ask = 0
+            if counted:
+                if calls >= _CALL_CAP:
+                    raise PlannerFailureError(
+                        "planner call cap reached",
+                        reason="retries_exhausted",
+                    )
+                calls += 1
+                if step == 1:
+                    step1_asks += 1
+                    ask = step1_asks
+                else:
+                    step2_asks += 1
+                    ask = step2_asks
             try:
                 result = self._client.run(
                     cast(type[Any], output_type), prompt.system, prompt.user
@@ -179,6 +192,10 @@ class ChartAgent:
                     raise
                 rejected = getattr(exc, "rejected_emit", None)
                 checker = _checker_message(exc) if reason == "invalid_emit" else ""
+                if not counted:
+                    raise _EmitFailed(
+                        reason, rejected=rejected, checker=checker
+                    ) from exc
                 raise _reject(
                     observe, step, ask, "decode", reason, rejected, checker
                 ) from exc
