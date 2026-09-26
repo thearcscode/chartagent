@@ -19,7 +19,15 @@ from chartagent.frame.input import Backend
 from chartagent.profile.models import Profile, StringColumn
 
 CheckName = Literal[
-    "injection_pattern", "painted", "colorblind_safe_palette", "data_truthfulness"
+    "injection_pattern",
+    "painted",
+    "colorblind_safe_palette",
+    "data_truthfulness",
+    "marks_present",
+    "axis_labels_present",
+    "legend_presence",
+    "label_overlap",
+    "bar_chart_y_axis_baseline",
 ]
 Outcome = Literal["pass", "fail", "not_checked"]
 
