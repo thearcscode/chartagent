@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-28
+- **Errata:** 2026-09-26 ([#189](https://github.com/thearcscode/chartagent/issues/189)) —
+  Decision 2's `theme_spec` type, recorded in place.
 - **Settled on:** [#60](https://github.com/thearcscode/chartagent/issues/60)
 - **Builds on:** ADR-0002 (the input frame is the spec; `x_chartagent`; canonical JSON is the
   diff unit), ADR-0005 (`bind` is the public seam; `canonical_json`; diagnostics ride on the
@@ -138,6 +140,13 @@ pin bump that retires a preset name cannot make a stored recipe unbindable. This
 unlike the frame path, where `SpecVocabularyError` is a hard error with no warn-and-strip: there
 the value reaches an assembler that will silently mis-draw, and here it reaches a palette
 lookup that has a defined default.
+
+**Erratum — 2026-09-26 ([#189](https://github.com/thearcscode/chartagent/issues/189)).**
+Decision 2's sketch types `theme_spec` as `ThemeSpec | None`. The frame's field is
+`ThemePresetName | ThemeSpec | None`, and copying that closed literal onto a recipe would
+make a retired preset unconstructable — the failure Decision 3 exists to prevent. The type
+is `str | ThemeSpec | None`, on `ChartRecipe` and on the `theme_spec` `bind_recipe` copies
+onto `BoundRecipe`. `bind_recipe` still does not validate it against the pin.
 
 ### 4. `escape` leaves `x_chartagent`; `spec_version` becomes 1.2; the line is shared
 

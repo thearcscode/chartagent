@@ -4,7 +4,9 @@ Not itself a wire type: ``Envelope``'s wire format is frozen at three keys
 (ADR-0005) and ``ChartResult`` never widens that by flattening either payload
 onto itself. Exactly one of ``envelope`` (deterministic rail) or ``recipe``
 (custom rail) is set; there is no ``kind`` field, the payload is the
-discriminator. Studio serialises by reaching into ``.envelope.to_dict()``.
+discriminator. An envelope result serialises through ``.envelope.to_dict()``.
+A recipe result has no envelope; the stored artifact is the recipe, and a
+recipe refresh's rows ride on ``bound``.
 """
 
 from __future__ import annotations

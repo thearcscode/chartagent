@@ -116,6 +116,13 @@ plus `review: ReviewReport | None`. No `kind` field; do not flatten either paylo
 (`bind` or `bind_recipe`) and sets `review=None`. Tests that constructed
 `ChartResult(envelope=…)` grow `review=`.
 
+**Erratum — 2026-09-26 ([#189](https://github.com/thearcscode/chartagent/issues/189),
+[ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md)).** The sentence
+above that Studio serialises by reaching into `.envelope.to_dict()` holds for an envelope
+result only. A recipe result has `envelope is None`; the stored artifact is the recipe,
+and a recipe refresh's rows ride on `bound`. `ChartResult` itself still never goes on the
+wire.
+
 ### 3. `UnanswerableInstructionError`, and the fence that keeps it out of bucket 1
 
 ```python

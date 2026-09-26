@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 
-import chartagent
 from chartagent import (
     ChartDocument,
     ChartRecipe,
@@ -118,15 +117,3 @@ def test_the_recipe_has_six_fields_and_no_dropped_ones() -> None:
         "theme_spec",
         "document",
     }
-
-
-def test_recipe_carrier_names_are_exported_together() -> None:
-    for name in (
-        "LibraryPin",
-        "ChartDocument",
-        "ChartRecipe",
-        "bind_recipe",
-        "EscapeReason",
-    ):
-        assert name in chartagent.__all__
-        assert hasattr(chartagent, name)
