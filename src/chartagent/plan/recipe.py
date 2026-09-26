@@ -11,14 +11,17 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict
 
+from chartagent.errors import ChartAgentError
+from chartagent.frame.input import SourceBucket
+from chartagent.plan.assemble import _source_refs
 from chartagent.plan.emit import _EmitFailed, _with_repair
 from chartagent.plan.prompt import render_document
 from chartagent.profile.models import Profile
-from chartagent.transform.model import Menu, RawSql
+from chartagent.transform.model import Menu, RawSql, TransformSpec, transform_mapping
 
 LibraryResolver = Callable[[str, str], tuple[str, bytes]]
 """``(name, version) -> (sha256, bytes)``. The bytes are the caller's in-request
@@ -71,6 +74,31 @@ class DocumentDraft(BaseModel):
     libraries: tuple[LibraryRequest, ...] = ()
 
 
+class RecipeDraft(BaseModel):
+    """The miss path's first-generation decode target: a transform, its
+    freshly authored ``semantic_types`` and its document in one ask (ADR-0030
+    Decision 5, widened by ``semantic_types`` so "authored fresh" has somewhere
+    to land). No field carries
+    ``source_schema`` — code computes it (Decision 2)."""
+
+    model_config = ConfigDict(extra="forbid")
+    transform: TransformSpec
+    semantic_types: dict[str, str]
+    document: DocumentDraft
+
+
+@dataclass(frozen=True)
+class GeneratedRecipe:
+    """What ``generate_recipe`` hands the caller, who assembles the
+    ``ChartRecipe``: the document, the transform (supplied or authored) and
+    the code-computed ``source_schema``."""
+
+    document: ChartDocument
+    transform: Menu | RawSql
+    semantic_types: Mapping[str, str]
+    source_schema: dict[str, SourceBucket]
+
+
 class DocumentGenerationFailed(Exception):
     """The decode-retry budget is spent. What to do about it is the caller's."""
 
@@ -85,16 +113,18 @@ def generate_recipe(
     escape_reason: EscapeReason,
     *,
     transform: Menu | RawSql | None,
-    semantic_types: Mapping[str, str],
+    semantic_types: Mapping[str, str] | None = None,
     resolver: LibraryResolver | None = None,
     invoke: Any,
-) -> ChartDocument:
+) -> GeneratedRecipe:
     """First-generation document. A supplied ``transform`` is carried over
-    verbatim by the caller and never re-asked here."""
-    if transform is None:
-        raise NotImplementedError("authoring a transform is not built yet")
+    verbatim and never re-asked; ``None`` means author it, in the same single
+    ask (``RecipeDraft``). The authoring ask's first call goes out with
+    ``counted=False``: it replaces a raise, so it is off the planner's 5-call
+    cap (ADR-0030 Decision 9). Its retry is counted."""
+    authoring = transform is None
     repair: _EmitFailed | None = None
-    for _ in range(_DECODE_RETRIES + 1):
+    for attempt in range(_DECODE_RETRIES + 1):
         prompt = _with_repair(
             render_document(
                 profile,
@@ -102,26 +132,73 @@ def generate_recipe(
                 escape_reason,
                 semantic_types,
                 resolver_set=resolver is not None,
+                author_transform=authoring,
             ),
             repair,
         )
         try:
-            draft, _ask = invoke(prompt.output_type, prompt)
-            if draft.libraries and resolver is None:
+            draft, _ask = invoke(
+                prompt.output_type, prompt, counted=not (authoring and attempt == 0)
+            )
+            document = draft.document if authoring else draft
+            if document.libraries and resolver is None:
                 raise _EmitFailed(
                     "invalid_emit",
                     rejected=draft.model_dump(mode="json", exclude_none=True),
                     checker="only libraries=() is legal this run",
                 )
+            chosen = (
+                draft.transform
+                if isinstance(draft, RecipeDraft)
+                else cast(Menu | RawSql, transform)
+            )
+            source_schema = _check_transform(chosen, profile, draft, authored=authoring)
         except _EmitFailed as exc:
             repair = exc
             continue
-        return ChartDocument(
-            module=draft.module,
-            styles=draft.styles,
-            libraries=_resolve(draft.libraries, resolver),
+        return GeneratedRecipe(
+            document=ChartDocument(
+                module=document.module,
+                styles=document.styles,
+                libraries=_resolve(document.libraries, resolver),
+            ),
+            transform=chosen,
+            semantic_types=(
+                draft.semantic_types
+                if isinstance(draft, RecipeDraft)
+                else dict(semantic_types or {})
+            ),
+            source_schema=source_schema,
         )
     raise DocumentGenerationFailed("document did not decode within its retry budget")
+
+
+def _check_transform(
+    transform: Menu | RawSql,
+    profile: Profile,
+    draft: DocumentDraft | RecipeDraft,
+    *,
+    authored: bool,
+) -> dict[str, SourceBucket]:
+    """``source_schema``, always code's. An authored transform also goes
+    through the existing machinery as a decode check: a raw_sql lock rejection
+    or a column the source lacks counts against the retry."""
+    rejected = draft.model_dump(mode="json", exclude_none=True)
+    try:
+        refs = _source_refs(transform_mapping(transform))
+    except ChartAgentError as exc:
+        if not authored:
+            raise
+        raise _EmitFailed("invalid_emit", rejected=rejected, checker=str(exc)) from exc
+    buckets = {column.name: column.bucket for column in profile.columns}
+    unknown = sorted(refs - buckets.keys())
+    if unknown and authored:
+        raise _EmitFailed(
+            "invalid_emit",
+            rejected=rejected,
+            checker=f"transform references columns the source does not have: {unknown}",
+        )
+    return {name: buckets[name] for name in sorted(refs) if name in buckets}
 
 
 def _resolve(
