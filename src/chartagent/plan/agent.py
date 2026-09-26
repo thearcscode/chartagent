@@ -36,6 +36,7 @@ from chartagent.frame.input import Backend
 from chartagent.plan.assemble import _SPEC_VERSION, assemble
 from chartagent.plan.client import ModelClient
 from chartagent.plan.emit import _EmitFailed, _with_repair
+from chartagent.plan.escalate import Quality
 from chartagent.plan.prompt import (
     DocumentPrompt,
     Step1Prompt,
@@ -119,7 +120,6 @@ def _reject(
     return _EmitFailed(reason, rejected=rejected, checker=checker)
 
 
-Quality = Literal["fast", "balanced", "best"]
 _QUALITIES: tuple[str, ...] = get_args(Quality)
 
 
