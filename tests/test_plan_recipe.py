@@ -328,7 +328,10 @@ def test_agent_resolver_is_private_and_unset_by_default() -> None:
 
     from chartagent.plan.agent import ChartAgent, create_chart_agent
 
-    assert list(inspect.signature(create_chart_agent).parameters) == ["model"]
+    assert list(inspect.signature(create_chart_agent).parameters) == [
+        "model",
+        "quality",
+    ]
     agent = ChartAgent.__new__(ChartAgent)
     ChartAgent.__init__(agent, model="test")
     assert agent._library_resolver is None

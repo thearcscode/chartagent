@@ -38,7 +38,6 @@ _SALES_BY_REGION = _FIXTURES / "sales_by_region.csv"
 _FORBIDDEN_KWARGS = (
     "sandbox",
     "outputs",
-    "quality",
     "history",
     "backend",
     "default_backend",
@@ -151,16 +150,50 @@ def test_public_surface_grows_by_exactly_two_and_chart_result_stays() -> None:
     assert not hasattr(chartagent, "ModelClient")
 
 
-def test_signatures_admit_no_p1_kwargs() -> None:
+def test_signatures_admit_only_the_quality_dial() -> None:
     factory = inspect.signature(create_chart_agent)
-    assert list(factory.parameters) == ["model"]
+    assert list(factory.parameters) == ["model", "quality"]
     assert factory.parameters["model"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert factory.parameters["quality"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert factory.parameters["quality"].default == "balanced"
     create = inspect.signature(ChartAgent.create_chart)
-    assert list(create.parameters) == ["self", "data", "instruction"]
+    assert list(create.parameters) == ["self", "data", "instruction", "quality"]
+    assert create.parameters["quality"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert create.parameters["quality"].default is None
     for name in _FORBIDDEN_KWARGS:
         assert name not in factory.parameters
         assert name not in create.parameters
         assert name not in inspect.signature(ChartAgent.__init__).parameters
+
+
+@pytest.mark.parametrize("quality", ["fast", "balanced", "best"])
+def test_quality_values_leave_behaviour_unchanged(quality: str) -> None:
+    agent = _agent()
+    calls = _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
+    result = agent.create_chart(_SALES, "revenue by quarter", quality=quality)  # type: ignore[arg-type]
+    assert result.envelope is not None
+    assert calls["model"] == 2
+
+
+@pytest.mark.parametrize("bad", ["slow", "", "FAST", 1])
+def test_unknown_per_request_quality_is_rejected_before_any_call(bad: Any) -> None:
+    agent = _agent()
+    calls = _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
+    with pytest.raises(ValueError, match="quality"):
+        agent.create_chart(_SALES, "revenue by quarter", quality=bad)
+    assert calls["model"] == 0
+
+
+def test_unknown_factory_quality_is_rejected_at_construction() -> None:
+    with pytest.raises(ValueError, match="quality"):
+        create_chart_agent(model="test", quality="slow")  # type: ignore[arg-type]
+
+
+def test_omitted_quality_falls_back_to_the_factory_default() -> None:
+    agent = create_chart_agent(model="test", quality="best")
+    assert agent._resolve_quality(None) == "best"
+    assert agent._resolve_quality("fast") == "fast"
+    assert _agent()._resolve_quality(None) == "balanced"
 
 
 def test_scripted_inexpressible_raises_after_exactly_one_call() -> None:
