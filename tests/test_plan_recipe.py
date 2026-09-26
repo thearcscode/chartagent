@@ -15,6 +15,7 @@ from pydantic_ai.messages import (
 )
 from pydantic_ai.models.function import AgentInfo, FunctionModel
 
+from chartagent.frame._generated import SemanticTypeName
 from chartagent.plan.agent import _call_failure_reason
 from chartagent.plan.client import ModelClient
 from chartagent.plan.emit import _EmitFailed
@@ -45,7 +46,7 @@ from chartagent.transform.model import Menu
 _NONCE = "aaaabbbbccccdddd"
 _SECRET_CELL = "Q1-SECRET-CELL"
 _INSTRUCTION = "Draw revenue by quarter as a bullet chart"
-_SEMANTIC = {"total": "Quantity"}
+_SEMANTIC: dict[str, SemanticTypeName] = {"total": "Quantity"}
 _TRANSFORM = Menu.model_validate(
     {
         "group_by": ["quarter"],
@@ -362,12 +363,16 @@ def test_miss_returns_authored_transform_and_document_from_one_ask() -> None:
 
 
 def test_miss_decodes_into_recipe_draft() -> None:
-    assert _miss_prompt(1).output_type is RecipeDraft
+    prompt = _miss_prompt(1)
+    assert prompt.output_type is RecipeDraft
     assert set(RecipeDraft.model_fields) == {
         "transform",
         "semantic_types",
         "document",
     }
+    assert "three keys" in prompt.system
+    assert "`semantic_types`" in prompt.system
+    assert "Quantity" in prompt.system
 
 
 def _miss_prompt(bucket: Literal[1, 2, 3, 4]) -> Any:
@@ -426,8 +431,18 @@ def test_authored_raw_sql_reading_a_foreign_relation_is_rejected() -> None:
 
 
 def test_authored_semantic_types_are_returned_from_the_draft() -> None:
-    client, _ = _client({**_MISS, "semantic_types": {"total": "Currency"}})
-    assert _author(client).semantic_types == {"total": "Currency"}
+    client, _ = _client({**_MISS, "semantic_types": {"total": "Amount"}})
+    assert _author(client).semantic_types == {"total": "Amount"}
+
+
+def test_authored_semantic_type_outside_the_closed_list_is_a_decode_failure() -> None:
+    bad = {**_MISS, "semantic_types": {"total": "Currency"}}
+    client, seen = _client(bad, _MISS)
+    assert _author(client).semantic_types == {"total": "Quantity"}
+    assert "Rejected emit" in seen["user"][1]
+    client, _ = _client(bad, bad)
+    with pytest.raises(DocumentGenerationFailed):
+        _author(client)
 
 
 def test_authored_transform_naming_a_missing_column_counts_as_decode_failure() -> None:
