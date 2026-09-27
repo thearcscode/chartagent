@@ -6,12 +6,14 @@ Internal — not in ``__all__``, not a factory kwarg. Returns a
 from a private resolver (ADR-0030 Decision 6): every ``LibraryRequest`` is
 resolved synchronously before returning, so no unresolved pin ever leaves
 this seam. With no resolver, only ``libraries=()`` is legal and a model
-naming one fails decode.
+naming one fails decode. ``patch_document`` is the repair ask on this
+same seam: one call, a full document, and ``PatchDiscarded`` rather than
+a raise when the patch cannot be kept.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -22,7 +24,7 @@ from chartagent.frame._generated import SemanticTypeName
 from chartagent.frame.input import SourceBucket
 from chartagent.plan.assemble import _source_refs
 from chartagent.plan.emit import _EmitFailed, _with_repair
-from chartagent.plan.prompt import render_document
+from chartagent.plan.prompt import REPAIRABLE_CHECKS, render_document, render_patch
 from chartagent.profile.models import Profile
 from chartagent.recipe import ChartDocument, EscapeReason, LibraryPin
 from chartagent.transform.model import Menu, RawSql, TransformSpec, transform_mapping
@@ -82,6 +84,16 @@ class DocumentGenerationFailed(Exception):
 
 class LibraryResolutionFailed(DocumentGenerationFailed):
     """The resolver raised. Terminal with no second model ask (ADR-0030 Decision 8)."""
+
+
+@dataclass(frozen=True)
+class PatchDiscarded:
+    """The patch was not applied. The caller keeps best-so-far.
+
+    Not a raise, and not the first-generation terminal ending. A malformed
+    patch, a resolver failure, ``injection_pattern`` in the failing set, or
+    a failing set with nothing repairable all end here. The first two follow
+    one ask and no retry; the last two make no call."""
 
 
 def generate_recipe(
@@ -150,6 +162,49 @@ def generate_recipe(
             source_schema=source_schema,
         )
     raise DocumentGenerationFailed("document did not decode within its retry budget")
+
+
+def patch_document(
+    profile: Profile,
+    instruction: str,
+    document: ChartDocument,
+    failures: Sequence[str],
+    *,
+    semantic_types: Mapping[str, SemanticTypeName] | None = None,
+    resolver: LibraryResolver | None = None,
+    invoke: Any,
+) -> ChartDocument | PatchDiscarded:
+    """One repair ask (ADR-0030 Decisions 11–14). The model rewrites the
+    whole document; libraries it names are resolved the same way as a first
+    generation. Off the planner's call cap — review-repair budget is the
+    caller's to spend. Returns :class:`PatchDiscarded` instead of raising."""
+    if "injection_pattern" in failures:
+        return PatchDiscarded()
+    failing = set(failures)
+    names = tuple(name for name in REPAIRABLE_CHECKS if name in failing)
+    if not names:
+        return PatchDiscarded()
+    prompt = render_patch(
+        profile,
+        instruction,
+        document,
+        names,
+        semantic_types=semantic_types,
+        resolver_set=resolver is not None,
+    )
+    try:
+        draft, _ask = invoke(prompt.output_type, prompt, counted=False)
+    except _EmitFailed:
+        return PatchDiscarded()
+    try:
+        libraries = _resolve(draft.libraries, resolver)
+    except DocumentGenerationFailed:
+        return PatchDiscarded()
+    return ChartDocument(
+        module=draft.module,
+        styles=draft.styles,
+        libraries=libraries,
+    )
 
 
 def _check_transform(
