@@ -1268,7 +1268,7 @@ def test_marks_present_fail_hops_to_a_recipe(quality: str) -> None:
     assert calls["model"] == 3
 
 
-def test_hop_does_not_rerun_step_one_and_first_call_is_uncounted() -> None:
+def test_hop_does_not_rerun_step_one() -> None:
     agent, calls = _hopping_agent(("step2", _HOP_DOC))
     agent.create_chart(_SALES, "revenue by quarter")
     assert calls["model"] == 3
