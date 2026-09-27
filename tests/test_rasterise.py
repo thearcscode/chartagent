@@ -16,6 +16,7 @@ import shutil
 import sys
 from pathlib import Path
 
+import pyarrow as pa
 import pytest
 
 from chartagent.envelope import Envelope
@@ -26,6 +27,7 @@ from chartagent.rasterise import (
     RendererAsset,
     load_vendored_renderers,
 )
+from chartagent.recipe import BoundDocument, ChartDocument
 
 _REPO = Path(__file__).resolve().parents[1]
 _VENDOR_DIR = _REPO / "tools" / "paint" / "vendor"
@@ -88,6 +90,23 @@ def test_load_vendored_renderers_rejects_a_tampered_file(tmp_path: Path) -> None
 def test_load_vendored_renderers_reports_a_missing_manifest(tmp_path: Path) -> None:
     with pytest.raises(RasterisationError, match="manifest"):
         load_vendored_renderers(tmp_path)
+
+
+def test_rasteriser_protocol_admits_a_bound_document_target() -> None:
+    doc = ChartDocument(module="function render(){}", styles=None, libraries=())
+    bound = BoundDocument(
+        document=doc, rows=pa.table({"x": [1]}), theme={}, libraries={}
+    )
+
+    class _StubRasteriser:
+        def rasterise(self, target: object, *, format: str = "png") -> bytes:
+            return b"x"
+
+    assert isinstance(_StubRasteriser(), Rasteriser)
+    # BoundDocument itself is constructible and typed as the protocol's
+    # second union member (ADR-0005 Decision 9's frozen erratum) even though
+    # nothing can rasterise one yet.
+    assert bound.document is doc
 
 
 def test_browser_rasteriser_raises_when_playwright_is_not_installed(
@@ -159,6 +178,18 @@ def test_browser_rasteriser_raises_on_excel() -> None:
     with BrowserRasteriser(renderers) as rasteriser:
         with pytest.raises(RasterisationError, match="excel"):
             rasteriser.rasterise(_envelope("excel"))
+
+
+@pytestmark_live
+def test_browser_rasteriser_raises_on_a_bound_document() -> None:
+    doc = ChartDocument(module="function render(){}", styles=None, libraries=())
+    bound = BoundDocument(
+        document=doc, rows=pa.table({"x": [1]}), theme={}, libraries={}
+    )
+    renderers = load_vendored_renderers(_VENDOR_DIR)
+    with BrowserRasteriser(renderers) as rasteriser:
+        with pytest.raises(RasterisationError, match="BoundDocument"):
+            rasteriser.rasterise(bound)
 
 
 @pytestmark_live

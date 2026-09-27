@@ -37,6 +37,7 @@ from chartagent._flint import flint_bundle
 from chartagent.envelope import Envelope
 from chartagent.errors import RasterisationError, RasteriserUnavailableError
 from chartagent.frame.input import Backend
+from chartagent.recipe import BoundDocument
 
 _EXTRA = "chartagent[review]"
 
@@ -51,16 +52,21 @@ _RASTERISABLE: tuple[Backend, ...] = ("vegalite", "echarts", "chartjs", "plotly"
 
 @runtime_checkable
 class Rasteriser(Protocol):
-    """Envelope in, PNG bytes out. The implementer owns compile-then-render.
+    """Envelope (or a custom-rail ``BoundDocument``) in, PNG bytes out. The
+    implementer owns compile-then-render.
 
-    ``format`` is fixed at ``"png"`` for v1 (ADR-0003 Decision 2). Raises
+    ``target``'s union is frozen at ADR-0005 Decision 9 as amended by
+    ADR-0017 Decision 6 — ``Envelope | BoundDocument`` — even though nothing
+    in the library constructs a ``BoundDocument`` yet (the custom-rail
+    rendering path is a later ticket's). ``format`` is fixed at ``"png"``
+    for v1 (ADR-0003 Decision 2). Raises
     :class:`~chartagent.errors.RasterisationError` on a failed render; never
     returns bytes for a chart it did not actually draw (ADR-0003's stated
     hazard — bytes without an exception is not proof of a render).
     """
 
     def rasterise(
-        self, target: Envelope, *, format: Literal["png"] = "png"
+        self, target: Envelope | BoundDocument, *, format: Literal["png"] = "png"
     ) -> bytes: ...
 
 
@@ -287,7 +293,16 @@ class BrowserRasteriser:
     def __exit__(self, *exc_info: object) -> None:
         self.close()
 
-    def rasterise(self, target: Envelope, *, format: Literal["png"] = "png") -> bytes:
+    def rasterise(
+        self, target: Envelope | BoundDocument, *, format: Literal["png"] = "png"
+    ) -> bytes:
+        if isinstance(target, BoundDocument):
+            # The custom-rail rendering path (build_shell, the sandboxed
+            # iframe) is not built yet (ADR-0017 Decisions 10-12) — nothing
+            # produces a BoundDocument today, so nothing here can paint one.
+            raise RasterisationError(
+                "BoundDocument rasterisation is not yet implemented"
+            )
         backend = target.backend
         if backend not in _RASTERISABLE:
             raise RasterisationError(

@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any
+from typing import Any, Literal
 
 import pytest
 from pydantic_ai.messages import ModelResponse, ToolCallPart
@@ -26,6 +26,7 @@ from chartagent.profile.models import (
     TopValue,
 )
 from chartagent.rasterise import Rasteriser
+from chartagent.recipe import BoundDocument
 from chartagent.review import (
     _BASELINE_APPLICABLE,
     _BASELINE_EXEMPT,
@@ -298,7 +299,10 @@ class _FakeRasteriser:
         self.png = png
         self.calls: list[Envelope] = []
 
-    def rasterise(self, target: Envelope, *, format: str = "png") -> bytes:
+    def rasterise(
+        self, target: Envelope | BoundDocument, *, format: Literal["png"] = "png"
+    ) -> bytes:
+        assert isinstance(target, Envelope)
         self.calls.append(target)
         return self.png
 
