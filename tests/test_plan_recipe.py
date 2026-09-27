@@ -469,8 +469,8 @@ def test_miss_first_call_is_uncounted_and_the_retry_is_counted() -> None:
     assert uncounted == [RecipeDraft]
 
 
-def test_supplied_transform_first_ask_is_uncounted_and_the_retry_is_counted() -> None:
+def test_supplied_transform_asks_are_all_counted() -> None:
     uncounted: list[Any] = []
     client, _ = _client({"module": 3}, _DOC)
     _generated(client, invoke=_invoke(client, uncounted))
-    assert len(uncounted) == 1
+    assert uncounted == []

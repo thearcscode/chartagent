@@ -324,6 +324,10 @@ class ChartAgent:
                 invoke=invoke,
             )
         except (DocumentGenerationFailed, PlannerFailureError):
+            # Codegen and resolution exhausted are DocumentGenerationFailed
+            # (LibraryResolutionFailed is that type). A counted retry that
+            # hits the 5-call cap is PlannerFailureError. Anything else,
+            # including a transport error, is not this fallback.
             return None
         return ChartResult(
             recipe=ChartRecipe(
