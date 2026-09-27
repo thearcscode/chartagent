@@ -23,6 +23,7 @@ from chartagent.frame.capability import properties_model
 from chartagent.frame.input import Backend
 from chartagent.plan.schema import Fragment
 from chartagent.profile.models import Profile, untrusted_paths
+from chartagent.recipe import ChartDocument
 from chartagent.transform.drift import referenced_source_columns
 from chartagent.transform.engine import open_connection
 from chartagent.transform.model import EXPR_KINDS, TRANSFORM_SLOTS, transform_mapping
@@ -268,6 +269,86 @@ def _document_system(resolver_set: bool, author_bucket: int | None) -> str:
         LIBRARY_RULE=_LIBRARY_RULE_RESOLVER if resolver_set else _LIBRARY_RULE,
         UNTRUSTED_PATHS=", ".join(untrusted_paths()),
     )
+
+
+# Custom-rail repair payload (ADR-0030 Decision 11). Host-authored, keyed by
+# the closed name, in the system prompt's trust class. ``injection_pattern``
+# is absent on purpose: it never triggers a patch. Order is the order a
+# round's names are listed.
+_PATCH_HINTS: dict[str, str] = {
+    "colorblind_safe_palette": (
+        "The palette is not safe for a colour-blind reader. Distinguish series "
+        "without relying on hue alone, using the theme's CSS custom properties."
+    ),
+    "data_truthfulness": (
+        "The drawn marks do not match the bound rows. Plot the values in `data` "
+        "and nothing else."
+    ),
+    "marks_present": (
+        "The picture shows chart chrome and no data marks. Draw the marks for "
+        "the rows in `data`."
+    ),
+    "axis_labels_present": "Both axes need a readable label.",
+    "legend_presence": "A legend must name each series the chart draws.",
+    "label_overlap": (
+        "Text and marks overlap. Separate them so every label can be read."
+    ),
+    "bar_chart_y_axis_baseline": (
+        "Bars must start at a zero baseline, not a truncated axis."
+    ),
+}
+
+REPAIRABLE_CHECKS: tuple[str, ...] = tuple(_PATCH_HINTS)
+
+
+def render_patch(
+    profile: Profile,
+    instruction: str,
+    document: ChartDocument,
+    failures: Sequence[str],
+    *,
+    semantic_types: Mapping[str, SemanticTypeName] | None,
+    resolver_set: bool = False,
+    nonce: str | None = None,
+) -> DocumentPrompt:
+    """The patch prompt. One full ``DocumentDraft`` — never a diff — plus
+    every failing check's static hint in the system prompt (ADR-0030
+    Decisions 5 and 11). Column names and ``semantic_types`` only, through
+    the same fence as first generation."""
+    from chartagent.plan.recipe import DocumentDraft
+
+    payload: dict[str, Any] = {
+        "columns": [column.name for column in profile.columns],
+        "semantic_types": dict(semantic_types or {}),
+    }
+    libraries = json.dumps(
+        [
+            {"name": pin.name, "version": pin.version}
+            for pin in document.libraries
+        ],
+        separators=(",", ":"),
+    )
+    styles = "null" if document.styles is None else document.styles
+    hints = "\n".join(f"- `{name}`: {_PATCH_HINTS[name]}" for name in failures)
+    system = (
+        f"{_document_system(resolver_set, None)}\n\n"
+        "## Repair\n"
+        "Rewrite the current document in the user turn. Emit the whole "
+        "document again — `module`, `styles` and `libraries` — never a diff.\n"
+        "These checks failed. Fix every one. Each hint is the host's, and it "
+        "is the only guidance for that check:\n"
+        f"{hints}"
+    )
+    user = "\n\n".join(
+        (
+            "Current document, to rewrite in full:",
+            f"module:\n{document.module}",
+            f"styles:\n{styles}",
+            f"libraries:\n{libraries}",
+            _user_turn(_nonce(nonce), payload, instruction),
+        )
+    )
+    return DocumentPrompt(system=system, user=user, output_type=DocumentDraft)
 
 
 def render_document(

@@ -51,6 +51,8 @@ def test_recipe_carrier_names_are_exported_together() -> None:
 def test_generate_recipe_names_stay_internal() -> None:
     for name in (
         "generate_recipe",
+        "patch_document",
+        "PatchDiscarded",
         "LibraryRequest",
         "DocumentDraft",
     ):

@@ -26,8 +26,10 @@ from chartagent.plan.recipe import (
     GeneratedRecipe,
     LibraryRequest,
     LibraryResolutionFailed,
+    PatchDiscarded,
     RecipeDraft,
     generate_recipe,
+    patch_document,
 )
 from chartagent.profile.models import (
     NumberColumn,
@@ -476,3 +478,189 @@ def test_supplied_transform_asks_are_all_counted() -> None:
     client, _ = _client({"module": 3}, _DOC)
     _generated(client, invoke=_invoke(client, uncounted))
     assert uncounted == []
+
+
+# --- patch prompt (#187, ADR-0030 Decisions 11–14) ---
+
+# Host-authored hints, quoted here as the independent wording the prompt must
+# carry. Keyed by check name; never a critic note.
+_PATCH_HINTS = {
+    "colorblind_safe_palette": (
+        "The palette is not safe for a colour-blind reader. Distinguish series "
+        "without relying on hue alone, using the theme's CSS custom properties."
+    ),
+    "data_truthfulness": (
+        "The drawn marks do not match the bound rows. Plot the values in `data` "
+        "and nothing else."
+    ),
+    "marks_present": (
+        "The picture shows chart chrome and no data marks. Draw the marks for "
+        "the rows in `data`."
+    ),
+    "axis_labels_present": "Both axes need a readable label.",
+    "legend_presence": "A legend must name each series the chart draws.",
+    "label_overlap": (
+        "Text and marks overlap. Separate them so every label can be read."
+    ),
+    "bar_chart_y_axis_baseline": (
+        "Bars must start at a zero baseline, not a truncated axis."
+    ),
+}
+_ALL_REPAIRABLE = tuple(_PATCH_HINTS)
+_CURRENT = ChartDocument(
+    module=_MODULE,
+    styles=".keep{}",
+    libraries=(LibraryPin("d3", "7.9.0", "sha-d3"),),
+)
+
+
+def test_one_patch_call_names_every_failing_check_with_a_static_hint() -> None:
+    uncounted: list[Any] = []
+    client, seen = _client({"module": _MODULE, "styles": ".b{}", "libraries": []})
+    result = patch_document(
+        _PROFILE,
+        _INSTRUCTION,
+        _CURRENT,
+        ("label_overlap", "marks_present", *_ALL_REPAIRABLE),
+        semantic_types=_SEMANTIC,
+        resolver=_resolver([]),
+        invoke=_invoke(client, uncounted),
+    )
+    assert result == ChartDocument(
+        module=_MODULE, styles=".b{}", libraries=(), contract_version=1
+    )
+    assert len(seen["user"]) == 1
+    assert uncounted == [DocumentDraft]
+    system, user = seen["system"][0], seen["user"][0]
+    for name, hint in _PATCH_HINTS.items():
+        assert name in system
+        assert hint in system
+        assert hint not in user
+    assert _MODULE in user and ".keep{}" in user
+    assert "d3" in user and "7.9.0" in user
+    assert "sha-d3" not in system + user
+    assert _SECRET_CELL not in system + user
+    assert "4242" not in system + user
+    assert "sample_rows" not in user
+
+
+def test_injection_pattern_in_the_failing_set_makes_no_patch_call() -> None:
+    client, seen = _client({"module": _MODULE, "libraries": []})
+    result = patch_document(
+        _PROFILE,
+        _INSTRUCTION,
+        _CURRENT,
+        ("marks_present", "injection_pattern", "axis_labels_present"),
+        semantic_types=_SEMANTIC,
+        invoke=_invoke(client),
+    )
+    assert isinstance(result, PatchDiscarded)
+    assert seen["user"] == []
+    assert seen["system"] == []
+
+
+def test_malformed_patch_is_discarded_without_a_retry() -> None:
+    client, seen = _client(
+        {"module": 3},
+        {"module": _MODULE, "libraries": []},
+    )
+    result = patch_document(
+        _PROFILE,
+        _INSTRUCTION,
+        _CURRENT,
+        ("marks_present",),
+        semantic_types=_SEMANTIC,
+        invoke=_invoke(client),
+    )
+    assert isinstance(result, PatchDiscarded)
+    assert len(seen["user"]) == 1
+
+
+def test_resolver_failure_on_a_patch_discards_it() -> None:
+    def broken(name: str, version: str) -> tuple[str, bytes]:
+        raise TimeoutError("registry down")
+
+    client, seen = _client(
+        {"module": _MODULE, "libraries": [_D3]},
+        {"module": _MODULE, "libraries": []},
+    )
+    result = patch_document(
+        _PROFILE,
+        _INSTRUCTION,
+        _CURRENT,
+        ("legend_presence",),
+        semantic_types=_SEMANTIC,
+        resolver=broken,
+        invoke=_invoke(client),
+    )
+    assert isinstance(result, PatchDiscarded)
+    assert len(seen["user"]) == 1
+
+
+def test_a_patch_reresolves_the_libraries_it_names() -> None:
+    calls: list[tuple[str, str]] = []
+    client, _ = _client({"module": _MODULE, "libraries": [_TOPO]})
+    changed = patch_document(
+        _PROFILE,
+        _INSTRUCTION,
+        _CURRENT,
+        ("data_truthfulness",),
+        semantic_types=_SEMANTIC,
+        resolver=_resolver(calls),
+        invoke=_invoke(client),
+    )
+    assert changed == ChartDocument(
+        module=_MODULE,
+        styles=None,
+        libraries=(LibraryPin("topojson", "3.0.2", "sha-topojson"),),
+        contract_version=1,
+    )
+    assert calls == [("topojson", "3.0.2")]
+
+    calls.clear()
+    client, _ = _client({"module": _MODULE, "styles": ".keep{}", "libraries": []})
+    dropped = patch_document(
+        _PROFILE,
+        _INSTRUCTION,
+        _CURRENT,
+        ("data_truthfulness",),
+        semantic_types=_SEMANTIC,
+        resolver=_resolver(calls),
+        invoke=_invoke(client),
+    )
+    assert dropped == ChartDocument(
+        module=_MODULE, styles=".keep{}", libraries=(), contract_version=1
+    )
+    assert calls == []
+
+
+def test_named_library_on_a_patch_without_a_resolver_is_discarded() -> None:
+    client, seen = _client(
+        {"module": _MODULE, "libraries": [_D3]},
+        {"module": _MODULE, "libraries": []},
+    )
+    result = patch_document(
+        _PROFILE,
+        _INSTRUCTION,
+        _CURRENT,
+        ("marks_present",),
+        semantic_types=_SEMANTIC,
+        invoke=_invoke(client),
+    )
+    assert isinstance(result, PatchDiscarded)
+    assert len(seen["user"]) == 1
+    assert "Only `libraries=()` is legal" in seen["system"][0]
+
+
+def test_a_failing_set_with_nothing_repairable_makes_no_patch_call() -> None:
+    client, seen = _client({"module": _MODULE, "libraries": []})
+    result = patch_document(
+        _PROFILE,
+        _INSTRUCTION,
+        _CURRENT,
+        ("painted",),
+        semantic_types=_SEMANTIC,
+        invoke=_invoke(client),
+    )
+    assert isinstance(result, PatchDiscarded)
+    assert seen["user"] == []
