@@ -114,9 +114,7 @@ def generate_recipe(
             repair,
         )
         try:
-            draft, _ask = invoke(
-                prompt.output_type, prompt, counted=not (authoring and attempt == 0)
-            )
+            draft, _ask = invoke(prompt.output_type, prompt, counted=attempt != 0)
             document = draft.document if authoring else draft
             if document.libraries and resolver is None:
                 raise _EmitFailed(

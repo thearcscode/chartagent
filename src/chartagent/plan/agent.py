@@ -13,6 +13,9 @@ per-ask journal (the corpus recorder) installs an observer at
 ``agent._client``. Left unset, behaviour is unchanged.
 ``ChartAgent._library_resolver`` (ADR-0030 Decision 6) follows the same
 convention: unset by default, not in ``__all__``, not a factory kwarg.
+``ChartAgent._reviewer`` (ADR-0027 Decision 6, issue #192) is the review seam
+the hop reads: it defaults to ``tier1_review``, which cannot fail
+``marks_present``, so the hop is dormant until a Flint review lands (#201).
 """
 
 from __future__ import annotations
@@ -32,11 +35,11 @@ from chartagent.errors import (
     SpecVocabularyError,
     UnanswerableInstructionError,
 )
-from chartagent.frame.input import Backend
+from chartagent.frame.input import Backend, InputFrame
 from chartagent.plan.assemble import _SPEC_VERSION, assemble
 from chartagent.plan.client import ModelClient
 from chartagent.plan.emit import _EmitFailed, _with_repair
-from chartagent.plan.escalate import Quality
+from chartagent.plan.escalate import EscalationDecision, Quality, decide_escalation
 from chartagent.plan.prompt import (
     DocumentPrompt,
     Step1Prompt,
@@ -55,7 +58,7 @@ from chartagent.profile.models import Profile
 from chartagent.profile.source import profile_source
 from chartagent.recipe import ChartRecipe, EscapeReason
 from chartagent.result import ChartResult
-from chartagent.review import tier1_review
+from chartagent.review import ReviewReport, tier1_review
 
 _STEP1_RETRIES = 1
 _STEP2_RETRIES = 2
@@ -88,6 +91,11 @@ class Attempt:
 
 
 AttemptObserver = Callable[[Attempt], None]
+Reviewer = Callable[[Profile, Backend], ReviewReport]
+
+
+def _tier1(profile: Profile, backend: Backend) -> ReviewReport:
+    return tier1_review(profile, backend=backend)
 
 
 def _dump_emit(value: Any) -> Any:
@@ -147,6 +155,7 @@ class ChartAgent:
         self._client = ModelClient(model)
         self._attempt_observer: AttemptObserver | None = None
         self._library_resolver: LibraryResolver | None = None
+        self._reviewer: Reviewer = _tier1
 
     def _resolve_quality(self, quality: Quality | None) -> Quality:
         return self._quality if quality is None else _check_quality(quality)
@@ -278,13 +287,54 @@ class ChartAgent:
                 )
                 continue
             observe(2, step2_ask, "ok")
-            return ChartResult(
-                envelope=envelope,
-                review=tier1_review(profile, backend=backend),
-            )
+            review = self._reviewer(profile, backend)
+            decision = decide_escalation(review, frame, quality=resolved_quality)
+            if decision is not None:
+                hopped = self._hop(profile, instruction, decision, frame, invoke)
+                if hopped is not None:
+                    return hopped
+            return ChartResult(envelope=envelope, review=review)
         raise PlannerFailureError(
             "step 1 did not emit a usable fragment",
             reason=last or "invalid_emit",
+        )
+
+    def _hop(
+        self,
+        profile: Profile,
+        instruction: str,
+        decision: EscalationDecision,
+        frame: InputFrame,
+        invoke: Any,
+    ) -> ChartResult | None:
+        """Bucket 4: the failed frame's transform goes to ``generate_recipe``;
+        step 1 is not re-run and the ask spends no review-repair budget. There
+        is no second hop: the recipe is never a frame. ``None`` means the seam
+        failed terminally and the caller returns the Flint result unchanged.
+        """
+        reason = EscapeReason(bucket=4)
+        try:
+            generated = generate_recipe(
+                profile,
+                instruction,
+                reason,
+                transform=decision.transform,
+                semantic_types=frame.semantic_types,
+                resolver=self._library_resolver,
+                invoke=invoke,
+            )
+        except (DocumentGenerationFailed, PlannerFailureError):
+            return None
+        return ChartResult(
+            recipe=ChartRecipe(
+                spec_version=_SPEC_VERSION,
+                transform=generated.transform,
+                source_schema=decision.source_schema,
+                escape_reason=reason,
+                theme_spec=decision.theme_spec,
+                document=generated.document,
+            ),
+            review=tier1_review(profile, backend=None),
         )
 
     def _author_miss(
