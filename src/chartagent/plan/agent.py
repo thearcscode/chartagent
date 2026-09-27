@@ -14,8 +14,11 @@ per-ask journal (the corpus recorder) installs an observer at
 ``ChartAgent._library_resolver`` (ADR-0030 Decision 6) follows the same
 convention: unset by default, not in ``__all__``, not a factory kwarg.
 ``ChartAgent._reviewer`` (ADR-0027 Decision 6, issue #192) is the review seam
-the hop reads: it defaults to ``tier1_review``, which cannot fail
-``marks_present``, so the hop is dormant until a Flint review lands (#201).
+the hop reads. It runs ``flint_review`` (#201): Tier 1, then — only when
+both ``rasteriser=`` and ``critique_model=`` were supplied at construction —
+a Flint critique that can actually fail ``marks_present`` and wake the hop.
+Neither kwarg has a default; unset, Tier 2 stays ``unavailable`` and the hop
+stays dormant, exactly as before #201.
 """
 
 from __future__ import annotations
@@ -25,6 +28,7 @@ from dataclasses import dataclass
 from typing import Any, Literal, cast, get_args
 
 from chartagent.bind import DataSource, bind
+from chartagent.envelope import Envelope
 from chartagent.errors import (
     ChartAgentError,
     InexpressibleRequestError,
@@ -56,9 +60,10 @@ from chartagent.plan.schema import Fragment, Inexpressible, Step1Result, Unanswe
 from chartagent.plan.select import select_backend
 from chartagent.profile.models import Profile
 from chartagent.profile.source import profile_source
+from chartagent.rasterise import Rasteriser
 from chartagent.recipe import ChartRecipe, EscapeReason
 from chartagent.result import ChartResult
-from chartagent.review import ReviewReport, tier1_review
+from chartagent.review import ReviewReport, flint_review, tier1_review
 
 _STEP1_RETRIES = 1
 _STEP2_RETRIES = 2
@@ -91,11 +96,7 @@ class Attempt:
 
 
 AttemptObserver = Callable[[Attempt], None]
-Reviewer = Callable[[Profile, Backend], ReviewReport]
-
-
-def _tier1(profile: Profile, backend: Backend) -> ReviewReport:
-    return tier1_review(profile, backend=backend)
+Reviewer = Callable[[Profile, InputFrame, Envelope, Backend, str], ReviewReport]
 
 
 def _dump_emit(value: Any) -> Any:
@@ -137,25 +138,72 @@ def _check_quality(quality: object) -> Quality:
     return cast(Quality, quality)
 
 
-def create_chart_agent(*, model: str, quality: Quality = "balanced") -> ChartAgent:
+def create_chart_agent(
+    *,
+    model: str,
+    quality: Quality = "balanced",
+    rasteriser: Rasteriser | None = None,
+    critique_model: str | None = None,
+) -> ChartAgent:
     """Factory. Raises at construction if the model-vendor extra is missing.
 
     ``quality`` is the default for requests that omit it (ADR-0027
     Decision 8); ``create_chart(quality=...)`` overrides it per request.
+    ``rasteriser=`` and ``critique_model=`` are factory-only and
+    construction-checked (ADR-0027 Decision 8, ADR-0026 Decision 9): a
+    ``critique_model`` naming an extra that is not installed raises
+    :class:`~chartagent.errors.ModelClientUnavailableError` here, exactly
+    like ``model``. Left unset, Tier 2 stays ``unavailable`` — a
+    ``rasteriser`` alone still serves Tier 1's image checks (#201 does not
+    build those; see ``chartagent.review``'s module docstring).
     """
-    return ChartAgent(model=model, quality=quality)
+    return ChartAgent(
+        model=model,
+        quality=quality,
+        rasteriser=rasteriser,
+        critique_model=critique_model,
+    )
 
 
 class ChartAgent:
     """Holds the model string and one client. No per-request mutable state."""
 
-    def __init__(self, *, model: str, quality: Quality = "balanced") -> None:
+    def __init__(
+        self,
+        *,
+        model: str,
+        quality: Quality = "balanced",
+        rasteriser: Rasteriser | None = None,
+        critique_model: str | None = None,
+    ) -> None:
         self._model = model
         self._quality = _check_quality(quality)
         self._client = ModelClient(model)
         self._attempt_observer: AttemptObserver | None = None
         self._library_resolver: LibraryResolver | None = None
-        self._reviewer: Reviewer = _tier1
+        self._rasteriser = rasteriser
+        self._critique_client = (
+            None if critique_model is None else ModelClient(critique_model)
+        )
+        self._reviewer: Reviewer = self._flint_review
+
+    def _flint_review(
+        self,
+        profile: Profile,
+        frame: InputFrame,
+        envelope: Envelope,
+        backend: Backend,
+        instruction: str,
+    ) -> ReviewReport:
+        return flint_review(
+            profile,
+            frame,
+            envelope,
+            backend,
+            instruction,
+            rasteriser=self._rasteriser,
+            critique_client=self._critique_client,
+        )
 
     def _resolve_quality(self, quality: Quality | None) -> Quality:
         return self._quality if quality is None else _check_quality(quality)
@@ -287,7 +335,7 @@ class ChartAgent:
                 )
                 continue
             observe(2, step2_ask, "ok")
-            review = self._reviewer(profile, backend)
+            review = self._reviewer(profile, frame, envelope, backend, instruction)
             decision = decide_escalation(review, frame, quality=resolved_quality)
             if decision is not None:
                 hopped = self._hop(profile, instruction, decision, frame, invoke)

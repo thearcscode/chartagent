@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import secrets
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
 from importlib.resources import files
@@ -173,6 +173,33 @@ def render_step2(
         user=f"{fragment_json}\n\n{scoped}",
         output_type=properties_model(backend, fragment.chart_type),
     )
+
+
+def render_critique(
+    chart_type: str,
+    backend: Backend,
+    encodings: Mapping[str, str],
+    row_count: int,
+    instruction: str,
+    items: Sequence[str],
+    *,
+    nonce: str | None = None,
+) -> str:
+    """The Tier-2 critic's user turn (ADR-0026 Decision 7): ``chartType``,
+    the backend, the encodings, ``row_count`` and the applicable items — all
+    ours except the encodings' field names, which are untrusted and so ride
+    inside the same one nonce-fenced block every other untrusted payload
+    uses. The caller's instruction stays outside it (ADR-0022 Decision 2).
+    Never row cells, never the custom rail's code."""
+    nonce_value = _nonce(nonce)
+    payload: dict[str, Any] = {
+        "chart_type": chart_type,
+        "backend": backend,
+        "encodings": dict(encodings),
+        "row_count": row_count,
+        "applicable_items": list(items),
+    }
+    return _user_turn(nonce_value, payload, instruction)
 
 
 _LIBRARY_RULE = (

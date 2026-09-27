@@ -285,6 +285,9 @@ anthropic = [
 openai = [
     { name = "pydantic-ai-slim", extra = ["openai"] },
 ]
+review = [
+    { name = "playwright" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -298,13 +301,14 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "duckdb", specifier = ">=1" },
+    { name = "playwright", marker = "extra == 'review'", specifier = ">=1.47" },
     { name = "pyarrow", specifier = ">=14" },
     { name = "pydantic", specifier = ">=2" },
     { name = "pydantic-ai-slim", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=2.40.0" },
     { name = "pydantic-ai-slim", extras = ["openai"], marker = "extra == 'openai'", specifier = ">=2.40.0" },
     { name = "tzdata", marker = "sys_platform == 'win32'", specifier = ">=2024" },
 ]
-provides-extras = ["anthropic", "openai"]
+provides-extras = ["anthropic", "openai", "review"]
 
 [package.metadata.requires-dev]
 dev = [

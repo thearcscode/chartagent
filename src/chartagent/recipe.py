@@ -10,8 +10,11 @@ has no wire format: nothing compiles it, and what reaches the browser is
 from __future__ import annotations
 
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
+
+import pyarrow as pa
 
 from chartagent.bind import DataSource, _run_source_stage
 from chartagent.envelope import Advisory
@@ -47,6 +50,29 @@ class ChartDocument:
     styles: str | None
     libraries: tuple[LibraryPin, ...]
     contract_version: int = _CONTRACT_VERSION
+
+
+@dataclass(frozen=True)
+class BoundDocument:
+    """A chart document plus everything it needs to paint (ADR-0017
+    Decision 8) — the custom rail's paintable counterpart to
+    ``ChartDocument``, the same split ``Envelope`` embodies for the
+    deterministic rail, and the second member of ``Rasteriser``'s
+    ``Envelope | BoundDocument`` union (ADR-0005 Decision 9's erratum).
+
+    Reserved here so that union type-checks; nothing in the library
+    constructs one yet. ``bind_recipe`` deliberately returns ``BoundRecipe``,
+    not this (ADR-0018 Decision 5) — assembling a ``BoundDocument`` needs
+    ``build_shell``'s verified library bytes, which is the still-unbuilt
+    custom-rail rendering path (ADR-0017 Decisions 10-12), a later ticket's
+    work. Not in ``__all__`` until that path, ``build_shell`` and its
+    siblings land together (ADR-0005 Decision 12's erratum names them as one
+    group)."""
+
+    document: ChartDocument
+    rows: pa.Table
+    theme: Mapping[str, str]
+    libraries: Mapping[str, bytes]
 
 
 @dataclass(frozen=True)

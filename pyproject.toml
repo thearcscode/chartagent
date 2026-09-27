@@ -37,6 +37,9 @@ anthropic = [
 openai = [
     "pydantic-ai-slim[openai]>=2.40.0",
 ]
+review = [
+    "playwright>=1.47",
+]
 
 [dependency-groups]
 dev = [

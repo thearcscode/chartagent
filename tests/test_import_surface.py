@@ -15,6 +15,7 @@ _FORBIDDEN = (
     "pydantic_ai",
     "anthropic",
     "openai",
+    "playwright",
 )
 
 
