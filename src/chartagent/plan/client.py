@@ -1,6 +1,10 @@
 """The model client. pydantic-ai is imported here, inside the constructor.
 
-One call: an output type, a system prompt, a user turn. The client's
+One call: an output type, a system prompt, a user turn. ``user_turn`` widens
+to ``str | Sequence[Any]`` so the critic's leaf call (ADR-0026 Decision 8)
+can hand a PNG alongside text — pydantic-ai's own ``UserContent`` union
+already accepts image parts; the type stays ``Any`` here rather than
+importing pydantic-ai types at module level. The client's
 retry budget is zero — ADR-0013 Decision 6's mean-calls-per-chart and
 ADR-0019 Decision 6's per-step retry rate are only honest if one layer
 counts, and that layer is not this one.
@@ -13,6 +17,7 @@ not :class:`~chartagent.errors.ChartAgentError` subclasses, so
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from typing import Any, TypeVar, cast
 
 from chartagent.errors import ModelClientUnavailableError
@@ -63,7 +68,12 @@ class ModelClient:
         self._Agent = Agent
         self._settings = settings
 
-    def run(self, output_type: type[T], system_prompt: str, user_turn: str) -> T:
+    def run(
+        self,
+        output_type: type[T],
+        system_prompt: str,
+        user_turn: str | Sequence[Any],
+    ) -> T:
         from pydantic_ai import capture_run_messages
 
         agent = self._Agent(

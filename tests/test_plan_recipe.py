@@ -331,6 +331,8 @@ def test_agent_resolver_is_private_and_unset_by_default() -> None:
     assert list(inspect.signature(create_chart_agent).parameters) == [
         "model",
         "quality",
+        "rasteriser",
+        "critique_model",
     ]
     agent = ChartAgent.__new__(ChartAgent)
     ChartAgent.__init__(agent, model="test")

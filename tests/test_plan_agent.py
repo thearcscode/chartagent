@@ -22,6 +22,7 @@ from chartagent import ChartAgent, ChartResult, create_chart_agent
 from chartagent.errors import (
     BackendCapabilityError,
     InexpressibleRequestError,
+    ModelClientUnavailableError,
     PlannerFailureError,
     SchemaDriftError,
     SpecShapeError,
@@ -151,12 +152,23 @@ def test_public_surface_grows_by_exactly_two_and_chart_result_stays() -> None:
     assert not hasattr(chartagent, "ModelClient")
 
 
-def test_signatures_admit_only_the_quality_dial() -> None:
+def test_signatures_admit_only_the_documented_kwargs() -> None:
+    # ADR-0027 Decision 8: rasteriser= / critique_model= are factory-only,
+    # alongside model= / quality=; create_chart keeps only the quality dial.
     factory = inspect.signature(create_chart_agent)
-    assert list(factory.parameters) == ["model", "quality"]
+    assert list(factory.parameters) == [
+        "model",
+        "quality",
+        "rasteriser",
+        "critique_model",
+    ]
     assert factory.parameters["model"].kind is inspect.Parameter.KEYWORD_ONLY
     assert factory.parameters["quality"].kind is inspect.Parameter.KEYWORD_ONLY
     assert factory.parameters["quality"].default == "balanced"
+    assert factory.parameters["rasteriser"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert factory.parameters["rasteriser"].default is None
+    assert factory.parameters["critique_model"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert factory.parameters["critique_model"].default is None
     create = inspect.signature(ChartAgent.create_chart)
     assert list(create.parameters) == ["self", "data", "instruction", "quality"]
     assert create.parameters["quality"].kind is inspect.Parameter.KEYWORD_ONLY
@@ -1235,7 +1247,9 @@ _HOP_DOC: dict[str, Any] = {
 }
 
 
-def _marks_missing(profile: Any, backend: Any) -> ReviewReport:
+def _marks_missing(
+    profile: Any, frame: Any, envelope: Any, backend: Any, instruction: Any
+) -> ReviewReport:
     return ReviewReport(
         tiers_run=(1, 2),
         tiers_skipped={},
@@ -1322,3 +1336,63 @@ def test_default_review_never_hops() -> None:
     agent = _agent()
     _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
     assert agent.create_chart(_SALES, "revenue by quarter").envelope is not None
+
+
+# --- #201: rasteriser= / critique_model= construction and real Tier-2 wiring -
+
+
+class _FakeRasteriser:
+    def rasterise(self, target: Any, *, format: str = "png") -> bytes:
+        return b"chrome-but-no-marks"
+
+
+def test_critique_model_is_construction_checked_like_model() -> None:
+    with pytest.raises(ModelClientUnavailableError) as caught:
+        create_chart_agent(
+            model="test", critique_model="groq:llama-3.3-70b-versatile"
+        )
+    assert caught.value.extra == "pydantic-ai-slim[groq]"
+
+
+def test_unset_critique_model_leaves_tier_two_unavailable() -> None:
+    agent = _agent()
+    calls = _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert result.envelope is not None
+    assert result.review is not None
+    assert result.review.tiers_skipped == {2: "unavailable"}
+    assert calls["model"] == 2
+
+
+def _critique_function_model(args: dict[str, Any]) -> FunctionModel:
+    def fn(_messages: object, info: AgentInfo) -> ModelResponse:
+        name = info.output_tools[0].name
+        return ModelResponse(parts=[ToolCallPart(tool_name=name, args=args)])
+
+    return FunctionModel(fn)
+
+
+@pytest.mark.parametrize("quality", ["balanced", "best"])
+def test_a_real_flint_review_marks_present_fail_hops_through_create_chart(
+    quality: str,
+) -> None:
+    """The full stack, not the ``_marks_missing`` stand-in: a real
+    ``flint_review`` call, through a fake ``Rasteriser`` and a scripted
+    critic, actually produces the hop (#201)."""
+    agent = create_chart_agent(
+        model="test", critique_model="test", rasteriser=_FakeRasteriser()
+    )
+    agent._critique_client._model = _critique_function_model(  # type: ignore[union-attr]
+        {
+            "marks_present": "fail",
+            "axis_labels_present": "pass",
+            "label_overlap": "pass",
+            "bar_chart_y_axis_baseline": "pass",
+            "note": "chrome painted, no bars",
+        }
+    )
+    _install(agent, ("Fragment", _FRAGMENT), ("step2", {}), ("step2", _HOP_DOC))
+    result = agent.create_chart(_SALES, "revenue by quarter", quality=quality)  # type: ignore[arg-type]
+    assert result.envelope is None
+    assert result.recipe is not None
+    assert result.recipe.escape_reason.bucket == 4

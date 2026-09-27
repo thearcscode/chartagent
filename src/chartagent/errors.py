@@ -206,3 +206,25 @@ class ModelClientUnavailableError(ChartAgentError):
     def __init__(self, message: str, *, extra: str) -> None:
         super().__init__(message)
         self.extra = extra
+
+
+class RasteriserUnavailableError(ChartAgentError):
+    """No rasteriser installed (ADR-0003 Decision 7, ADR-0005 Decision 9).
+
+    ``extra`` names the pip extra to install. Distinct from a missing
+    ``critique_model``, which also reports Tier 2 ``unavailable`` but never
+    raises this — the caller simply did not ask for a critic.
+    """
+
+    def __init__(self, message: str, *, extra: str) -> None:
+        super().__init__(message)
+        self.extra = extra
+
+
+class RasterisationError(ChartAgentError):
+    """A render attempt failed — a compiled spec a renderer rejected, a
+    render that raised, or a backend with no vendored renderer.
+
+    Never raised for Excel: that skip is the gate's to decide before ever
+    calling a ``Rasteriser`` (ADR-0003 Decision 7).
+    """
