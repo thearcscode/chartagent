@@ -322,10 +322,7 @@ def render_patch(
         "semantic_types": dict(semantic_types or {}),
     }
     libraries = json.dumps(
-        [
-            {"name": pin.name, "version": pin.version}
-            for pin in document.libraries
-        ],
+        [{"name": pin.name, "version": pin.version} for pin in document.libraries],
         separators=(",", ":"),
     )
     styles = "null" if document.styles is None else document.styles
