@@ -29,9 +29,9 @@ from chartagent.errors import (
 )
 from chartagent.frame.input import DEFAULT_BASE_SIZE
 from chartagent.plan.agent import Attempt
+from chartagent.result import ChartResult as ResultFromStablePath
 from chartagent.review import CheckResult, ReviewReport
 from chartagent.transform.model import Menu
-from chartagent.result import ChartResult as ResultFromStablePath
 
 _FIXTURES = Path(__file__).with_name("data")
 _SALES = _FIXTURES / "sales.csv"
