@@ -29,6 +29,8 @@ from chartagent.errors import (
 )
 from chartagent.frame.input import DEFAULT_BASE_SIZE
 from chartagent.plan.agent import Attempt
+from chartagent.review import CheckResult, ReviewReport
+from chartagent.transform.model import Menu
 from chartagent.result import ChartResult as ResultFromStablePath
 
 _FIXTURES = Path(__file__).with_name("data")
@@ -1222,3 +1224,101 @@ def test_unset_resolver_is_from_scratch_only() -> None:
     _install(agent, _inexpressible(1), ("step2", draft), ("step2", draft))
     with pytest.raises(InexpressibleRequestError):
         agent.create_chart(_SALES, "a 3D globe")
+
+
+# --- #192: the bucket-4 hop -------------------------------------------------
+
+_HOP_DOC: dict[str, Any] = {
+    "module": "function render(data, el) {}",
+    "styles": None,
+    "libraries": [],
+}
+
+
+def _marks_missing(profile: Any, backend: Any) -> ReviewReport:
+    return ReviewReport(
+        tiers_run=(1, 2),
+        tiers_skipped={},
+        passed=False,
+        budget_exhausted=False,
+        checks=(
+            CheckResult("injection_pattern", "pass"),
+            CheckResult("painted", "pass"),
+            CheckResult("marks_present", "fail"),
+        ),
+    )
+
+
+def _hopping_agent(*replies: Any) -> tuple[ChartAgent, dict[str, Any]]:
+    agent = _agent()
+    agent._reviewer = _marks_missing
+    return agent, _install(agent, ("Fragment", _FRAGMENT), ("step2", {}), *replies)
+
+
+@pytest.mark.parametrize("quality", ["balanced", "best"])
+def test_marks_present_fail_hops_to_a_recipe(quality: str) -> None:
+    agent, calls = _hopping_agent(("step2", _HOP_DOC))
+    result = agent.create_chart(_SALES, "revenue by quarter", quality=quality)  # type: ignore[arg-type]
+    assert result.envelope is None
+    assert result.recipe is not None
+    assert result.recipe.escape_reason.bucket == 4
+    assert result.recipe.transform == Menu.model_validate(_TRANSFORM)
+    assert result.recipe.source_schema == {"quarter": "string", "revenue": "number"}
+    assert result.recipe.document.module.startswith("function render")
+    assert calls["model"] == 3
+
+
+def test_hop_does_not_rerun_step_one_and_first_call_is_uncounted() -> None:
+    agent, calls = _hopping_agent(("step2", _HOP_DOC))
+    agent.create_chart(_SALES, "revenue by quarter")
+    assert calls["model"] == 3
+    assert calls["system"][2] != calls["system"][0]
+
+
+def test_hop_carries_theme_and_semantic_types_from_the_frame() -> None:
+    agent, calls = _hopping_agent(("step2", _HOP_DOC))
+    agent.create_chart(_SALES, "revenue by quarter")
+    assert "Quantity" in calls["user"][2]
+
+
+def test_hop_terminal_failure_returns_the_flint_result_unpassed() -> None:
+    agent, _ = _hopping_agent(("step2", {"module": 3}), ("step2", {"module": 3}))
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert result.recipe is None
+    assert result.envelope is not None
+    assert result.review is not None
+    assert result.review.passed is False
+
+
+def test_hop_resolution_failure_returns_the_flint_result() -> None:
+    def broken(name: str, version: str) -> tuple[str, bytes]:
+        raise RuntimeError("registry down")
+
+    draft = {**_HOP_DOC, "libraries": [{"name": "d3", "version": "7.9.0"}]}
+    agent, calls = _hopping_agent(("step2", draft))
+    agent._library_resolver = broken
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert result.envelope is not None and result.recipe is None
+    assert calls["model"] == 3
+
+
+def test_hop_resolves_pins_when_a_resolver_is_installed() -> None:
+    draft = {**_HOP_DOC, "libraries": [{"name": "d3", "version": "7.9.0"}]}
+    agent, _ = _hopping_agent(("step2", draft))
+    agent._library_resolver = lambda name, version: ("f" * 64, b"lib")
+    result = agent.create_chart(_SALES, "revenue by quarter")
+    assert result.recipe is not None
+    assert [p.sha256 for p in result.recipe.document.libraries] == ["f" * 64]
+
+
+def test_fast_never_reaches_generate_recipe() -> None:
+    agent, calls = _hopping_agent()
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="fast")
+    assert result.envelope is not None and result.recipe is None
+    assert calls["model"] == 2
+
+
+def test_default_review_never_hops() -> None:
+    agent = _agent()
+    _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
+    assert agent.create_chart(_SALES, "revenue by quarter").envelope is not None
