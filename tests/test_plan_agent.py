@@ -1348,9 +1348,7 @@ class _FakeRasteriser:
 
 def test_critique_model_is_construction_checked_like_model() -> None:
     with pytest.raises(ModelClientUnavailableError) as caught:
-        create_chart_agent(
-            model="test", critique_model="groq:llama-3.3-70b-versatile"
-        )
+        create_chart_agent(model="test", critique_model="groq:llama-3.3-70b-versatile")
     assert caught.value.extra == "pydantic-ai-slim[groq]"
 
 

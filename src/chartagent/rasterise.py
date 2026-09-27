@@ -329,9 +329,7 @@ class BrowserRasteriser:
             page.wait_for_function("window.__ready === true")
             result = page.evaluate("(input) => window.__render(input)", target.input)
             error = (
-                result.get("error")
-                if isinstance(result, dict)
-                else "render: no result"
+                result.get("error") if isinstance(result, dict) else "render: no result"
             )
             if error:
                 raise RasterisationError(error)
