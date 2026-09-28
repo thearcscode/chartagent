@@ -7,10 +7,10 @@ iframe exactly as Studio will — real Chromium via Playwright, no CDN, no
 stand-in — and are skipped when no Chromium is installed, the same posture
 ``test_rasterise.py`` takes (#201).
 
-Paint-failure recovery (#209), iframe isolation beyond the CSP's script
-policy (#210), CSS-scoping adversarial cases (#211), pinned-library load
-order at scale (#212), size caps (#213) and safe embedding of adversarial
-``</script>``/``<!--`` text (#214) are later tickets'.
+Iframe isolation beyond the CSP's script policy (#210), CSS-scoping
+adversarial cases (#211), pinned-library load order at scale (#212), size
+caps (#213) and safe embedding of adversarial ``</script>``/``<!--`` text
+(#214) are later tickets'.
 """
 
 from __future__ import annotations
@@ -56,6 +56,45 @@ function render(data, el) {
 }
 function getPlottedSeries() {
   return [{ series: "s", x: "a", y: 1 }];
+}
+"""
+
+# No top-level `render` at all (#209 AC1).
+_MISSING_RENDER_MODULE = """
+function getPlottedSeries() {
+  return [{ series: "s", x: "a", y: 1 }];
+}
+"""
+
+# `render` throws on its first call, then paints cleanly (#209 AC2 and AC4:
+# the same shell instance recovers without being remounted).
+_FLAKY_RENDER_MODULE = """
+window.__callCount = 0;
+function render(data, el) {
+  window.__callCount = (window.__callCount || 0) + 1;
+  if (window.__callCount === 1) {
+    throw new Error("boom");
+  }
+  el.textContent = JSON.stringify(data);
+}
+function getPlottedSeries() {
+  return [{ series: "s", x: "a", y: window.__callCount }];
+}
+"""
+
+# `render` always succeeds; `getPlottedSeries` throws on its first call, then
+# answers cleanly (#209 AC3 and AC4).
+_FLAKY_GET_PLOTTED_SERIES_MODULE = """
+window.__paintCount = 0;
+function render(data, el) {
+  window.__paintCount = (window.__paintCount || 0) + 1;
+  el.textContent = JSON.stringify(data);
+}
+function getPlottedSeries() {
+  if (window.__paintCount === 1) {
+    throw new Error("boom");
+  }
+  return [{ series: "s", x: "a", y: window.__paintCount }];
 }
 """
 
@@ -170,6 +209,27 @@ window.addEventListener("message", function (e) {{ window.__acks.push(e.data); }
 </body></html>"""
 
 
+def _post_paint(page: object, rows: object) -> None:
+    page.evaluate(  # type: ignore[attr-defined]
+        """(rows) => {
+          window.frames["main"].postMessage(
+            { type: "chartagent/paint", contractVersion: 1, rows: rows },
+            "*"
+          );
+        }""",
+        rows,
+    )
+
+
+def _capture_page_errors(page: object) -> list[object]:
+    # An uncaught exception on the shell's own page would land here — a
+    # thrown render/getPlottedSeries must be contained by the bootstrap's
+    # own try/catch and never escape to this listener (#209 AC2).
+    errors: list[object] = []
+    page.on("pageerror", lambda exc: errors.append(exc))  # type: ignore[attr-defined]
+    return errors
+
+
 @pytest.fixture()
 def page() -> Iterator[object]:
     from playwright.sync_api import sync_playwright
@@ -193,15 +253,7 @@ def test_from_scratch_document_paints_and_reports_true_with_declaration(
     # JSON string (ADR-0017 Decision 9; #208 AC1) — this is the seam's
     # first caller, and Studio is the second.
     rows, _ = serialize_rows(pa.table({"a": [1]}), {"a": "BIGINT"})
-    page.evaluate(  # type: ignore[attr-defined]
-        """(rows) => {
-          window.frames["main"].postMessage(
-            { type: "chartagent/paint", contractVersion: 1, rows: rows },
-            "*"
-          );
-        }""",
-        rows,
-    )
+    _post_paint(page, rows)
     page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
     acks = page.evaluate("() => window.__acks")  # type: ignore[attr-defined]
 
@@ -224,15 +276,7 @@ def test_a_re_read_without_a_redraw_returns_the_last_declaration(page: object) -
     page.wait_for_timeout(100)  # type: ignore[attr-defined]
 
     rows, _ = serialize_rows(pa.table({"a": [1]}), {"a": "BIGINT"})
-    page.evaluate(  # type: ignore[attr-defined]
-        """(rows) => {
-          window.frames["main"].postMessage(
-            { type: "chartagent/paint", contractVersion: 1, rows: rows },
-            "*"
-          );
-        }""",
-        rows,
-    )
+    _post_paint(page, rows)
     page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
 
     # A re-read: no render call, just getPlottedSeries() again.
@@ -253,6 +297,119 @@ def test_a_re_read_without_a_redraw_returns_the_last_declaration(page: object) -
     main = page.frame(name="main")  # type: ignore[attr-defined]
     # No second render — the container still holds the first paint's text.
     assert main.evaluate("() => window.__paintCount") == 1
+
+
+@pytestmark_live
+def test_missing_render_reports_false(page: object) -> None:
+    shell = build_shell(
+        _from_scratch_document(module=_MISSING_RENDER_MODULE), libraries={}
+    )
+    errors = _capture_page_errors(page)
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+
+    rows, _ = serialize_rows(pa.table({"a": [1]}), {"a": "BIGINT"})
+    _post_paint(page, rows)
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    acks = page.evaluate("() => window.__acks")  # type: ignore[attr-defined]
+
+    assert acks[0]["ok"] is False
+    assert acks[0]["plottedSeries"] is None
+    assert errors == []
+
+
+@pytestmark_live
+def test_throwing_render_reports_false_and_does_not_break_the_shell_page(
+    page: object,
+) -> None:
+    shell = build_shell(
+        _from_scratch_document(module=_FLAKY_RENDER_MODULE), libraries={}
+    )
+    errors = _capture_page_errors(page)
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+
+    rows, _ = serialize_rows(pa.table({"a": [1]}), {"a": "BIGINT"})
+    _post_paint(page, rows)
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    acks = page.evaluate("() => window.__acks")  # type: ignore[attr-defined]
+
+    assert acks[0]["ok"] is False
+    assert acks[0]["plottedSeries"] is None
+    # The throw was caught inside the shell's own bootstrap — it never
+    # escaped to become an uncaught exception on the shell's page.
+    assert errors == []
+
+
+@pytestmark_live
+def test_throwing_get_plotted_series_after_successful_render_reports_false(
+    page: object,
+) -> None:
+    shell = build_shell(
+        _from_scratch_document(module=_FLAKY_GET_PLOTTED_SERIES_MODULE), libraries={}
+    )
+    errors = _capture_page_errors(page)
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+
+    rows, _ = serialize_rows(pa.table({"a": [1]}), {"a": "BIGINT"})
+    _post_paint(page, rows)
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    acks = page.evaluate("() => window.__acks")  # type: ignore[attr-defined]
+
+    assert acks[0]["ok"] is False
+    assert acks[0]["plottedSeries"] is None
+    assert errors == []
+    # render itself ran fine before getPlottedSeries blew up.
+    main = page.frame(name="main")  # type: ignore[attr-defined]
+    assert main.evaluate("() => window.__paintCount") == 1
+
+
+@pytestmark_live
+def test_a_second_good_paint_recovers_after_render_throws(page: object) -> None:
+    shell = build_shell(
+        _from_scratch_document(module=_FLAKY_RENDER_MODULE), libraries={}
+    )
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+
+    rows, _ = serialize_rows(pa.table({"a": [1]}), {"a": "BIGINT"})
+    _post_paint(page, rows)
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    _post_paint(page, rows)
+    page.wait_for_function("() => window.__acks.length > 1")  # type: ignore[attr-defined]
+    acks = page.evaluate("() => window.__acks")  # type: ignore[attr-defined]
+
+    assert acks[0]["ok"] is False
+    assert acks[1]["ok"] is True
+    assert acks[1]["plottedSeries"] == [{"series": "s", "x": "a", "y": 2}]
+    main = page.frame(name="main")  # type: ignore[attr-defined]
+    container_text = main.evaluate(
+        "() => document.getElementById('chartagent-container').textContent"
+    )
+    assert container_text == '[{"a":1}]'
+
+
+@pytestmark_live
+def test_a_second_good_paint_recovers_after_get_plotted_series_throws(
+    page: object,
+) -> None:
+    shell = build_shell(
+        _from_scratch_document(module=_FLAKY_GET_PLOTTED_SERIES_MODULE), libraries={}
+    )
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+
+    rows, _ = serialize_rows(pa.table({"a": [1]}), {"a": "BIGINT"})
+    _post_paint(page, rows)
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    _post_paint(page, rows)
+    page.wait_for_function("() => window.__acks.length > 1")  # type: ignore[attr-defined]
+    acks = page.evaluate("() => window.__acks")  # type: ignore[attr-defined]
+
+    assert acks[0]["ok"] is False
+    assert acks[1]["ok"] is True
+    assert acks[1]["plottedSeries"] == [{"series": "s", "x": "a", "y": 2}]
 
 
 @pytestmark_live
