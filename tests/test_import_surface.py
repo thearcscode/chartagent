@@ -48,6 +48,18 @@ def test_recipe_carrier_names_are_exported_together() -> None:
         assert hasattr(chartagent, name)
 
 
+def test_shell_names_are_exported_together() -> None:
+    for name in (
+        "build_shell",
+        "Shell",
+        "DocumentAssemblyError",
+        "BoundDocument",
+        "serialize_rows",
+    ):
+        assert name in chartagent.__all__
+        assert hasattr(chartagent, name)
+
+
 def test_generate_recipe_names_stay_internal() -> None:
     for name in (
         "generate_recipe",

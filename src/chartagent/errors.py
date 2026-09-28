@@ -221,6 +221,21 @@ class RasteriserUnavailableError(ChartAgentError):
         self.extra = extra
 
 
+class DocumentAssemblyError(ChartAgentError):
+    """``build_shell`` could not assemble a shell for this document.
+
+    ``kind`` is one of ``pin_missing``, ``pin_mismatch``, ``contract_unsupported``,
+    ``source_too_large``, ``library_too_large``, ``assembled_too_large`` — the
+    closed vocabulary ADR-0017 Decision 15 names. Raised only from
+    :func:`chartagent.shell.build_shell`, never at paint time (that is
+    :class:`RasterisationError` instead).
+    """
+
+    def __init__(self, message: str, *, kind: str) -> None:
+        super().__init__(message)
+        self.kind = kind
+
+
 class RasterisationError(ChartAgentError):
     """A render attempt failed — a compiled spec a renderer rejected, a
     render that raised, or a backend with no vendored renderer.

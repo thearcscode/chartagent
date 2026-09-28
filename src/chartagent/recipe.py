@@ -60,14 +60,12 @@ class BoundDocument:
     deterministic rail, and the second member of ``Rasteriser``'s
     ``Envelope | BoundDocument`` union (ADR-0005 Decision 9's erratum).
 
-    Reserved here so that union type-checks; nothing in the library
-    constructs one yet. ``bind_recipe`` deliberately returns ``BoundRecipe``,
-    not this (ADR-0018 Decision 5) — assembling a ``BoundDocument`` needs
-    ``build_shell``'s verified library bytes, which is the still-unbuilt
-    custom-rail rendering path (ADR-0017 Decisions 10-12), a later ticket's
-    work. Not in ``__all__`` until that path, ``build_shell`` and its
-    siblings land together (ADR-0005 Decision 12's erratum names them as one
-    group)."""
+    ``bind_recipe`` deliberately returns ``BoundRecipe``, not this
+    (ADR-0018 Decision 5) — assembling a ``BoundDocument`` composes
+    ``build_shell``'s verified library bytes with rows and theme, which is
+    the ``Rasteriser``'s job for a custom-rail chart, a later ticket's work
+    (ADR-0017 Decisions 10-12). Exported alongside ``build_shell`` and its
+    siblings, as ADR-0005 Decision 12's erratum names them as one group."""
 
     document: ChartDocument
     rows: pa.Table

@@ -3,7 +3,7 @@
 from chartagent._flint import FlintBundle, flint_bundle
 from chartagent.bind import DataSource, bind
 from chartagent.envelope import Advisory, Envelope
-from chartagent.errors import ChartAgentError
+from chartagent.errors import ChartAgentError, DocumentAssemblyError
 from chartagent.frame import (
     Backend,
     ChartVocabulary,
@@ -18,6 +18,7 @@ from chartagent.frame._generated import __all__ as _GENERATED_ALL
 from chartagent.plan.agent import ChartAgent, create_chart_agent
 from chartagent.rasterise import Rasteriser
 from chartagent.recipe import (
+    BoundDocument,
     BoundRecipe,
     ChartDocument,
     ChartRecipe,
@@ -27,6 +28,8 @@ from chartagent.recipe import (
 )
 from chartagent.result import ChartResult
 from chartagent.review import CheckResult, ReviewReport
+from chartagent.shell import Shell, build_shell
+from chartagent.transform.serialize import serialize_rows
 
 _GENERATED_MODELS = tuple(
     name
@@ -44,8 +47,13 @@ __all__ = [
     "ChartRecipe",
     "BoundRecipe",
     "ChartDocument",
+    "BoundDocument",
     "LibraryPin",
     "EscapeReason",
+    "build_shell",
+    "Shell",
+    "DocumentAssemblyError",
+    "serialize_rows",
     "Envelope",
     "ChartResult",
     "ReviewReport",
