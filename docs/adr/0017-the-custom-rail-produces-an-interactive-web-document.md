@@ -2,6 +2,8 @@
 
 - **Status:** Accepted
 - **Date:** 2026-08-28
+- **Errata:** 2026-09-29 ([#208](https://github.com/thearcscode/chartagent/issues/208)) —
+  Decision 7's channel message shapes for contract version 1, recorded in place.
 - **Settled on:** [#57](https://github.com/thearcscode/chartagent/issues/57)
 - **Builds on:** ADR-0003 (rasterise in a browser), ADR-0005 (`bind` is the public seam;
   `Rasteriser` and `ReviewReport`), ADR-0006 (the server binds, the browser compiles; the
@@ -158,6 +160,62 @@ getPlottedSeries()      // declares what it drew
 - Agent CSS is **scoped to `el`** and must not restyle the shell.
 - A one-symbol `render`-returns-series variant is refused: it couples the truthfulness read to
   the draw and makes a re-read impossible.
+
+**Erratum — 2026-09-29 ([#208](https://github.com/thearcscode/chartagent/issues/208)).** This
+decision fixed what travels — rows, theme and container dimensions in; the paint signal and the
+plotted-series declaration out — and fixed the `event.source` check, but left the message
+*shapes* to whoever built `build_shell`. Studio, in a separate repo, implements the parent side
+against a published contract rather than a reading of the shell's HTML, so the shapes are
+written down here as **contract version 1**.
+
+Parent → iframe, a paint request:
+
+```json
+{
+  "type": "chartagent/paint",
+  "contractVersion": 1,
+  "rows": [{ "...": "..." }],
+  "theme": { "<token>": "<css-value>" },
+  "container": { "width": 640, "height": 400 }
+}
+```
+
+- `rows` is the plain JSON array of objects `render(data, el)` receives as `data` — the output
+  of the JSON channel serialiser (`serialize_rows`, ADR-0008 Decision 9's three rules already
+  applied). Required.
+- `theme` is optional data-palette tokens (Decision 14). The bootstrap sets each as a CSS custom
+  property, `--<token>`, on the container element; the module reads them or ignores them.
+- `container` is optional `{width, height}` in CSS pixels — Studio's layout, or the
+  `Rasteriser`'s constructor setting (Decision 8 keeps this off `BoundDocument` for exactly this
+  reason). The bootstrap sets it as the container's inline size.
+
+Iframe → parent, the paint result, sent once per paint request:
+
+```json
+{
+  "type": "chartagent/painted",
+  "contractVersion": 1,
+  "ok": true,
+  "plottedSeries": [{ "...": "..." }]
+}
+```
+
+- `ok` is the boolean paint signal (Decision 15). `false` when `render` or `getPlottedSeries` is
+  missing or throws, or the host otherwise cannot draw.
+- `plottedSeries` is `getPlottedSeries()`'s return value when `ok` is `true`, and `null`
+  otherwise.
+
+A third parent → iframe shape, the re-read this decision's *"re-read without redraw is the last
+draw"* names: `{ "type": "chartagent/read", "contractVersion": 1 }`. It carries no `rows`,
+`theme` or `container` — the bootstrap skips emptying the container and calling `render`
+entirely, and calls only `getPlottedSeries()` again. Its response reuses the same
+`chartagent/painted` shape above; there is no third response type, because the answer to *"what
+did you last draw"* is exactly the same pair a paint's response carries.
+
+**All three message shapes carry `contractVersion` so a future bump is detectable on the wire,
+not only on `ChartDocument.contract_version`.** A message with an unrecognised `type`, or no
+message at all yet, is silently ignored — the bootstrap's only other rule is Decision 5's
+`event.source === window.parent` check, applied before any shape is even parsed.
 
 ### 8. Three named types, and the stored/paintable split
 
