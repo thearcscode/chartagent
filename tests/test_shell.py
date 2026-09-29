@@ -14,6 +14,7 @@ CSS-scoping adversarial cases (#211), pinned-library load order at scale
 
 from __future__ import annotations
 
+import base64
 import dataclasses
 import hashlib
 import html
@@ -810,3 +811,133 @@ def test_document_with_no_styles_paints_with_default_chrome(page: object) -> Non
         assert styled[key]["color"] == "rgb(0, 0, 0)", key
         assert styled[key]["padding"] == "0px", key
     assert styled["mark"]["padding"] == "0px"
+
+
+# --- Pinned libraries: verify, embed in pin order, before the module (#212) --
+
+
+def _pinned_library(name: str, source: str) -> tuple[LibraryPin, str, bytes]:
+    blob = source.encode("utf-8")
+    sha = hashlib.sha256(blob).hexdigest()
+    return LibraryPin(name=name, version="1.0.0", sha256=sha), sha, blob
+
+
+def _pinned_document(
+    pins: tuple[LibraryPin, ...], module: str = _RENDER_MODULE
+) -> ChartDocument:
+    return ChartDocument(module=module, styles=None, libraries=pins)
+
+
+_LIB_A_SOURCE = (
+    "window.__loadOrder = (window.__loadOrder || []).concat(['a']);"
+    " window.LibA = { n: 1 };"
+)
+_LIB_B_SOURCE = (
+    "window.__loadOrder = (window.__loadOrder || []).concat(['b']);"
+    " window.LibB = { n: 2 };"
+)
+
+_LIB_CALLING_MODULE = """
+window.__loadOrder = (window.__loadOrder || []).concat(['module']);
+function render(data, el) {
+  el.textContent = String(window.LibA.n);
+}
+function getPlottedSeries() {
+  return [{ series: "s", x: "a", y: window.LibA.n }];
+}
+"""
+
+
+def test_pinned_libraries_are_embedded_in_pin_order_before_the_module() -> None:
+    pin_a, sha_a, blob_a = _pinned_library("liba", _LIB_A_SOURCE)
+    pin_b, sha_b, blob_b = _pinned_library("libb", _LIB_B_SOURCE)
+    # Map order is the reverse of pin order: tuple order must win.
+    shell = build_shell(
+        _pinned_document((pin_a, pin_b)),
+        libraries={sha_b: blob_b, sha_a: blob_a},
+    )
+
+    a = shell.html.index(_LIB_A_SOURCE)
+    b = shell.html.index(_LIB_B_SOURCE)
+    module = shell.html.index("window.__paintCount = 0;")
+    assert a < b < module
+
+
+def test_pinned_libraries_are_hash_allowed_by_the_csp() -> None:
+    pin, sha, blob = _pinned_library("liba", _LIB_A_SOURCE)
+    shell = build_shell(_pinned_document((pin,)), libraries={sha: blob})
+    csp_line = next(
+        line for line in shell.html.splitlines() if "Content-Security-Policy" in line
+    )
+    digest = base64.b64encode(hashlib.sha256(blob).digest()).decode("ascii")
+    assert f"'sha256-{digest}'" in csp_line
+
+
+def test_a_second_pin_missing_from_the_map_raises_pin_missing() -> None:
+    pin_a, sha_a, blob_a = _pinned_library("liba", _LIB_A_SOURCE)
+    pin_b, _, _ = _pinned_library("libb", _LIB_B_SOURCE)
+    with pytest.raises(DocumentAssemblyError) as caught:
+        build_shell(_pinned_document((pin_a, pin_b)), libraries={sha_a: blob_a})
+    assert caught.value.kind == "pin_missing"
+
+
+def test_unpinned_entries_are_never_embedded_alongside_pinned_ones() -> None:
+    pin_a, sha_a, blob_a = _pinned_library("liba", _LIB_A_SOURCE)
+    _, sha_b, blob_b = _pinned_library("libb", _LIB_B_SOURCE)
+    shell = build_shell(
+        _pinned_document((pin_a,)), libraries={sha_a: blob_a, sha_b: blob_b}
+    )
+    assert shell.html.count(_LIB_A_SOURCE) == 1
+    assert _LIB_B_SOURCE not in shell.html
+    assert sha_b not in shell.html
+    # Not hash-allowed by the CSP either: the blob never entered the page.
+    assert base64.b64encode(hashlib.sha256(blob_b).digest()).decode() not in shell.html
+
+
+def test_from_scratch_document_ignores_a_non_empty_libraries_map() -> None:
+    _, sha, blob = _pinned_library("liba", _LIB_A_SOURCE)
+    with_map = build_shell(_from_scratch_document(), libraries={sha: blob})
+    without = build_shell(_from_scratch_document(), libraries={})
+    assert with_map == without
+    assert "LibA" not in with_map.html
+
+
+@pytestmark_live
+def test_module_can_call_into_a_pinned_librarys_global(page: object) -> None:
+    pin, sha, blob = _pinned_library("liba", _LIB_A_SOURCE)
+    shell = build_shell(
+        _pinned_document((pin,), _LIB_CALLING_MODULE), libraries={sha: blob}
+    )
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+    _post_paint(page, [])
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    ack = page.evaluate("() => window.__acks[0]")  # type: ignore[attr-defined]
+
+    assert ack["ok"] is True
+    assert ack["plottedSeries"] == [{"series": "s", "x": "a", "y": 1}]
+    main = page.frame(name="main")  # type: ignore[attr-defined]
+    assert main.evaluate("() => window.__loadOrder") == ["a", "module"]
+
+
+@pytestmark_live
+@pytest.mark.parametrize(
+    ("order", "expected"),
+    [("ab", ["a", "b", "module"]), ("ba", ["b", "a", "module"])],
+)
+def test_two_pinned_libraries_load_in_pin_order_before_the_module(
+    page: object, order: str, expected: list[str]
+) -> None:
+    lib_a = _pinned_library("liba", _LIB_A_SOURCE)
+    lib_b = _pinned_library("libb", _LIB_B_SOURCE)
+    by_key = {"a": lib_a, "b": lib_b}
+    libraries = {sha: blob for _, sha, blob in by_key.values()}
+    pins = tuple(by_key[key][0] for key in order)
+
+    shell = build_shell(
+        _pinned_document(pins, _LIB_CALLING_MODULE), libraries=libraries
+    )
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+    main = page.frame(name="main")  # type: ignore[attr-defined]
+    assert main.evaluate("() => window.__loadOrder") == expected
