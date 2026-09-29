@@ -19,6 +19,7 @@ import dataclasses
 import hashlib
 import html
 import inspect
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -1051,6 +1052,7 @@ _ADVERSARIAL_TEXTS = {
     "close_tag_upper": 'window.__marker = "a</SCRIPT >c";',
     "comment_open": 'window.__marker = "a<!--b";',
     "comment_then_script": 'window.__marker = "<!-- <script> x";',
+    "unicode_regex": "window.__marker = /<!--|<\\/script>/u.test('<!--');",
     "regex_literal": "window.__marker = /<\\/script>|<!--/.test('<!--');",
 }
 
@@ -1059,6 +1061,7 @@ _ADVERSARIAL_EXPECTED = {
     "close_tag_upper": "a</SCRIPT >c",
     "comment_open": "a<!--b",
     "comment_then_script": "<!-- <script> x",
+    "unicode_regex": True,
     "regex_literal": True,
 }
 
@@ -1103,8 +1106,6 @@ def _csp_script_hashes(shell: Shell) -> set[str]:
 
 
 def _served_script_hashes(shell: Shell) -> list[str]:
-    import re
-
     bodies = re.findall(r"<script>(.*?)</script>", shell.html, flags=re.DOTALL)
     return [
         "sha256-" + base64.b64encode(hashlib.sha256(b.encode()).digest()).decode()

@@ -178,38 +178,41 @@ def _verify_pin(
     return blob.decode("utf-8")
 
 
+# Sequences that can end or re-enter an inline element's raw text per the
+# HTML tokenizer: `</script` (any case) closes a <script>, `<!--` opens the
+# escaped states in which a following `<script` swallows the real close tag,
+# and `</style` closes a <style>.
+_SCRIPT_CLOSE = re.compile(r"<(/script)", re.IGNORECASE)
+_STYLE_CLOSE = re.compile(r"<(/style)", re.IGNORECASE)
+_COMMENT_OPEN = re.compile(r"<!--")
+
+
+def _escape_close_tag(pattern: re.Pattern[str], text: str) -> str:
+    return pattern.sub(r"<\\\1", text)
+
+
 def _style_block(styles: str | None) -> str:
     if not styles:
         return ""
     # Scoped to the container so a stray `body` or `*` rule cannot restyle
-    # the shell's chrome (ADR-0017 Decision 7). Full adversarial hardening
-    # of this text is #211/#214's; this is the from-scratch, well-formed
-    # case.
-    styles = _STYLE_CLOSE.sub(r"<\\/\1", styles)
+    # the shell's chrome (ADR-0017 Decision 7); `</style` is escaped so the
+    # text cannot close its own element (CSS reads `\/` as `/`).
+    styles = _escape_close_tag(_STYLE_CLOSE, styles)
     return f"<style>@scope (#{_CONTAINER_ID}) {{\n{styles}\n}}</style>\n"
-
-
-# Sequences that can end or re-enter an inline <script> per the HTML script
-# data states: `</script` (any case) closes it, and `<!--` opens the escaped
-# states in which a following `<script` swallows the real close tag.
-_SCRIPT_CLOSE = re.compile(r"<(/script)", re.IGNORECASE)
-_COMMENT_OPEN = re.compile(r"<!--")
-_STYLE_CLOSE = re.compile(r"<(/style)", re.IGNORECASE)
 
 
 def _embed_script(text: str) -> str:
     """Make ``text`` safe to sit inside an inline ``<script>`` element.
 
-    ``</script`` becomes ``<\\/script`` and ``<!--`` becomes ``<\\!--``. In
-    a JS string, template, regex literal or comment the backslash escape
-    denotes the same character, so the script's behaviour is unchanged and
-    the bytes differ only at those sequences. Text that hits them outside
-    such a context (e.g. ``a<!--b`` as bare code, an HTML-like comment)
-    cannot be preserved; that is the residual case ADR-0017 must rule on
-    rather than a new ``DocumentAssemblyError`` kind.
+    ``</script`` becomes ``<\\/script`` and ``<!--`` becomes ``\\x3C!--``.
+    In a JS string, template, regex literal (including ``u``/``v`` flags) or comment the escape denotes the same character, so
+    behaviour is unchanged and the bytes differ only at those sequences.
+    Text that hits them outside such a context (e.g. ``a<!--b`` as bare code,
+    an HTML-like comment) cannot be preserved; that residual case is for an
+    ADR-0017 amendment rather than a new ``DocumentAssemblyError`` kind.
     """
-    text = _SCRIPT_CLOSE.sub(r"<\\\1", text)
-    return _COMMENT_OPEN.sub(r"<\\!--", text)
+    text = _escape_close_tag(_SCRIPT_CLOSE, text)
+    return _COMMENT_OPEN.sub(r"\\x3C!--", text)
 
 
 def _script_hash(text: str) -> str:
