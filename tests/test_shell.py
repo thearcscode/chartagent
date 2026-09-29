@@ -791,7 +791,7 @@ def test_universal_and_root_rules_do_not_leak_outside_the_container(
 @pytestmark_live
 def test_ordinary_rules_apply_inside_the_container_only(page: object) -> None:
     baseline = _paint_styled(page, None)
-    styled = _paint_styled(page, ".mark { color: rgb(255, 0, 0); padding: 7px; }")
+    styled = _paint_styled(page, ".mark { color: rgb(255, 0, 0); } p { padding: 7px; }")
 
     assert styled["mark"]["color"] == "rgb(255, 0, 0)"
     assert styled["mark"]["padding"] == "7px"
@@ -803,5 +803,10 @@ def test_ordinary_rules_apply_inside_the_container_only(page: object) -> None:
 def test_document_with_no_styles_paints_with_default_chrome(page: object) -> None:
     styled = _paint_styled(page, None)
 
-    assert styled["body"]["bg"] == "rgba(0, 0, 0, 0)"
-    assert styled["mark"]["color"] == styled["body"]["color"]
+    # Browser defaults: transparent backgrounds, black text, 8px body margin
+    # is not probed here; a `<p>` carries no padding of its own.
+    for key in _NO_STYLES_BASELINE_KEYS:
+        assert styled[key]["bg"] == "rgba(0, 0, 0, 0)", key
+        assert styled[key]["color"] == "rgb(0, 0, 0)", key
+        assert styled[key]["padding"] == "0px", key
+    assert styled["mark"]["padding"] == "0px"
