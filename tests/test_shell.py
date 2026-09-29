@@ -111,7 +111,7 @@ def _from_scratch_document(
 
 def test_build_shell_takes_no_rows() -> None:
     params = list(inspect.signature(build_shell).parameters)
-    assert params == ["document", "libraries"]
+    assert "rows" not in params and "data" not in params
 
 
 def test_shell_is_frozen() -> None:
@@ -941,3 +941,85 @@ def test_two_pinned_libraries_load_in_pin_order_before_the_module(
     page.wait_for_timeout(100)  # type: ignore[attr-defined]
     main = page.frame(name="main")  # type: ignore[attr-defined]
     assert main.evaluate("() => window.__loadOrder") == expected
+
+
+# --- Size caps: source, per-blob, assembled page (#213) -----------------
+
+
+def _blob_of(size: int) -> tuple[LibraryPin, str, bytes]:
+    prefix = "window.Big = 1; /*"
+    suffix = "*/"
+    padding = "x" * (size - len(prefix) - len(suffix))
+    return _pinned_library("big", prefix + padding + suffix)
+
+
+def test_module_plus_css_over_a_supplied_cap_raises_source_too_large() -> None:
+    document = _from_scratch_document(module="x" * 60, styles="y" * 60)
+    with pytest.raises(DocumentAssemblyError) as caught:
+        build_shell(document, libraries={}, max_source_bytes=100)
+    assert caught.value.kind == "source_too_large"
+    assert "100" in str(caught.value)
+    assert "120" in str(caught.value)
+
+
+def test_module_plus_css_at_the_cap_is_accepted() -> None:
+    document = _from_scratch_document(module="x" * 60, styles="y" * 40)
+    build_shell(document, libraries={}, max_source_bytes=100)
+
+
+def test_source_cap_counts_utf8_bytes_not_characters() -> None:
+    document = _from_scratch_document(module="é" * 60)  # 120 bytes
+    with pytest.raises(DocumentAssemblyError) as caught:
+        build_shell(document, libraries={}, max_source_bytes=100)
+    assert caught.value.kind == "source_too_large"
+
+
+def test_module_plus_css_over_the_shipped_default_raises_source_too_large() -> None:
+    document = _from_scratch_document(module="/*" + "x" * (2 * 1024 * 1024) + "*/")
+    with pytest.raises(DocumentAssemblyError) as caught:
+        build_shell(document, libraries={})
+    assert caught.value.kind == "source_too_large"
+
+
+def test_a_library_blob_over_its_cap_raises_library_too_large() -> None:
+    pin, sha, blob = _blob_of(2000)
+    with pytest.raises(DocumentAssemblyError) as caught:
+        build_shell(
+            _pinned_document((pin,)), libraries={sha: blob}, max_library_bytes=1000
+        )
+    assert caught.value.kind == "library_too_large"
+    message = str(caught.value)
+    assert "big@1.0.0" in message
+    assert "1000" in message
+    assert "2000" in message
+
+
+def test_library_cap_is_checked_per_blob_not_summed() -> None:
+    pin_a, sha_a, blob_a = _pinned_library("liba", "a" * 600)
+    pin_b, sha_b, blob_b = _pinned_library("libb", "b" * 600)
+    build_shell(
+        _pinned_document((pin_a, pin_b)),
+        libraries={sha_a: blob_a, sha_b: blob_b},
+        max_library_bytes=1000,
+        max_assembled_bytes=10_000,
+    )
+
+
+def test_an_assembled_page_over_its_cap_raises_assembled_too_large() -> None:
+    pin_a, sha_a, blob_a = _pinned_library("liba", "a" * 600)
+    pin_b, sha_b, blob_b = _pinned_library("libb", "b" * 600)
+    with pytest.raises(DocumentAssemblyError) as caught:
+        build_shell(
+            _pinned_document((pin_a, pin_b)),
+            libraries={sha_a: blob_a, sha_b: blob_b},
+            max_library_bytes=1000,
+            max_assembled_bytes=1500,
+        )
+    assert caught.value.kind == "assembled_too_large"
+    assert "1500" in str(caught.value)
+
+
+def test_a_plotly_class_blob_passes_under_the_shipped_defaults() -> None:
+    pin, sha, blob = _blob_of(5 * 1024 * 1024 + 1)
+    shell = build_shell(_pinned_document((pin,)), libraries={sha: blob})
+    assert len(shell.html.encode("utf-8")) > len(blob)

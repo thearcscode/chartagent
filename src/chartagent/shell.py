@@ -13,9 +13,9 @@ serves both the user's render and the review render. ``build_shell`` never
 fetches — the caller hands library bytes in, keyed by sha256, and every pin
 in ``document.libraries`` is verified against them.
 
-Not yet built here (later tickets under #207): size caps as keyword
-arguments (#213), and byte-faithful safe embedding of untrusted module and
-library text containing ``</script>`` or ``<!--`` (#214).
+Not yet built here (a later ticket under #207): byte-faithful safe embedding
+of untrusted module and library text containing ``</script>`` or ``<!--``
+(#214).
 """
 
 from __future__ import annotations
@@ -37,6 +37,14 @@ _SANDBOX_TOKENS: tuple[str, ...] = ("allow-scripts",)
 
 _CONTAINER_ID = "chartagent-container"
 
+# Shipped size-cap defaults (ADR-0017 Decision 15), all in UTF-8 bytes. They
+# are policy, not allowlists: callers override them by keyword. The per-blob
+# default admits a Plotly-class minified library (~5 MB) with headroom, and
+# the assembled default admits a page carrying one such blob.
+DEFAULT_MAX_SOURCE_BYTES = 1024 * 1024
+DEFAULT_MAX_LIBRARY_BYTES = 10 * 1024 * 1024
+DEFAULT_MAX_ASSEMBLED_BYTES = 16 * 1024 * 1024
+
 
 @dataclass(frozen=True)
 class Shell:
@@ -57,6 +65,9 @@ def build_shell(
     document: ChartDocument,
     *,
     libraries: Mapping[str, bytes],
+    max_source_bytes: int = DEFAULT_MAX_SOURCE_BYTES,
+    max_library_bytes: int = DEFAULT_MAX_LIBRARY_BYTES,
+    max_assembled_bytes: int = DEFAULT_MAX_ASSEMBLED_BYTES,
 ) -> Shell:
     """Assemble a rows-free, theme-free iframe shell for ``document``.
 
@@ -67,6 +78,11 @@ def build_shell(
     ``(document, libraries)`` — two calls with equal inputs return an equal
     ``Shell``.
 
+    Three size caps, in UTF-8 bytes, are keyword arguments with shipped
+    defaults: ``max_source_bytes`` bounds the module plus CSS together,
+    ``max_library_bytes`` bounds each library blob on its own, and
+    ``max_assembled_bytes`` bounds the finished page.
+
     Raises :class:`~chartagent.errors.DocumentAssemblyError`:
 
     - ``kind="contract_unsupported"`` if ``document.contract_version`` is
@@ -74,6 +90,12 @@ def build_shell(
     - ``kind="pin_missing"`` if a pinned library has no entry in
       ``libraries``.
     - ``kind="pin_mismatch"`` if the supplied bytes do not hash to the pin.
+    - ``kind="source_too_large"`` if module plus CSS exceed
+      ``max_source_bytes``.
+    - ``kind="library_too_large"`` if a pinned blob exceeds
+      ``max_library_bytes``.
+    - ``kind="assembled_too_large"`` if the page exceeds
+      ``max_assembled_bytes``.
     """
     if document.contract_version != _SUPPORTED_CONTRACT_VERSION:
         raise DocumentAssemblyError(
@@ -82,7 +104,19 @@ def build_shell(
             kind="contract_unsupported",
         )
 
-    library_scripts = [_verify_pin(pin, libraries) for pin in document.libraries]
+    source_bytes = len(document.module.encode("utf-8")) + len(
+        (document.styles or "").encode("utf-8")
+    )
+    if source_bytes > max_source_bytes:
+        raise DocumentAssemblyError(
+            f"module and CSS total {source_bytes} bytes, over the "
+            f"{max_source_bytes}-byte source cap",
+            kind="source_too_large",
+        )
+
+    library_scripts = [
+        _verify_pin(pin, libraries, max_library_bytes) for pin in document.libraries
+    ]
     scripts = [*library_scripts, document.module, _bootstrap_js()]
 
     csp = _content_security_policy(_script_hash(text) for text in scripts)
@@ -103,16 +137,31 @@ def build_shell(
         "</body>\n"
         "</html>"
     )
+    assembled_bytes = len(html.encode("utf-8"))
+    if assembled_bytes > max_assembled_bytes:
+        raise DocumentAssemblyError(
+            f"assembled page is {assembled_bytes} bytes, over the "
+            f"{max_assembled_bytes}-byte assembled-page cap",
+            kind="assembled_too_large",
+        )
     return Shell(html=html, sandbox=_SANDBOX_TOKENS)
 
 
-def _verify_pin(pin: LibraryPin, libraries: Mapping[str, bytes]) -> str:
+def _verify_pin(
+    pin: LibraryPin, libraries: Mapping[str, bytes], max_library_bytes: int
+) -> str:
     blob = libraries.get(pin.sha256)
     if blob is None:
         raise DocumentAssemblyError(
             f"no bytes supplied for pinned library {pin.name}@{pin.version} "
             f"({pin.sha256})",
             kind="pin_missing",
+        )
+    if len(blob) > max_library_bytes:
+        raise DocumentAssemblyError(
+            f"library {pin.name}@{pin.version} is {len(blob)} bytes, over the "
+            f"{max_library_bytes}-byte library cap",
+            kind="library_too_large",
         )
     actual = hashlib.sha256(blob).hexdigest()
     if actual != pin.sha256:
