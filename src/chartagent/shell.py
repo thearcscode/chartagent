@@ -205,7 +205,8 @@ def _embed_script(text: str) -> str:
     """Make ``text`` safe to sit inside an inline ``<script>`` element.
 
     ``</script`` becomes ``<\\/script`` and ``<!--`` becomes ``\\x3C!--``.
-    In a JS string, template, regex literal (including ``u``/``v`` flags) or comment the escape denotes the same character, so
+    In a JS string, template, regex literal (including ``u``/``v`` flags) or
+    comment the escape denotes the same character, so
     behaviour is unchanged and the bytes differ only at those sequences.
     Text that hits them outside such a context (e.g. ``a<!--b`` as bare code,
     an HTML-like comment) cannot be preserved; that residual case is for an
