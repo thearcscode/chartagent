@@ -13,9 +13,9 @@ serves both the user's render and the review render. ``build_shell`` never
 fetches — the caller hands library bytes in, keyed by sha256, and every pin
 in ``document.libraries`` is verified against them.
 
-Not yet built here (a later ticket under #207): byte-faithful safe embedding
-of untrusted module and library text containing ``</script>`` or ``<!--``
-(#214).
+Module and library text is untrusted, so it is escaped before it is embedded
+(see :func:`_embed_script`); the CSP hashes are computed over that same
+escaped text, which is exactly what the browser parses.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
@@ -118,7 +119,10 @@ def build_shell(
     library_scripts = [
         _verify_pin(pin, libraries, max_library_bytes) for pin in document.libraries
     ]
-    scripts = [*library_scripts, document.module, _bootstrap_js()]
+    scripts = [
+        _embed_script(text)
+        for text in (*library_scripts, document.module, _bootstrap_js())
+    ]
 
     csp = _content_security_policy(_script_hash(text) for text in scripts)
     script_tags = "\n".join(f"<script>{text}</script>" for text in scripts)
@@ -181,7 +185,31 @@ def _style_block(styles: str | None) -> str:
     # the shell's chrome (ADR-0017 Decision 7). Full adversarial hardening
     # of this text is #211/#214's; this is the from-scratch, well-formed
     # case.
+    styles = _STYLE_CLOSE.sub(r"<\\/\1", styles)
     return f"<style>@scope (#{_CONTAINER_ID}) {{\n{styles}\n}}</style>\n"
+
+
+# Sequences that can end or re-enter an inline <script> per the HTML script
+# data states: `</script` (any case) closes it, and `<!--` opens the escaped
+# states in which a following `<script` swallows the real close tag.
+_SCRIPT_CLOSE = re.compile(r"<(/script)", re.IGNORECASE)
+_COMMENT_OPEN = re.compile(r"<!--")
+_STYLE_CLOSE = re.compile(r"<(/style)", re.IGNORECASE)
+
+
+def _embed_script(text: str) -> str:
+    """Make ``text`` safe to sit inside an inline ``<script>`` element.
+
+    ``</script`` becomes ``<\\/script`` and ``<!--`` becomes ``<\\!--``. In
+    a JS string, template, regex literal or comment the backslash escape
+    denotes the same character, so the script's behaviour is unchanged and
+    the bytes differ only at those sequences. Text that hits them outside
+    such a context (e.g. ``a<!--b`` as bare code, an HTML-like comment)
+    cannot be preserved; that is the residual case ADR-0017 must rule on
+    rather than a new ``DocumentAssemblyError`` kind.
+    """
+    text = _SCRIPT_CLOSE.sub(r"<\\\1", text)
+    return _COMMENT_OPEN.sub(r"<\\!--", text)
 
 
 def _script_hash(text: str) -> str:
