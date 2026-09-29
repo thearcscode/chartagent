@@ -710,3 +710,98 @@ def test_the_bootstrap_postmessage_channel_still_works_under_isolation(
     acks = host.page.evaluate("() => window.__acks")  # type: ignore[attr-defined]
 
     assert acks[0]["ok"] is True
+
+
+# --- Agent CSS is scoped to the container (#211) ------------------------
+
+# Renders a `.mark` inside the container and a `.chrome` probe outside it,
+# standing in for the host's own shell chrome.
+_STYLED_MODULE = """
+function render(data, el) {
+  el.innerHTML = '<p class="mark">inside</p>';
+  var chrome = document.getElementById("chrome-probe");
+  if (!chrome) {
+    chrome = document.createElement("div");
+    chrome.id = "chrome-probe";
+    chrome.className = "mark";
+    document.body.appendChild(chrome);
+  }
+}
+function getPlottedSeries() { return []; }
+"""
+
+_STYLE_PROBE_JS = """() => {
+  const css = (el) => {
+    const s = getComputedStyle(el);
+    return { bg: s.backgroundColor, color: s.color, padding: s.paddingTop };
+  };
+  return {
+    html: css(document.documentElement),
+    body: css(document.body),
+    chrome: css(document.getElementById("chrome-probe")),
+    container: css(document.getElementById("chartagent-container")),
+    mark: css(document.querySelector("#chartagent-container .mark")),
+  };
+}"""
+
+
+def _paint_styled(page: object, styles: str | None) -> dict[str, dict[str, str]]:
+    shell = build_shell(_from_scratch_document(_STYLED_MODULE, styles), libraries={})
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+    _post_paint(page, [])
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    assert page.evaluate("() => window.__acks[0].ok") is True  # type: ignore[attr-defined]
+    main = page.frame(name="main")  # type: ignore[attr-defined]
+    result: dict[str, dict[str, str]] = main.evaluate(_STYLE_PROBE_JS)
+    return result
+
+
+_NO_STYLES_BASELINE_KEYS = ("html", "body", "chrome", "container")
+
+
+@pytestmark_live
+def test_body_rule_in_agent_css_does_not_restyle_the_shell(page: object) -> None:
+    baseline = _paint_styled(page, None)
+    styled = _paint_styled(
+        page,
+        "body { background: rgb(255, 0, 0); color: rgb(0, 0, 255); padding: 40px; }",
+    )
+
+    for key in _NO_STYLES_BASELINE_KEYS:
+        assert styled[key] == baseline[key], key
+
+
+@pytestmark_live
+def test_universal_and_root_rules_do_not_leak_outside_the_container(
+    page: object,
+) -> None:
+    baseline = _paint_styled(page, None)
+    styled = _paint_styled(
+        page,
+        "* { color: rgb(0, 128, 0); }\n"
+        ":root { background: rgb(255, 0, 0); }\n"
+        "html { background: rgb(255, 0, 0); }",
+    )
+
+    for key in _NO_STYLES_BASELINE_KEYS:
+        assert styled[key] == baseline[key], key
+
+
+@pytestmark_live
+def test_ordinary_rules_apply_inside_the_container_only(page: object) -> None:
+    baseline = _paint_styled(page, None)
+    styled = _paint_styled(page, ".mark { color: rgb(255, 0, 0); padding: 7px; }")
+
+    assert styled["mark"]["color"] == "rgb(255, 0, 0)"
+    assert styled["mark"]["padding"] == "7px"
+    # The same class outside the container is untouched.
+    assert styled["chrome"] == baseline["chrome"]
+
+
+@pytestmark_live
+def test_document_with_no_styles_paints_with_default_chrome(page: object) -> None:
+    styled = _paint_styled(page, None)
+
+    assert styled["body"]["bg"] == "rgba(0, 0, 0, 0)"
+    assert styled["mark"]["color"] == styled["body"]["color"]
