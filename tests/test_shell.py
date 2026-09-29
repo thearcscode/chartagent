@@ -7,10 +7,9 @@ iframe exactly as Studio will — real Chromium via Playwright, no CDN, no
 stand-in — and are skipped when no Chromium is installed, the same posture
 ``test_rasterise.py`` takes (#201).
 
-CSS-scoping
-adversarial cases (#211), pinned-library load order at scale (#212), size
-caps (#213) and safe embedding of adversarial ``</script>``/``<!--`` text
-(#214) are later tickets'.
+CSS-scoping adversarial cases (#211), pinned-library load order at scale
+(#212), size caps (#213) and safe embedding of adversarial
+``</script>``/``<!--`` text (#214) are later tickets'.
 """
 
 from __future__ import annotations
@@ -20,6 +19,7 @@ import hashlib
 import html
 import inspect
 from collections.abc import Iterator
+from typing import Any
 
 import pyarrow as pa
 import pytest
@@ -518,6 +518,10 @@ def _mount_probe(host: _HostPage, probe_body: str) -> object:
         _RENDER_MODULE
         + f"""
 window.__probe = {{}};
+window.__violations = [];
+document.addEventListener("securitypolicyviolation", function (e) {{
+  window.__violations.push(e.effectiveDirective);
+}});
 function __attempt(name, fn) {{
   try {{ window.__probe[name] = {{ value: fn() }}; }}
   catch (e) {{ window.__probe[name] = {{ error: e && e.name }}; }}
@@ -538,6 +542,13 @@ function __attempt(name, fn) {{
         }""",
         _HOST_SECRET,
     )
+    # Positive control: the host really holds the state the module must not
+    # see, so an isolated probe is not just a probe that never ran.
+    held = page.evaluate(  # type: ignore[attr-defined]
+        "() => [document.cookie, localStorage.getItem('token'),"
+        " sessionStorage.getItem('token')].join('|')"
+    )
+    assert held.count(_HOST_SECRET) >= 3
     page.evaluate(  # type: ignore[attr-defined]
         """([sandbox, srcdoc]) => {
           const f = document.createElement("iframe");
@@ -556,6 +567,20 @@ function __attempt(name, fn) {{
         page.wait_for_timeout(50)  # type: ignore[attr-defined]
     assert frame is not None
     return frame
+
+
+def _read_probe(frame: object) -> dict[str, Any]:
+    return frame.evaluate("() => window.__probe")  # type: ignore[attr-defined,no-any-return]
+
+
+def _violations(frame: object) -> list[str]:
+    return frame.evaluate("() => window.__violations")  # type: ignore[attr-defined,no-any-return]
+
+
+def _sees_nothing(entry: dict[str, Any]) -> bool:
+    # An opaque origin has no cookie jar or storage area: access throws, or
+    # at most yields nothing — never the parent's value.
+    return entry.get("error") == "SecurityError" or not entry.get("value")
 
 
 @pytestmark_live
@@ -579,11 +604,15 @@ try {{
 }} catch (e) {{ window.__probe.xhr = "threw"; }}
 """,
     )
-    host.page.wait_for_timeout(300)  # type: ignore[attr-defined]
+    frame.wait_for_function(  # type: ignore[attr-defined]
+        "() => window.__probe.fetch !== 'pending' && window.__probe.xhr !== 'pending'"
+    )
 
-    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
+    probe = _read_probe(frame)
     assert probe["fetch"] == "rejected"
     assert probe["xhr"] in ("error", "threw")
+    # The CSP is what blocked it, not a CORS failure or the sandbox.
+    assert _violations(frame).count("connect-src") >= 2
     assert host.evil_requests == []
 
 
@@ -601,11 +630,14 @@ var img = new Image();
 img.src = {url!r};
 """,
     )
-    host.page.wait_for_timeout(300)  # type: ignore[attr-defined]
+    # beacon and WebSocket (connect-src) plus the image (img-src): each is
+    # blocked by the CSP. The request log cannot see WebSockets, so the
+    # violation events are the evidence for that leg.
+    frame.wait_for_function(  # type: ignore[attr-defined]
+        "() => window.__violations.length >= 3"
+    )
 
-    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
-    # sendBeacon returns true once queued; the request log is the signal.
-    assert "beacon" in probe and "ws" in probe
+    assert sorted(_violations(frame)) == ["connect-src", "connect-src", "img-src"]
     assert host.evil_requests == []
 
 
@@ -614,13 +646,9 @@ def test_module_sees_none_of_the_parents_cookies(host: _HostPage) -> None:
     frame = _mount_probe(
         host, '__attempt("cookie", function () { return document.cookie; });'
     )
-    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
+    probe = _read_probe(frame)
 
-    # An opaque origin has no cookie jar: reading throws (or, at most,
-    # returns nothing) — it never returns the parent's cookie.
-    assert probe["cookie"].get("error") == "SecurityError" or not probe["cookie"].get(
-        "value"
-    )
+    assert _sees_nothing(probe["cookie"])
     assert _HOST_SECRET not in str(probe["cookie"])
 
 
@@ -633,12 +661,10 @@ __attempt("local", function () { return localStorage.getItem("token"); });
 __attempt("session", function () { return sessionStorage.getItem("token"); });
 """,
     )
-    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
+    probe = _read_probe(frame)
 
     for kind in ("local", "session"):
-        assert probe[kind].get("error") == "SecurityError" or not probe[kind].get(
-            "value"
-        )
+        assert _sees_nothing(probe[kind])
     assert _HOST_SECRET not in str(probe)
 
 
@@ -658,7 +684,7 @@ __attempt("frameElement", function () { return window.frameElement; });
 __attempt("opener", function () { return window.opener; });
 """,
     )
-    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
+    probe = _read_probe(frame)
 
     for name in (
         "parentDocument",
