@@ -13,9 +13,9 @@ serves both the user's render and the review render. ``build_shell`` never
 fetches — the caller hands library bytes in, keyed by sha256, and every pin
 in ``document.libraries`` is verified against them.
 
-Not yet built here (a later ticket under #207): byte-faithful safe embedding
-of untrusted module and library text containing ``</script>`` or ``<!--``
-(#214).
+Module and library text is untrusted, so it is escaped before it is embedded
+(see :func:`_embed_script`); the CSP hashes are computed over that same
+escaped text, which is exactly what the browser parses.
 """
 
 from __future__ import annotations
@@ -23,6 +23,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
@@ -118,7 +119,10 @@ def build_shell(
     library_scripts = [
         _verify_pin(pin, libraries, max_library_bytes) for pin in document.libraries
     ]
-    scripts = [*library_scripts, document.module, _bootstrap_js()]
+    scripts = [
+        _embed_script(text)
+        for text in (*library_scripts, document.module, _bootstrap_js())
+    ]
 
     csp = _content_security_policy(_script_hash(text) for text in scripts)
     script_tags = "\n".join(f"<script>{text}</script>" for text in scripts)
@@ -174,14 +178,42 @@ def _verify_pin(
     return blob.decode("utf-8")
 
 
+# Sequences that can end or re-enter an inline element's raw text per the
+# HTML tokenizer: `</script` (any case) closes a <script>, `<!--` opens the
+# escaped states in which a following `<script` swallows the real close tag,
+# and `</style` closes a <style>.
+_SCRIPT_CLOSE = re.compile(r"<(/script)", re.IGNORECASE)
+_STYLE_CLOSE = re.compile(r"<(/style)", re.IGNORECASE)
+_COMMENT_OPEN = re.compile(r"<!--")
+
+
+def _escape_close_tag(pattern: re.Pattern[str], text: str) -> str:
+    return pattern.sub(r"<\\\1", text)
+
+
 def _style_block(styles: str | None) -> str:
     if not styles:
         return ""
     # Scoped to the container so a stray `body` or `*` rule cannot restyle
-    # the shell's chrome (ADR-0017 Decision 7). Full adversarial hardening
-    # of this text is #211/#214's; this is the from-scratch, well-formed
-    # case.
+    # the shell's chrome (ADR-0017 Decision 7); `</style` is escaped so the
+    # text cannot close its own element (CSS reads `\/` as `/`).
+    styles = _escape_close_tag(_STYLE_CLOSE, styles)
     return f"<style>@scope (#{_CONTAINER_ID}) {{\n{styles}\n}}</style>\n"
+
+
+def _embed_script(text: str) -> str:
+    """Make ``text`` safe to sit inside an inline ``<script>`` element.
+
+    ``</script`` becomes ``<\\/script`` and ``<!--`` becomes ``\\x3C!--``.
+    In a JS string, template, regex literal (including ``u``/``v`` flags) or
+    comment the escape denotes the same character, so
+    behaviour is unchanged and the bytes differ only at those sequences.
+    Text that hits them outside such a context (e.g. ``a<!--b`` as bare code,
+    an HTML-like comment) cannot be preserved; that residual case is for an
+    ADR-0017 amendment rather than a new ``DocumentAssemblyError`` kind.
+    """
+    text = _escape_close_tag(_SCRIPT_CLOSE, text)
+    return _COMMENT_OPEN.sub(r"\\x3C!--", text)
 
 
 def _script_hash(text: str) -> str:

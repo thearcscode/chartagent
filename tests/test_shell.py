@@ -9,7 +9,7 @@ stand-in — and are skipped when no Chromium is installed, the same posture
 
 CSS-scoping adversarial cases (#211), pinned-library load order at scale
 (#212), size caps (#213) and safe embedding of adversarial
-``</script>``/``<!--`` text (#214) are later tickets'.
+``</script>``/``<!--`` text (#214) round out the slice.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import dataclasses
 import hashlib
 import html
 import inspect
+import re
 from collections.abc import Iterator
 from typing import Any
 
@@ -1042,3 +1043,125 @@ def test_a_page_over_the_shipped_assembled_default_raises_assembled_too_large() 
             _pinned_document((pin_a, pin_b)), libraries={sha_a: blob_a, sha_b: blob_b}
         )
     assert caught.value.kind == "assembled_too_large"
+
+
+# --- Safe embedding of untrusted module/library text (#214) -------------
+
+_ADVERSARIAL_TEXTS = {
+    "close_tag": 'window.__marker = "a</script><b>injected</b>c";',
+    "close_tag_upper": 'window.__marker = "a</SCRIPT >c";',
+    "comment_open": 'window.__marker = "a<!--b";',
+    "comment_then_script": 'window.__marker = "<!-- <script> x";',
+    "unicode_regex": "window.__marker = /<!--|<\\/script>/u.test('<!--');",
+    "regex_literal": "window.__marker = /<\\/script>|<!--/.test('<!--');",
+}
+
+_ADVERSARIAL_EXPECTED = {
+    "close_tag": "a</script><b>injected</b>c",
+    "close_tag_upper": "a</SCRIPT >c",
+    "comment_open": "a<!--b",
+    "comment_then_script": "<!-- <script> x",
+    "unicode_regex": True,
+    "regex_literal": True,
+}
+
+
+def _adversarial_module(snippet: str) -> str:
+    return snippet + "\n" + _RENDER_MODULE
+
+
+@pytest.mark.parametrize("case", sorted(_ADVERSARIAL_TEXTS))
+def test_module_text_cannot_add_or_close_script_tags(case: str) -> None:
+    shell = build_shell(
+        _from_scratch_document(_adversarial_module(_ADVERSARIAL_TEXTS[case])),
+        libraries={},
+    )
+    # Module + bootstrap only: no early close.
+    assert shell.html.lower().count("</script") == 2
+    assert "<!--" not in shell.html
+
+
+@pytest.mark.parametrize("case", sorted(_ADVERSARIAL_TEXTS))
+def test_library_bytes_cannot_add_or_close_script_tags(case: str) -> None:
+    pin, sha, blob = _pinned_library("evil", _ADVERSARIAL_TEXTS[case])
+    shell = build_shell(_pinned_document((pin,)), libraries={sha: blob})
+    assert shell.html.lower().count("</script") == 3
+    assert "<!--" not in shell.html
+
+
+def test_styles_cannot_close_the_style_element() -> None:
+    shell = build_shell(
+        _from_scratch_document(styles="a{}</style><script>x</script>"),
+        libraries={},
+    )
+    assert shell.html.lower().count("</style") == 1
+
+
+def _csp_script_hashes(shell: Shell) -> set[str]:
+    csp_line = next(
+        line for line in shell.html.splitlines() if "Content-Security-Policy" in line
+    )
+    src = csp_line.split("script-src", 1)[1].split(";", 1)[0]
+    return {token.strip("'") for token in src.split()}
+
+
+def _served_script_hashes(shell: Shell) -> list[str]:
+    bodies = re.findall(r"<script>(.*?)</script>", shell.html, flags=re.DOTALL)
+    return [
+        "sha256-" + base64.b64encode(hashlib.sha256(b.encode()).digest()).decode()
+        for b in bodies
+    ]
+
+
+@pytest.mark.parametrize("case", sorted(_ADVERSARIAL_TEXTS))
+def test_csp_hashes_match_the_served_script_text(case: str) -> None:
+    pin, sha, blob = _pinned_library("evil", _ADVERSARIAL_TEXTS[case])
+    shell = build_shell(
+        _pinned_document((pin,), _adversarial_module(_ADVERSARIAL_TEXTS[case])),
+        libraries={sha: blob},
+    )
+    served = _served_script_hashes(shell)
+    assert len(served) == 3
+    assert set(served) == _csp_script_hashes(shell)
+
+
+@pytestmark_live
+@pytest.mark.parametrize("case", sorted(_ADVERSARIAL_TEXTS))
+def test_adversarial_module_executes_as_one_script_under_csp(
+    page: object, case: str
+) -> None:
+    shell = build_shell(
+        _from_scratch_document(_adversarial_module(_ADVERSARIAL_TEXTS[case])),
+        libraries={},
+    )
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+    _post_paint(page, [])
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    ack = page.evaluate("() => window.__acks[0]")  # type: ignore[attr-defined]
+    main = page.frame(name="main")  # type: ignore[attr-defined]
+
+    assert ack["ok"] is True
+    assert main.evaluate("() => window.__marker") == _ADVERSARIAL_EXPECTED[case]
+    assert main.evaluate("() => document.querySelectorAll('b').length") == 0
+    assert main.evaluate("() => document.scripts.length") == 2
+
+
+@pytestmark_live
+@pytest.mark.parametrize("case", sorted(_ADVERSARIAL_TEXTS))
+def test_adversarial_library_executes_as_one_script_under_csp(
+    page: object, case: str
+) -> None:
+    pin, sha, blob = _pinned_library("evil", _ADVERSARIAL_TEXTS[case])
+    shell = build_shell(_pinned_document((pin,)), libraries={sha: blob})
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+    _post_paint(page, [])
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    ack = page.evaluate("() => window.__acks[0]")  # type: ignore[attr-defined]
+    main = page.frame(name="main")  # type: ignore[attr-defined]
+
+    assert ack["ok"] is True
+    assert main.evaluate("() => window.__marker") == _ADVERSARIAL_EXPECTED[case]
+    assert main.evaluate("() => document.querySelectorAll('b').length") == 0
+    assert main.evaluate("() => document.scripts.length") == 3
