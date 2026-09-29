@@ -484,7 +484,7 @@ class _HostPage:
 
 
 @pytest.fixture()
-def host(request: pytest.FixtureRequest) -> Iterator[_HostPage]:
+def host() -> Iterator[_HostPage]:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
@@ -528,7 +528,7 @@ function __attempt(name, fn) {{
     shell = build_shell(_from_scratch_document(module=module), libraries={})
     page = host.page
     page.evaluate(  # type: ignore[attr-defined]
-        """([secret, origin]) => {
+        """(secret) => {
           document.cookie = "docsecret=" + secret;
           localStorage.setItem("token", secret);
           sessionStorage.setItem("token", secret);
@@ -536,7 +536,7 @@ function __attempt(name, fn) {{
           window.__acks = [];
           window.addEventListener("message", (e) => window.__acks.push(e.data));
         }""",
-        [_HOST_SECRET, _HOST_ORIGIN],
+        _HOST_SECRET,
     )
     page.evaluate(  # type: ignore[attr-defined]
         """([sandbox, srcdoc]) => {
