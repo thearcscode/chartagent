@@ -78,10 +78,11 @@ def build_shell(
     ``(document, libraries)`` — two calls with equal inputs return an equal
     ``Shell``.
 
-    Three size caps, in UTF-8 bytes, are keyword arguments with shipped
-    defaults: ``max_source_bytes`` bounds the module plus CSS together,
-    ``max_library_bytes`` bounds each library blob on its own, and
-    ``max_assembled_bytes`` bounds the finished page.
+    Three size caps, in bytes, are keyword arguments with shipped defaults:
+    ``max_source_bytes`` bounds the module plus CSS together (default 1 MiB),
+    ``max_library_bytes`` bounds each library blob on its own (default
+    10 MiB, admitting Plotly-class libraries), and ``max_assembled_bytes``
+    bounds the finished UTF-8 page (default 16 MiB).
 
     Raises :class:`~chartagent.errors.DocumentAssemblyError`:
 

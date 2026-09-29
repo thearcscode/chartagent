@@ -111,6 +111,7 @@ def _from_scratch_document(
 
 def test_build_shell_takes_no_rows() -> None:
     params = list(inspect.signature(build_shell).parameters)
+    assert params[:2] == ["document", "libraries"]
     assert "rows" not in params and "data" not in params
 
 
@@ -1017,9 +1018,27 @@ def test_an_assembled_page_over_its_cap_raises_assembled_too_large() -> None:
         )
     assert caught.value.kind == "assembled_too_large"
     assert "1500" in str(caught.value)
+    assert "assembled" in str(caught.value)
 
 
 def test_a_plotly_class_blob_passes_under_the_shipped_defaults() -> None:
     pin, sha, blob = _blob_of(5 * 1024 * 1024 + 1)
     shell = build_shell(_pinned_document((pin,)), libraries={sha: blob})
     assert len(shell.html.encode("utf-8")) > len(blob)
+
+
+def test_a_library_blob_over_the_shipped_default_raises_library_too_large() -> None:
+    pin, sha, blob = _blob_of(10 * 1024 * 1024 + 1)
+    with pytest.raises(DocumentAssemblyError) as caught:
+        build_shell(_pinned_document((pin,)), libraries={sha: blob})
+    assert caught.value.kind == "library_too_large"
+
+
+def test_a_page_over_the_shipped_assembled_default_raises_assembled_too_large() -> None:
+    pin_a, sha_a, blob_a = _blob_of(9 * 1024 * 1024)
+    pin_b, sha_b, blob_b = _pinned_library("libb", "b" * (9 * 1024 * 1024))
+    with pytest.raises(DocumentAssemblyError) as caught:
+        build_shell(
+            _pinned_document((pin_a, pin_b)), libraries={sha_a: blob_a, sha_b: blob_b}
+        )
+    assert caught.value.kind == "assembled_too_large"
