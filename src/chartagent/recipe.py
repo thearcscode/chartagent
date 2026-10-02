@@ -143,7 +143,6 @@ class ChartRecipe:
         doc = self.document
         out: dict[str, Any] = {
             "spec_version": self.spec_version,
-            "transform": transform_mapping(self.transform),
             "source_schema": dict(self.source_schema),
             "escape_reason": {"bucket": self.escape_reason.bucket},
             "theme_spec": theme,
@@ -159,6 +158,9 @@ class ChartRecipe:
         }
         result = _omit_nulls(out)
         assert isinstance(result, dict)
+        # A ``lit`` node's null is a SQL NULL, not an absence (see
+        # ``transform_mapping``), so the transform is not null-stripped.
+        result["transform"] = transform_mapping(self.transform)
         return result
 
     def canonical_json(self) -> str:

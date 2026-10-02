@@ -112,3 +112,16 @@ def test_missing_field_raises() -> None:
     del body["document"]
     with pytest.raises(SpecShapeError):
         ChartRecipe.from_dict(body)
+
+
+def test_lit_null_survives_the_round_trip() -> None:
+    body = _payload()
+    body["transform"]["filter"] = {
+        "kind": "eq",
+        "args": [
+            {"kind": "col", "name": "quarter"},
+            {"kind": "lit", "value": None},
+        ],
+    }
+    recipe = ChartRecipe.from_dict(body)
+    assert ChartRecipe.from_dict(json.loads(recipe.canonical_json())) == recipe
