@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from typing import Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -25,6 +25,9 @@ from chartagent.frame._generated import (
     ThemePresetName,
 )
 from chartagent.transform.model import DISCRIMINATOR_TAGS, TransformSpec
+
+if TYPE_CHECKING:
+    from chartagent.recipe import ChartRecipe
 
 Backend = Literal["vegalite", "echarts", "chartjs", "plotly", "excel"]
 
@@ -177,8 +180,16 @@ def _omit_nulls(value: object) -> object:
     return value
 
 
-def canonical_json(spec: InputFrame | Mapping[str, Any]) -> str:
-    """Nulls omitted; empty collections preserved."""
+def canonical_json(spec: InputFrame | ChartRecipe | Mapping[str, Any]) -> str:
+    """Nulls omitted; empty collections preserved. Accepts an input frame, a
+    ``ChartRecipe`` (ADR-0018 Decision 9), or a mapping of either — a mapping
+    with a ``document`` key is a recipe."""
+    from chartagent.recipe import ChartRecipe
+
+    if isinstance(spec, Mapping) and "document" in spec:
+        spec = ChartRecipe.from_dict(spec)
+    if isinstance(spec, ChartRecipe):
+        return spec.canonical_json()
     frame = spec if isinstance(spec, InputFrame) else InputFrame.model_validate(spec)
     dumped = frame.model_dump(mode="json", by_alias=True, exclude_none=True)
     return json.dumps(

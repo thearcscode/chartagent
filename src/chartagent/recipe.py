@@ -9,18 +9,26 @@ has no wire format: nothing compiles it, and what reaches the browser is
 
 from __future__ import annotations
 
+import json
 import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
 import pyarrow as pa
+from pydantic import BaseModel, ConfigDict, StrictInt, StrictStr, ValidationError
 
 from chartagent.bind import DataSource, _run_source_stage
 from chartagent.envelope import Advisory
-from chartagent.frame.input import SourceBucket, ThemeSpec
+from chartagent.errors import SpecShapeError
+from chartagent.frame.input import (
+    SourceBucket,
+    ThemeSpec,
+    _format_field_path,
+    _omit_nulls,
+)
 from chartagent.transform.drift import unchecked_source_columns
-from chartagent.transform.model import Menu, RawSql, transform_mapping
+from chartagent.transform.model import Menu, RawSql, TransformSpec, transform_mapping
 from chartagent.transform.serialize import serialize_rows
 
 _CONTRACT_VERSION = 1
@@ -89,6 +97,106 @@ class ChartRecipe:
     escape_reason: EscapeReason
     theme_spec: str | ThemeSpec | None
     document: ChartDocument
+
+    @classmethod
+    def from_dict(cls, obj: Mapping[str, Any]) -> ChartRecipe:
+        """Validate posted or stored JSON into a recipe (ADR-0018 Decisions 7, 9).
+
+        Raises :class:`SpecShapeError` on any invalid input; the library, not
+        Studio, owns the grammar. The inverse of :meth:`to_dict`."""
+        if not isinstance(obj, Mapping):
+            raise SpecShapeError("recipe must be a JSON object")
+        try:
+            model = _RecipeModel.model_validate(obj)
+        except ValidationError as exc:
+            first = exc.errors()[0]
+            path = _format_field_path(first["loc"])
+            raise SpecShapeError(
+                f"invalid recipe: {path}: {first['msg']}"
+                if path
+                else f"invalid recipe: {first['msg']}"
+            ) from exc
+        doc = model.document
+        return cls(
+            spec_version=model.spec_version,
+            transform=model.transform,
+            source_schema=dict(model.source_schema),
+            escape_reason=EscapeReason(bucket=model.escape_reason.bucket),
+            theme_spec=model.theme_spec,
+            document=ChartDocument(
+                module=doc.module,
+                styles=doc.styles,
+                libraries=tuple(
+                    LibraryPin(p.name, p.version, p.sha256) for p in doc.libraries
+                ),
+                contract_version=doc.contract_version,
+            ),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """A JSON-ready mapping; nulls omitted, empty collections kept."""
+        theme: str | dict[str, Any] | None = None
+        if isinstance(self.theme_spec, ThemeSpec):
+            theme = self.theme_spec.model_dump(mode="json", exclude_none=True)
+        else:
+            theme = self.theme_spec
+        doc = self.document
+        out: dict[str, Any] = {
+            "spec_version": self.spec_version,
+            "source_schema": dict(self.source_schema),
+            "escape_reason": {"bucket": self.escape_reason.bucket},
+            "theme_spec": theme,
+            "document": {
+                "module": doc.module,
+                "styles": doc.styles,
+                "libraries": [
+                    {"name": p.name, "version": p.version, "sha256": p.sha256}
+                    for p in doc.libraries
+                ],
+                "contract_version": doc.contract_version,
+            },
+        }
+        result = _omit_nulls(out)
+        assert isinstance(result, dict)
+        # A ``lit`` node's null is a SQL NULL, not an absence (see
+        # ``transform_mapping``), so the transform is not null-stripped.
+        result["transform"] = transform_mapping(self.transform)
+        return result
+
+    def canonical_json(self) -> str:
+        return json.dumps(
+            self.to_dict(), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        )
+
+
+class _PinModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: StrictStr
+    version: StrictStr
+    sha256: StrictStr
+
+
+class _DocumentModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    module: StrictStr
+    styles: StrictStr | None = None
+    libraries: list[_PinModel]
+    contract_version: StrictInt = _CONTRACT_VERSION
+
+
+class _EscapeModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    bucket: Literal[1, 2, 3, 4]
+
+
+class _RecipeModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    spec_version: StrictStr
+    transform: TransformSpec
+    source_schema: dict[str, SourceBucket]
+    escape_reason: _EscapeModel
+    theme_spec: StrictStr | ThemeSpec | None = None
+    document: _DocumentModel
 
 
 @dataclass(frozen=True)
