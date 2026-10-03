@@ -29,6 +29,7 @@ from chartagent.errors import (
     UnanswerableInstructionError,
 )
 from chartagent.frame.input import DEFAULT_BASE_SIZE
+from chartagent.plan import escalate as escalate_module
 from chartagent.plan.agent import Attempt
 from chartagent.result import ChartResult as ResultFromStablePath
 from chartagent.review import CheckResult, ReviewReport
@@ -1452,6 +1453,122 @@ def test_patch_ask_is_off_the_planner_cap() -> None:
     assert calls["model"] == 4
     assert result.recipe is not None
     assert result.recipe.document.module == _PATCHED_DOC["module"]
+
+
+def _repairing_agent_with(
+    reports: list[ReviewReport], *replies: Any
+) -> tuple[ChartAgent, dict[str, Any], list[Any]]:
+    agent = _agent()
+    queue = list(reports)
+    reviewed: list[Any] = []
+
+    def reviewer(profile: Any, recipe: Any, instruction: Any) -> ReviewReport:
+        reviewed.append(recipe)
+        return queue.pop(0)
+
+    agent._recipe_reviewer = reviewer
+    calls = _install(agent, _inexpressible(1), ("step2", _MISS_DRAFT), *replies)
+    return agent, calls, reviewed
+
+
+_MALFORMED = ("step2", {"nonsense": True})
+
+
+def _failing_names(result: ChartResult) -> list[str]:
+    assert result.review is not None
+    return [c.name for c in result.review.checks if c.outcome == "fail"]
+
+
+def test_malformed_patch_returns_the_unrepaired_recipe_with_its_report() -> None:
+    agent, calls, reviewed = _repairing_agent_with(
+        [_recipe_report("label_overlap")], _MALFORMED
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    assert len(reviewed) == 1
+    assert result.recipe is reviewed[0]
+    assert result.review is not None and result.review.passed is False
+    assert _failing_names(result) == ["label_overlap"]
+    assert result.review.budget_exhausted is True
+
+
+def test_discarded_patch_spends_one_unit_and_best_runs_a_second_round() -> None:
+    agent, calls, _ = _repairing_agent_with(
+        [_recipe_report("label_overlap"), _recipe_report()],
+        _MALFORMED,
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="best")
+    assert calls["model"] == 4
+    assert result.recipe is not None
+    assert result.recipe.document.module == _PATCHED_DOC["module"]
+    assert result.review is not None and result.review.passed is True
+    assert result.review.budget_exhausted is False
+
+
+def test_discarded_patch_at_balanced_makes_no_second_ask() -> None:
+    agent, calls, _ = _repairing_agent_with(
+        [_recipe_report("label_overlap")], _MALFORMED, ("step2", _PATCHED_DOC)
+    )
+    agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+
+
+def test_worse_patch_is_dropped_for_the_best_recipe_seen() -> None:
+    agent, _, reviewed = _repairing_agent_with(
+        [
+            _recipe_report("label_overlap"),
+            _recipe_report("label_overlap", "axis_labels_present"),
+        ],
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert len(reviewed) == 2
+    assert result.recipe is reviewed[0]
+    assert result.recipe.document.module == _MISS_DRAFT["document"]["module"]
+    assert _failing_names(result) == ["label_overlap"]
+    assert result.review is not None and result.review.budget_exhausted is True
+
+
+def test_passing_recipe_is_never_replaced_by_a_failing_one() -> None:
+    agent, calls, reviewed = _repairing_agent_with(
+        [_recipe_report("label_overlap"), _recipe_report(), _recipe_report("x")],
+        ("step2", _PATCHED_DOC),
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="best")
+    assert calls["model"] == 3
+    assert result.recipe is reviewed[1]
+    assert result.review is not None and result.review.passed is True
+
+
+def test_zero_budget_marks_a_repairable_failure_exhausted_with_no_ask(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setitem(escalate_module._REVIEW_REPAIRS, "balanced", 0)
+    agent, calls, _ = _repairing_agent(_recipe_report("label_overlap"))
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 2
+    assert result.review is not None and result.review.budget_exhausted is True
+
+
+def test_injection_failure_alone_never_sets_budget_exhausted() -> None:
+    agent, _, _ = _repairing_agent(_recipe_report("injection_pattern"))
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.review is not None
+    assert result.review.budget_exhausted is False
+
+
+def test_reviewer_error_propagates() -> None:
+    agent = _agent()
+
+    def boom(profile: Any, recipe: Any, instruction: Any) -> ReviewReport:
+        raise RuntimeError("reviewer broke")
+
+    agent._recipe_reviewer = boom
+    _install(agent, _inexpressible(1), ("step2", _MISS_DRAFT))
+    with pytest.raises(RuntimeError, match="reviewer broke"):
+        agent.create_chart(_SALES, "a 3D globe", quality="balanced")
 
 
 def test_default_recipe_review_is_tier_one_only_with_no_patch_ask() -> None:
