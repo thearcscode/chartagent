@@ -1508,6 +1508,43 @@ def test_discarded_patch_spends_one_unit_and_best_runs_a_second_round() -> None:
     assert result.review.budget_exhausted is False
 
 
+def test_twice_failing_recipe_gets_two_patch_asks_at_best_and_is_exhausted() -> None:
+    failing = _recipe_report("label_overlap")
+    agent, calls, reviewed = _repairing_agent_with(
+        [failing, failing, failing],
+        ("step2", _PATCHED_DOC),
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="best")
+    assert calls["model"] == 4
+    assert len(reviewed) == 3
+    assert result.recipe is reviewed[0]
+    assert result.review is not None
+    assert result.review.passed is False
+    assert result.review.budget_exhausted is True
+
+
+def test_twice_failing_recipe_gets_one_patch_ask_at_balanced() -> None:
+    failing = _recipe_report("label_overlap")
+    agent, calls, _ = _repairing_agent_with(
+        [failing, failing], ("step2", _PATCHED_DOC), ("step2", _PATCHED_DOC)
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    assert result.review is not None and result.review.budget_exhausted is True
+
+
+def test_round_one_pass_at_best_makes_no_second_ask() -> None:
+    agent, calls, _ = _repairing_agent_with(
+        [_recipe_report("label_overlap"), _recipe_report()],
+        ("step2", _PATCHED_DOC),
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="best")
+    assert calls["model"] == 3
+    assert result.review is not None and result.review.passed is True
+
+
 def test_discarded_patch_at_balanced_makes_no_second_ask() -> None:
     agent, calls, _ = _repairing_agent_with(
         [_recipe_report("label_overlap")], _MALFORMED, ("step2", _PATCHED_DOC)
