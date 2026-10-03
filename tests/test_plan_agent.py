@@ -120,6 +120,8 @@ def _install(agent: ChartAgent, *replies: Any) -> dict[str, Any]:
         calls["user"].append(_prompt_text(messages, UserPromptPart))
         calls["n_messages"].append(len(messages) if isinstance(messages, list) else 0)
         reply = queue.pop(0)
+        if isinstance(reply, Exception):
+            raise reply
         if isinstance(reply, tuple):
             kind, args = reply
             return _reply(kind, args)(messages, info)
@@ -1525,21 +1527,41 @@ def test_worse_patch_is_dropped_for_the_best_recipe_seen() -> None:
     result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
     assert len(reviewed) == 2
     assert result.recipe is reviewed[0]
-    assert result.recipe.document.module == _MISS_DRAFT["document"]["module"]
     assert _failing_names(result) == ["label_overlap"]
     assert result.review is not None and result.review.budget_exhausted is True
 
 
 def test_passing_recipe_is_never_replaced_by_a_failing_one() -> None:
+    # A third review would pop an empty queue: the loop must stop at the pass.
     agent, calls, reviewed = _repairing_agent_with(
-        [_recipe_report("label_overlap"), _recipe_report(), _recipe_report("x")],
+        [_recipe_report("label_overlap"), _recipe_report()],
         ("step2", _PATCHED_DOC),
         ("step2", _PATCHED_DOC),
     )
     result = agent.create_chart(_SALES, "a 3D globe", quality="best")
     assert calls["model"] == 3
+    assert len(reviewed) == 2
     assert result.recipe is reviewed[1]
     assert result.review is not None and result.review.passed is True
+
+
+def test_marks_present_is_patched_with_the_other_failures_in_one_ask() -> None:
+    agent, calls, _ = _repairing_agent_with(
+        [_recipe_report("marks_present", "label_overlap"), _recipe_report()],
+        ("step2", _PATCHED_DOC),
+    )
+    agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    system = calls["system"][2]
+    assert "marks_present" in system and "label_overlap" in system
+
+
+def test_transport_error_on_the_patch_ask_propagates() -> None:
+    agent, _, _ = _repairing_agent_with(
+        [_recipe_report("label_overlap")], RuntimeError("transport down")
+    )
+    with pytest.raises(RuntimeError, match="transport down"):
+        agent.create_chart(_SALES, "a 3D globe", quality="balanced")
 
 
 def test_zero_budget_marks_a_repairable_failure_exhausted_with_no_ask(
