@@ -453,6 +453,11 @@ ask, not the whole budget. A discarded patch keeps the unrepaired recipe and spe
 (`_recipe_reviewer`, default Tier 1 only), so production behaviour is unchanged until real
 custom-rail scoring replaces it.
 
+(#227) The loop keeps the first recipe unless a patched one passes review: a failing
+re-review is dropped and the next round patches the recipe as it was. A discarded patch
+returns the unrepaired recipe, and `budget_exhausted` is set on the returned report iff a
+repairable failure remains with no budget left.
+
 ## Related
 
 - [#175](https://github.com/thearcscode/chartagent/issues/175) — the ticket this ADR settles.

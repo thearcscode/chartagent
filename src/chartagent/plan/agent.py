@@ -75,7 +75,7 @@ from chartagent.profile.source import profile_source
 from chartagent.rasterise import Rasteriser
 from chartagent.recipe import ChartRecipe, EscapeReason
 from chartagent.result import ChartResult
-from chartagent.review import ReviewReport, flint_review, tier1_review
+from chartagent.review import CheckName, ReviewReport, flint_review, tier1_review
 
 _STEP1_RETRIES = 1
 _STEP2_RETRIES = 2
@@ -460,35 +460,46 @@ class ChartAgent:
         budget: int,
         invoke: Any,
     ) -> ChartResult:
-        """Review a custom-rail recipe; on a failure with budget left, make one
-        ``patch_document`` call for every failing name, keep only its document,
-        and review the repaired recipe in full (ADR-0030 Decisions 11-14). A
-        discarded patch keeps the recipe as it was."""
+        """Review a custom-rail recipe and spend the budget on patch rounds.
+
+        Each round is one ``patch_document`` call for every repairable failing
+        name (ADR-0030 Decisions 11-14), charged one unit whether or not the
+        patch is kept. A patch that decodes is reviewed in full: if it passes
+        it is the answer, otherwise it is dropped and the next round patches the
+        recipe as it was. A discarded patch changes nothing. Best-so-far is the
+        recipe that passed, else the first one emitted; the returned report is
+        always that recipe's (ADR-0027 Decision 7). Never raises on review."""
         review = self._recipe_reviewer(profile, recipe, instruction)
-        # injection_pattern is never patched and must not veto the other names.
-        failing = [
-            check.name
-            for check in review.checks
-            if check.outcome == "fail" and check.name != "injection_pattern"
-        ]
-        if budget < 1 or not failing:
-            return ChartResult(recipe=recipe, review=review)
-        patched = patch_document(
-            profile,
-            instruction,
-            recipe.document,
-            failing,
-            semantic_types=semantic_types,
-            resolver=self._library_resolver,
-            invoke=invoke,
-        )
-        if isinstance(patched, PatchDiscarded):
-            return ChartResult(recipe=recipe, review=review)
-        repaired = replace(recipe, document=patched)
-        return ChartResult(
-            recipe=repaired,
-            review=self._recipe_reviewer(profile, repaired, instruction),
-        )
+        failing = _repairable_failures(review)
+        while budget > 0 and failing:
+            budget -= 1
+            patched = patch_document(
+                profile,
+                instruction,
+                recipe.document,
+                failing,
+                semantic_types=semantic_types,
+                resolver=self._library_resolver,
+                invoke=invoke,
+            )
+            if isinstance(patched, PatchDiscarded):
+                continue
+            repaired = replace(recipe, document=patched)
+            repaired_review = self._recipe_reviewer(profile, repaired, instruction)
+            if repaired_review.passed:
+                return ChartResult(recipe=repaired, review=repaired_review)
+        if failing:
+            review = replace(review, budget_exhausted=True)
+        return ChartResult(recipe=recipe, review=review)
+
+
+def _repairable_failures(review: ReviewReport) -> list[CheckName]:
+    """injection_pattern is never patched and must not veto the other names."""
+    return [
+        check.name
+        for check in review.checks
+        if check.outcome == "fail" and check.name != "injection_pattern"
+    ]
 
 
 def _tier1_recipe_review(
