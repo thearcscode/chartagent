@@ -445,6 +445,14 @@ prompt exactly as ADR-0017 Decision 7 froze it — restated here, not reinvented
   ([#177](https://github.com/thearcscode/chartagent/issues/177)) inherits the two-prompt split
   (Decision 5) as what a light-mode changed-checks-only review would diff.
 
+## Erratum (2026-10-03, #225/#226): round semantics
+
+Decision 13's "consumes the budget" is read as one unit of the `quality=` budget per patch
+ask, not the whole budget. A discarded patch keeps the unrepaired recipe and spends one unit.
+`create_chart` runs the loop through a private recipe reviewer on `ChartAgent`
+(`_recipe_reviewer`, default Tier 1 only), so production behaviour is unchanged until real
+custom-rail scoring replaces it.
+
 ## Related
 
 - [#175](https://github.com/thearcscode/chartagent/issues/175) — the ticket this ADR settles.

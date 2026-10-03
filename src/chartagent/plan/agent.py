@@ -19,12 +19,16 @@ both ``rasteriser=`` and ``critique_model=`` were supplied at construction —
 a Flint critique that can actually fail ``marks_present`` and wake the hop.
 Neither kwarg has a default; unset, Tier 2 stays ``unavailable`` and the hop
 stays dormant, exactly as before #201.
+``ChartAgent._recipe_reviewer`` (issue #226) is the same seam for a custom-rail
+recipe: ``(profile, recipe, instruction) -> ReviewReport``. Its default is
+Tier 1 only, so a recipe is never repaired in production until real
+custom-rail scoring replaces it.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
 from typing import Any, Literal, cast, get_args
 
 from chartagent.bind import DataSource, bind
@@ -39,11 +43,17 @@ from chartagent.errors import (
     SpecVocabularyError,
     UnanswerableInstructionError,
 )
+from chartagent.frame._generated import SemanticTypeName
 from chartagent.frame.input import Backend, InputFrame
 from chartagent.plan.assemble import _SPEC_VERSION, assemble
 from chartagent.plan.client import ModelClient
 from chartagent.plan.emit import _EmitFailed, _with_repair
-from chartagent.plan.escalate import EscalationDecision, Quality, decide_escalation
+from chartagent.plan.escalate import (
+    _REVIEW_REPAIRS,
+    EscalationDecision,
+    Quality,
+    decide_escalation,
+)
 from chartagent.plan.prompt import (
     DocumentPrompt,
     Step1Prompt,
@@ -54,7 +64,9 @@ from chartagent.plan.prompt import (
 from chartagent.plan.recipe import (
     DocumentGenerationFailed,
     LibraryResolver,
+    PatchDiscarded,
     generate_recipe,
+    patch_document,
 )
 from chartagent.plan.schema import Fragment, Inexpressible, Step1Result, Unanswerable
 from chartagent.plan.select import select_backend
@@ -97,6 +109,7 @@ class Attempt:
 
 AttemptObserver = Callable[[Attempt], None]
 Reviewer = Callable[[Profile, InputFrame, Envelope, Backend, str], ReviewReport]
+RecipeReviewer = Callable[[Profile, ChartRecipe, str], ReviewReport]
 
 
 def _dump_emit(value: Any) -> Any:
@@ -186,6 +199,7 @@ class ChartAgent:
             None if critique_model is None else ModelClient(critique_model)
         )
         self._reviewer: Reviewer = self._flint_review
+        self._recipe_reviewer: RecipeReviewer = _tier1_recipe_review
 
     def _flint_review(
         self,
@@ -299,7 +313,9 @@ class ChartAgent:
                 # raise; above it the miss is authored into a recipe (ADR-0030).
                 if resolved_quality == "fast":
                     raise
-                return self._author_miss(profile, instruction, miss, invoke)
+                return self._author_miss(
+                    profile, instruction, miss, invoke, resolved_quality
+                )
             except _EmitFailed as exc:
                 last = exc.reason
                 repair = exc
@@ -395,6 +411,7 @@ class ChartAgent:
         instruction: str,
         miss: InexpressibleRequestError,
         invoke: Any,
+        quality: Quality,
     ) -> ChartResult:
         """Bucket 1/2 at balanced/best: author a recipe instead of raising.
 
@@ -417,17 +434,67 @@ class ChartAgent:
                 f"request is inexpressible (bucket {miss.bucket})",
                 bucket=miss.bucket,
             ) from exc
-        return ChartResult(
-            recipe=ChartRecipe(
-                spec_version=_SPEC_VERSION,
-                transform=generated.transform,
-                source_schema=generated.source_schema,
-                escape_reason=reason,
-                theme_spec=None,
-                document=generated.document,
-            ),
-            review=tier1_review(profile, backend=None),
+        recipe = ChartRecipe(
+            spec_version=_SPEC_VERSION,
+            transform=generated.transform,
+            source_schema=generated.source_schema,
+            escape_reason=reason,
+            theme_spec=None,
+            document=generated.document,
         )
+        return self._review_and_repair(
+            profile,
+            instruction,
+            recipe,
+            generated.semantic_types,
+            _REVIEW_REPAIRS[quality],
+            invoke,
+        )
+
+    def _review_and_repair(
+        self,
+        profile: Profile,
+        instruction: str,
+        recipe: ChartRecipe,
+        semantic_types: Mapping[str, SemanticTypeName],
+        budget: int,
+        invoke: Any,
+    ) -> ChartResult:
+        """Review a custom-rail recipe; on a failure with budget left, make one
+        ``patch_document`` call for every failing name, keep only its document,
+        and review the repaired recipe in full (ADR-0030 Decisions 11-14). A
+        discarded patch keeps the recipe as it was."""
+        review = self._recipe_reviewer(profile, recipe, instruction)
+        # injection_pattern is never patched and must not veto the other names.
+        failing = [
+            check.name
+            for check in review.checks
+            if check.outcome == "fail" and check.name != "injection_pattern"
+        ]
+        if budget < 1 or not failing:
+            return ChartResult(recipe=recipe, review=review)
+        patched = patch_document(
+            profile,
+            instruction,
+            recipe.document,
+            failing,
+            semantic_types=semantic_types,
+            resolver=self._library_resolver,
+            invoke=invoke,
+        )
+        if isinstance(patched, PatchDiscarded):
+            return ChartResult(recipe=recipe, review=review)
+        repaired = replace(recipe, document=patched)
+        return ChartResult(
+            recipe=repaired,
+            review=self._recipe_reviewer(profile, repaired, instruction),
+        )
+
+
+def _tier1_recipe_review(
+    profile: Profile, recipe: ChartRecipe, instruction: str
+) -> ReviewReport:
+    return tier1_review(profile, backend=None)
 
 
 def _step1_attempt(
