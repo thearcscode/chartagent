@@ -1338,6 +1338,114 @@ def test_default_review_never_hops() -> None:
     assert agent.create_chart(_SALES, "revenue by quarter").envelope is not None
 
 
+# --- #226: the review-repair loop on a miss-path recipe --------------------
+
+_PATCHED_DOC: dict[str, Any] = {
+    "module": "function render(data, el) { /* patched */ }",
+    "styles": ".patched{}",
+    "libraries": [],
+}
+
+
+def _recipe_report(*failing: str) -> ReviewReport:
+    checks = [CheckResult("injection_pattern", "pass")]
+    checks += [CheckResult(name, "fail") for name in failing]  # type: ignore[arg-type]
+    return ReviewReport(
+        tiers_run=(1, 2),
+        tiers_skipped={},
+        passed=not failing,
+        budget_exhausted=False,
+        checks=tuple(checks),
+    )
+
+
+def _repairing_agent(
+    *reports: ReviewReport,
+) -> tuple[ChartAgent, dict[str, Any], list[Any]]:
+    agent = _agent()
+    queue = list(reports)
+    reviewed: list[Any] = []
+
+    def reviewer(profile: Any, recipe: Any, instruction: Any) -> ReviewReport:
+        reviewed.append(recipe)
+        return queue.pop(0)
+
+    agent._recipe_reviewer = reviewer
+    calls = _install(
+        agent,
+        _inexpressible(1),
+        ("step2", _MISS_DRAFT),
+        ("step2", _PATCHED_DOC),
+    )
+    return agent, calls, reviewed
+
+
+def test_failing_recipe_review_gets_one_patch_ask_naming_every_failure() -> None:
+    agent, calls, _ = _repairing_agent(
+        _recipe_report("label_overlap", "axis_labels_present"), _recipe_report()
+    )
+    agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    system = calls["system"][2]
+    assert "label_overlap" in system and "axis_labels_present" in system
+
+
+def test_patch_replaces_only_the_document_and_is_reviewed_in_full() -> None:
+    agent, _, reviewed = _repairing_agent(
+        _recipe_report("label_overlap"), _recipe_report()
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.recipe is not None and result.review is not None
+    original = reviewed[0]
+    assert result.recipe.document.module == _PATCHED_DOC["module"]
+    assert result.recipe.document.styles == ".patched{}"
+    assert result.recipe.transform == original.transform
+    assert result.recipe.source_schema == original.source_schema
+    assert result.recipe.theme_spec == original.theme_spec
+    assert result.recipe.escape_reason == original.escape_reason
+    assert len(reviewed) == 2 and reviewed[1] is result.recipe
+    assert result.review.passed is True
+
+
+def test_passing_recipe_review_makes_no_patch_ask() -> None:
+    agent, calls, reviewed = _repairing_agent(_recipe_report())
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 2
+    assert len(reviewed) == 1
+    assert result.recipe is not None
+    assert result.recipe.document.module == _MISS_DRAFT["document"]["module"]
+
+
+def test_patch_ask_is_off_the_planner_cap() -> None:
+    agent = _agent()
+    agent._recipe_reviewer = lambda p, r, i: (
+        _recipe_report("label_overlap")
+        if r.document.module == _MISS_DRAFT["document"]["module"]
+        else _recipe_report()
+    )
+    # A counted step-1 ask fails decode, then the miss lands; the patch is an
+    # extra ask on top of the planner's own history.
+    calls = _install(
+        agent,
+        ("Fragment", {"outcome": "nope"}),
+        _inexpressible(2),
+        ("step2", _MISS_DRAFT),
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 4
+    assert result.recipe is not None
+    assert result.recipe.document.module == _PATCHED_DOC["module"]
+
+
+def test_default_recipe_review_is_tier_one_only_with_no_patch_ask() -> None:
+    agent = _agent()
+    calls = _install(agent, _inexpressible(1), ("step2", _MISS_DRAFT))
+    result = agent.create_chart(_SALES, "a 3D globe", quality="best")
+    assert calls["model"] == 2
+    assert result.review is not None and result.review.tiers_run == (1,)
+
+
 # --- #201: rasteriser= / critique_model= construction and real Tier-2 wiring -
 
 
