@@ -1581,6 +1581,32 @@ def test_injection_failure_alone_never_sets_budget_exhausted() -> None:
     assert result.review.budget_exhausted is False
 
 
+def test_not_checked_tier_two_triggers_no_patch_and_no_critic_call() -> None:
+    report = ReviewReport(
+        tiers_run=(1,),
+        tiers_skipped={},
+        passed=False,
+        budget_exhausted=False,
+        checks=(
+            CheckResult("injection_pattern", "pass"),
+            CheckResult("label_overlap", "not_checked", "unavailable"),
+        ),
+    )
+    agent, calls, reviewed = _repairing_agent(report)
+    result = agent.create_chart(_SALES, "a 3D globe", quality="best")
+    assert calls["model"] == 2
+    assert len(reviewed) == 1
+    assert result.review is not None and result.review.budget_exhausted is False
+
+
+def test_passing_recipe_review_is_not_budget_exhausted() -> None:
+    agent, _, _ = _repairing_agent(_recipe_report())
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.review is not None
+    assert result.review.passed is True
+    assert result.review.budget_exhausted is False
+
+
 def test_reviewer_error_propagates() -> None:
     agent = _agent()
 
