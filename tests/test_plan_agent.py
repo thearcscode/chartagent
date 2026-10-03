@@ -1407,6 +1407,22 @@ def test_patch_replaces_only_the_document_and_is_reviewed_in_full() -> None:
     assert result.review.passed is True
 
 
+def test_injection_pattern_is_not_listed_and_does_not_block_other_repairs() -> None:
+    agent, calls, _ = _repairing_agent(
+        _recipe_report("injection_pattern", "label_overlap"), _recipe_report()
+    )
+    agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    system = calls["system"][2]
+    assert "label_overlap" in system and "injection_pattern" not in system
+
+
+def test_injection_pattern_alone_makes_no_patch_ask() -> None:
+    agent, calls, _ = _repairing_agent(_recipe_report("injection_pattern"))
+    agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 2
+
+
 def test_passing_recipe_review_makes_no_patch_ask() -> None:
     agent, calls, reviewed = _repairing_agent(_recipe_report())
     result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")

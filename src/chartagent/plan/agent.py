@@ -465,7 +465,12 @@ class ChartAgent:
         and review the repaired recipe in full (ADR-0030 Decisions 11-14). A
         discarded patch keeps the recipe as it was."""
         review = self._recipe_reviewer(profile, recipe, instruction)
-        failing = [check.name for check in review.checks if check.outcome == "fail"]
+        # injection_pattern is never patched and must not veto the other names.
+        failing = [
+            check.name
+            for check in review.checks
+            if check.outcome == "fail" and check.name != "injection_pattern"
+        ]
         if budget < 1 or not failing:
             return ChartResult(recipe=recipe, review=review)
         patched = patch_document(
