@@ -1542,7 +1542,10 @@ def test_round_one_pass_at_best_makes_no_second_ask() -> None:
     )
     result = agent.create_chart(_SALES, "a 3D globe", quality="best")
     assert calls["model"] == 3
+    assert result.recipe is not None
+    assert result.recipe.document.module == _PATCHED_DOC["module"]
     assert result.review is not None and result.review.passed is True
+    assert result.review.budget_exhausted is False
 
 
 def test_discarded_patch_at_balanced_makes_no_second_ask() -> None:
