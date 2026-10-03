@@ -1790,12 +1790,14 @@ def test_hopped_recipe_gets_up_to_two_patch_asks_at_best() -> None:
 
 def test_hopped_recipe_never_hops_again_whatever_its_review_says() -> None:
     agent, calls, _ = _hopped_repairing_agent(
-        [_recipe_report("marks_present"), _recipe_report("marks_present")],
+        [_recipe_report("marks_present")] * 3,
+        ("step2", _PATCHED_DOC),
         ("step2", _PATCHED_DOC),
     )
-    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
-    assert calls["model"] == 4
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert calls["model"] == 5
     assert result.recipe is not None and result.envelope is None
+    assert result.recipe.escape_reason.bucket == 4
 
 
 def test_patch_ask_on_a_hopped_recipe_receives_the_frames_semantic_types() -> None:
