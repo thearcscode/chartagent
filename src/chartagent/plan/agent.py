@@ -423,7 +423,7 @@ class ChartAgent:
         """Bucket 1/2 at balanced/best: author a recipe instead of raising.
 
         ``theme_spec`` is absent — ``create_chart`` takes no theme. ``review``
-        is Tier 1 over the profiled data only; there is no rasteriser here. A
+        comes from the recipe reviewer via the review-repair loop. A
         terminal authoring or resolution failure re-raises the original bucket.
         """
         reason = EscapeReason(bucket=miss.bucket)
