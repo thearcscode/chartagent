@@ -1476,6 +1476,11 @@ def _repairing_agent_with(
 _MALFORMED = ("step2", {"nonsense": True})
 
 
+def _queued_reviewer(reports: list[ReviewReport]) -> Any:
+    queue = list(reports)
+    return lambda profile, recipe, instruction: queue.pop(0)
+
+
 def _failing_names(result: ChartResult) -> list[str]:
     assert result.review is not None
     return [c.name for c in result.review.checks if c.outcome == "fail"]
@@ -1594,6 +1599,75 @@ def test_marks_present_is_patched_with_the_other_failures_in_one_ask() -> None:
     assert calls["model"] == 3
     system = calls["system"][2]
     assert "marks_present" in system and "label_overlap" in system
+
+
+_D3_PATCH = (
+    "step2",
+    {**_PATCHED_DOC, "libraries": [{"name": "d3", "version": "7.9.0"}]},
+)
+
+
+def test_patch_naming_a_library_is_resolved_and_pinned_on_the_result() -> None:
+    agent, _, _ = _repairing_agent_with(
+        [_recipe_report("label_overlap"), _recipe_report()], _D3_PATCH
+    )
+    agent._library_resolver = lambda name, version: ("f" * 64, b"lib")
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.recipe is not None
+    assert result.recipe.document.module == _PATCHED_DOC["module"]
+    assert [
+        (p.name, p.version, p.sha256) for p in result.recipe.document.libraries
+    ] == [("d3", "7.9.0", "f" * 64)]
+
+
+def test_patch_naming_a_library_with_no_resolver_keeps_the_unrepaired_recipe() -> None:
+    agent, calls, reviewed = _repairing_agent_with(
+        [_recipe_report("label_overlap")], _D3_PATCH
+    )
+    agent._library_resolver = None
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    assert len(reviewed) == 1
+    assert result.recipe is reviewed[0]
+    assert _failing_names(result) == ["label_overlap"]
+
+
+def test_resolver_failure_on_a_patch_keeps_the_recipe_with_no_second_ask() -> None:
+    def broken(name: str, version: str) -> tuple[str, bytes]:
+        raise RuntimeError("registry down")
+
+    agent, calls, reviewed = _repairing_agent_with(
+        [_recipe_report("label_overlap")], _D3_PATCH
+    )
+    agent._library_resolver = broken
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    assert len(reviewed) == 1
+    assert result.recipe is reviewed[0]
+    assert _failing_names(result) == ["label_overlap"]
+
+
+def test_patch_swapping_libraries_reresolves_what_it_names() -> None:
+    names: list[str] = []
+
+    def resolver(name: str, version: str) -> tuple[str, bytes]:
+        names.append(name)
+        return (name[0] * 64, b"lib")
+
+    swap = (
+        "step2",
+        {**_PATCHED_DOC, "libraries": [{"name": "topojson", "version": "3.0.2"}]},
+    )
+    agent = _agent()
+    agent._library_resolver = resolver
+    agent._recipe_reviewer = _queued_reviewer(
+        [_recipe_report("label_overlap"), _recipe_report()]
+    )
+    _install(agent, _inexpressible(1), ("step2", _draft_with_d3()), swap)
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.recipe is not None
+    assert [p.name for p in result.recipe.document.libraries] == ["topojson"]
+    assert names == ["d3", "topojson"]
 
 
 def test_transport_error_on_the_patch_ask_propagates() -> None:
