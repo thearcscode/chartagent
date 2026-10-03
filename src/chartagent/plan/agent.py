@@ -372,8 +372,10 @@ class ChartAgent:
         invoke: Any,
     ) -> ChartResult | None:
         """Bucket 4: the failed frame's transform goes to ``generate_recipe``;
-        step 1 is not re-run and the ask spends no review-repair budget. There
-        is no second hop: the recipe is never a frame. ``None`` means the seam
+        step 1 is not re-run. The recipe enters the review-repair loop with only
+        the budget the decision left, and ``frame.semantic_types`` go to the
+        patch ask since a recipe stores none. There is no second hop: the loop
+        never calls ``decide_escalation``. ``None`` means the seam
         failed terminally and the caller returns the Flint result unchanged.
         """
         reason = EscapeReason(bucket=4)
@@ -393,16 +395,21 @@ class ChartAgent:
             # hits the 5-call cap is PlannerFailureError. Anything else,
             # including a transport error, is not this fallback.
             return None
-        return ChartResult(
-            recipe=ChartRecipe(
-                spec_version=_SPEC_VERSION,
-                transform=generated.transform,
-                source_schema=decision.source_schema,
-                escape_reason=reason,
-                theme_spec=decision.theme_spec,
-                document=generated.document,
-            ),
-            review=tier1_review(profile, backend=None),
+        recipe = ChartRecipe(
+            spec_version=_SPEC_VERSION,
+            transform=generated.transform,
+            source_schema=decision.source_schema,
+            escape_reason=reason,
+            theme_spec=decision.theme_spec,
+            document=generated.document,
+        )
+        return self._review_and_repair(
+            profile,
+            instruction,
+            recipe,
+            frame.semantic_types,
+            decision.remaining_repairs,
+            invoke,
         )
 
     def _author_miss(

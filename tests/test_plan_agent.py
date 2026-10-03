@@ -1734,3 +1734,73 @@ def test_a_real_flint_review_marks_present_fail_hops_through_create_chart(
     assert result.envelope is None
     assert result.recipe is not None
     assert result.recipe.escape_reason.bucket == 4
+
+
+# --- #230: a hopped recipe enters the review-repair loop -------------------
+
+
+def _hopped_repairing_agent(
+    reports: list[ReviewReport], *replies: Any
+) -> tuple[ChartAgent, dict[str, Any], list[Any]]:
+    agent, calls = _hopping_agent(("step2", _HOP_DOC), *replies)
+    queue = list(reports)
+    reviewed: list[Any] = []
+
+    def reviewer(profile: Any, recipe: Any, instruction: Any) -> ReviewReport:
+        reviewed.append(recipe)
+        return queue.pop(0)
+
+    agent._recipe_reviewer = reviewer
+    return agent, calls, reviewed
+
+
+def test_hopped_recipe_with_a_repairable_failure_gets_a_patch_ask_at_balanced() -> None:
+    agent, calls, reviewed = _hopped_repairing_agent(
+        [_recipe_report("label_overlap"), _recipe_report()], ("step2", _PATCHED_DOC)
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 4
+    assert "label_overlap" in calls["system"][3]
+    assert result.recipe is not None and result.recipe.document.styles == ".patched{}"
+    assert result.recipe.escape_reason.bucket == 4
+    assert result.review is not None and result.review.passed is True
+
+
+def test_hopped_recipe_never_exceeds_the_balanced_budget() -> None:
+    agent, calls, _ = _hopped_repairing_agent(
+        [_recipe_report("label_overlap"), _recipe_report("label_overlap")],
+        ("step2", _PATCHED_DOC),
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 4
+    assert result.review is not None and result.review.budget_exhausted is True
+
+
+def test_hopped_recipe_gets_up_to_two_patch_asks_at_best() -> None:
+    agent, calls, _ = _hopped_repairing_agent(
+        [_recipe_report("label_overlap")] * 3,
+        ("step2", _PATCHED_DOC),
+        ("step2", _PATCHED_DOC),
+        ("step2", _PATCHED_DOC),
+    )
+    agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert calls["model"] == 5
+
+
+def test_hopped_recipe_never_hops_again_whatever_its_review_says() -> None:
+    agent, calls, _ = _hopped_repairing_agent(
+        [_recipe_report("marks_present"), _recipe_report("marks_present")],
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 4
+    assert result.recipe is not None and result.envelope is None
+
+
+def test_patch_ask_on_a_hopped_recipe_receives_the_frames_semantic_types() -> None:
+    agent, calls, _ = _hopped_repairing_agent(
+        [_recipe_report("label_overlap"), _recipe_report()], ("step2", _PATCHED_DOC)
+    )
+    agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert "Quantity" in calls["user"][3]
