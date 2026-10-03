@@ -1476,6 +1476,11 @@ def _repairing_agent_with(
 _MALFORMED = ("step2", {"nonsense": True})
 
 
+def _queued_reviewer(reports: list[ReviewReport]) -> Any:
+    queue = list(reports)
+    return lambda profile, recipe, instruction: queue.pop(0)
+
+
 def _failing_names(result: ChartResult) -> list[str]:
     assert result.review is not None
     return [c.name for c in result.review.checks if c.outcome == "fail"]
@@ -1619,11 +1624,12 @@ def test_patch_naming_a_library_with_no_resolver_keeps_the_unrepaired_recipe() -
     agent, calls, reviewed = _repairing_agent_with(
         [_recipe_report("label_overlap")], _D3_PATCH
     )
+    agent._library_resolver = None
     result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
     assert calls["model"] == 3
     assert len(reviewed) == 1
     assert result.recipe is reviewed[0]
-    assert result.recipe.document.module == _MISS_DRAFT["document"]["module"]
+    assert _failing_names(result) == ["label_overlap"]
 
 
 def test_resolver_failure_on_a_patch_keeps_the_recipe_with_no_second_ask() -> None:
@@ -1638,6 +1644,30 @@ def test_resolver_failure_on_a_patch_keeps_the_recipe_with_no_second_ask() -> No
     assert calls["model"] == 3
     assert len(reviewed) == 1
     assert result.recipe is reviewed[0]
+    assert _failing_names(result) == ["label_overlap"]
+
+
+def test_patch_swapping_libraries_reresolves_what_it_names() -> None:
+    names: list[str] = []
+
+    def resolver(name: str, version: str) -> tuple[str, bytes]:
+        names.append(name)
+        return (name[0] * 64, b"lib")
+
+    swap = (
+        "step2",
+        {**_PATCHED_DOC, "libraries": [{"name": "topojson", "version": "3.0.2"}]},
+    )
+    agent = _agent()
+    agent._library_resolver = resolver
+    agent._recipe_reviewer = _queued_reviewer(
+        [_recipe_report("label_overlap"), _recipe_report()]
+    )
+    _install(agent, _inexpressible(1), ("step2", _draft_with_d3()), swap)
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.recipe is not None
+    assert [p.name for p in result.recipe.document.libraries] == ["topojson"]
+    assert names == ["d3", "topojson"]
 
 
 def test_transport_error_on_the_patch_ask_propagates() -> None:
