@@ -1596,6 +1596,50 @@ def test_marks_present_is_patched_with_the_other_failures_in_one_ask() -> None:
     assert "marks_present" in system and "label_overlap" in system
 
 
+_D3_PATCH = (
+    "step2",
+    {**_PATCHED_DOC, "libraries": [{"name": "d3", "version": "7.9.0"}]},
+)
+
+
+def test_patch_naming_a_library_is_resolved_and_pinned_on_the_result() -> None:
+    agent, _, _ = _repairing_agent_with(
+        [_recipe_report("label_overlap"), _recipe_report()], _D3_PATCH
+    )
+    agent._library_resolver = lambda name, version: ("f" * 64, b"lib")
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.recipe is not None
+    assert result.recipe.document.module == _PATCHED_DOC["module"]
+    assert [
+        (p.name, p.version, p.sha256) for p in result.recipe.document.libraries
+    ] == [("d3", "7.9.0", "f" * 64)]
+
+
+def test_patch_naming_a_library_with_no_resolver_keeps_the_unrepaired_recipe() -> None:
+    agent, calls, reviewed = _repairing_agent_with(
+        [_recipe_report("label_overlap")], _D3_PATCH
+    )
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    assert len(reviewed) == 1
+    assert result.recipe is reviewed[0]
+    assert result.recipe.document.module == _MISS_DRAFT["document"]["module"]
+
+
+def test_resolver_failure_on_a_patch_keeps_the_recipe_with_no_second_ask() -> None:
+    def broken(name: str, version: str) -> tuple[str, bytes]:
+        raise RuntimeError("registry down")
+
+    agent, calls, reviewed = _repairing_agent_with(
+        [_recipe_report("label_overlap")], _D3_PATCH
+    )
+    agent._library_resolver = broken
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    assert len(reviewed) == 1
+    assert result.recipe is reviewed[0]
+
+
 def test_transport_error_on_the_patch_ask_propagates() -> None:
     agent, _, _ = _repairing_agent_with(
         [_recipe_report("label_overlap")], RuntimeError("transport down")
