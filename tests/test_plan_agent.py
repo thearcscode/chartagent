@@ -1572,12 +1572,49 @@ def test_zero_budget_marks_a_repairable_failure_exhausted_with_no_ask(
     result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
     assert calls["model"] == 2
     assert result.review is not None and result.review.budget_exhausted is True
+    assert result.review.passed is False
 
 
 def test_injection_failure_alone_never_sets_budget_exhausted() -> None:
-    agent, _, _ = _repairing_agent(_recipe_report("injection_pattern"))
+    agent, calls, _ = _repairing_agent(_recipe_report("injection_pattern"))
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 2
+    assert result.review is not None
+    assert result.review.budget_exhausted is False
+
+
+def test_injection_plus_repairable_failure_is_exhausted_when_budget_is_spent() -> None:
+    both = _recipe_report("injection_pattern", "label_overlap")
+    agent, calls, _ = _repairing_agent(both, both)
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert calls["model"] == 3
+    assert "injection_pattern" not in calls["system"][2]
+    assert result.review is not None and result.review.budget_exhausted is True
+
+
+def test_not_checked_tier_two_triggers_no_patch_and_no_re_review() -> None:
+    report = ReviewReport(
+        tiers_run=(1, 2),
+        tiers_skipped={},
+        passed=False,
+        budget_exhausted=False,
+        checks=(
+            CheckResult("injection_pattern", "pass"),
+            CheckResult("label_overlap", "not_checked", "unavailable"),
+        ),
+    )
+    agent, calls, reviewed = _repairing_agent(report)
+    result = agent.create_chart(_SALES, "a 3D globe", quality="best")
+    assert calls["model"] == 2
+    assert len(reviewed) == 1
+    assert result.review is not None and result.review.budget_exhausted is False
+
+
+def test_passing_recipe_review_is_not_budget_exhausted() -> None:
+    agent, _, _ = _repairing_agent(_recipe_report())
     result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
     assert result.review is not None
+    assert result.review.passed is True
     assert result.review.budget_exhausted is False
 
 
