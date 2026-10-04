@@ -3,7 +3,9 @@
 - **Status:** Accepted
 - **Date:** 2026-09-23
 - **Errata:** 2026-09-26 ([#186](https://github.com/thearcscode/chartagent/issues/186)) —
-  Decisions 1, 5 and 9, recorded in place.
+  Decisions 1, 5 and 9, recorded in place; 2026-10-03
+  ([#225](https://github.com/thearcscode/chartagent/issues/225)/#226/#227/#232) — Decision 13's
+  round semantics, recorded in place.
 - **Settled on:** [#175](https://github.com/thearcscode/chartagent/issues/175)
 - **Builds on:** ADR-0008 (the transform menu; `raw_sql` as the menu's own escape valve),
   ADR-0016 Decisions 12–13 (the rail owns both prompt shapes as one competence; one
@@ -346,7 +348,8 @@ like any other repairable name.
 ### 13. The patch prompt is a single ask — no internal retry
 
 ADR-0027 Decision 3's "one patch-prompt call" is literal: zero internal decode-retry. A
-malformed patch response simply fails that repair round outright — consumes the budget,
+malformed patch response simply fails that repair round outright — consumes one unit of the
+budget (see the 2026-10-03 erratum at the end),
 contributes to `passed=False` via Decision 12's `budget_exhausted` rule — the same posture a
 `marks_present` fail on Flint already has (consumes nothing further, buys nothing further).
 Giving the patch call its own retry ladder would reopen the "different budget for different
@@ -445,7 +448,7 @@ prompt exactly as ADR-0017 Decision 7 froze it — restated here, not reinvented
   ([#177](https://github.com/thearcscode/chartagent/issues/177)) inherits the two-prompt split
   (Decision 5) as what a light-mode changed-checks-only review would diff.
 
-## Erratum (2026-10-03, #225/#226): round semantics
+## Erratum (2026-10-03, #225/#226/#227/#232): round semantics
 
 Decision 13's "consumes the budget" is read as one unit of the `quality=` budget per patch
 ask, not the whole budget. A discarded patch keeps the unrepaired recipe and spends one unit.
@@ -457,6 +460,15 @@ custom-rail scoring replaces it.
 re-review is dropped and the next round patches the recipe as it was. A discarded patch
 returns the unrepaired recipe, and `budget_exhausted` is set on the returned report iff a
 repairable failure remains with no budget left.
+
+(#232, 2026-10-04) A discarded round does not end the loop: while budget and a repairable failure remain,
+the next round patches the same recipe against the same failures. A discarded round changes
+nothing, so it is not re-reviewed. A patch that
+decodes is re-reviewed in full and kept only if it passes. A patch's libraries are
+re-resolved as on first generation (Decision 14), so with no resolver a patch that names one
+is a discard. A hopped recipe enters the loop with only the budget the Flint attempt left;
+a miss-path recipe starts with the full `quality=` count. Both the hopped and the miss-path
+recipe are reviewed and repaired in this one loop, and neither can hop again.
 
 ## Related
 
