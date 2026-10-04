@@ -1,4 +1,5 @@
-"""Review-repair accounting shared by both rails (ADR-0027 Decision 7).
+"""Review-repair accounting, rail-agnostic (ADR-0027 Decision 7). The recipe
+loop uses it today; Flint's loop (#240) reuses it.
 
 One unit of budget per repair ask, charged whether or not the repair is kept;
 a discarded ask spends a unit; a repair that does not pass re-review is
@@ -15,10 +16,10 @@ from typing import TypeVar
 
 from chartagent.review import CheckName, ReviewReport
 
-A = TypeVar("A")
+_A = TypeVar("_A")
 
 
-def repairable_failures(review: ReviewReport) -> list[CheckName]:
+def _repairable_failures(review: ReviewReport) -> list[CheckName]:
     """injection_pattern is never repaired and must not veto the other names."""
     return [
         check.name
@@ -28,16 +29,16 @@ def repairable_failures(review: ReviewReport) -> list[CheckName]:
 
 
 def spend_repair_budget(
-    artifact: A,
+    artifact: _A,
     review: ReviewReport,
     budget: int,
     *,
-    request: Callable[[A, list[CheckName]], A | None],
-    reviewer: Callable[[A], ReviewReport],
-) -> tuple[A, ReviewReport]:
+    request: Callable[[_A, list[CheckName]], _A | None],
+    reviewer: Callable[[_A], ReviewReport],
+) -> tuple[_A, ReviewReport]:
     """Returns the best artifact and its report. ``request`` returns ``None``
     for a discarded ask. Never raises on review."""
-    failing = repairable_failures(review)
+    failing = _repairable_failures(review)
     while budget > 0 and failing:
         budget -= 1
         repaired = request(artifact, failing)
