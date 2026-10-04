@@ -55,9 +55,11 @@ from chartagent.plan.escalate import (
     decide_escalation,
 )
 from chartagent.plan.prompt import (
+    FLINT_REPAIRABLE_CHECKS,
     DocumentPrompt,
     Step1Prompt,
     Step2Prompt,
+    render_review_repair,
     render_step1,
     render_step2,
 )
@@ -78,6 +80,7 @@ from chartagent.recipe import ChartRecipe, EscapeReason
 from chartagent.result import ChartResult
 from chartagent.review import CheckName, ReviewReport, flint_review, tier1_review
 
+_FLINT_REPAIRABLE = cast(frozenset[CheckName], frozenset(FLINT_REPAIRABLE_CHECKS))
 _STEP1_RETRIES = 1
 _STEP2_RETRIES = 2
 _CALL_CAP = 5
@@ -358,11 +361,70 @@ class ChartAgent:
                 hopped = self._hop(profile, instruction, decision, frame, invoke)
                 if hopped is not None:
                     return hopped
-            return ChartResult(envelope=envelope, review=review)
+            return self._repair_flint(
+                profile,
+                data,
+                instruction,
+                fragment,
+                backend,
+                (frame, envelope),
+                review,
+                _REVIEW_REPAIRS[resolved_quality],
+                invoke,
+            )
         raise PlannerFailureError(
             "step 1 did not emit a usable fragment",
             reason=last or "invalid_emit",
         )
+
+    def _repair_flint(
+        self,
+        profile: Profile,
+        data: DataSource,
+        instruction: str,
+        fragment: Fragment,
+        backend: Backend,
+        first: tuple[InputFrame, Envelope],
+        review: ReviewReport,
+        budget: int,
+        invoke: Any,
+    ) -> ChartResult:
+        """Spend the budget on step-2 re-asks for a presentational failure.
+
+        Each round is one uncounted ``chartProperties`` ask carrying every
+        failing repairable name; chart type, encodings, transform and backend
+        are the carried ones and step 1 is not re-run. A response that fails to
+        decode, assemble or bind is a discard that still spends a unit. A
+        repaired chart is reviewed in full. Never raises on review."""
+
+        def request(
+            _current: tuple[InputFrame, Envelope], failing: list[CheckName]
+        ) -> tuple[InputFrame, Envelope] | None:
+            prompt = render_review_repair(
+                profile, fragment, instruction, backend, failing
+            )
+            try:
+                result, _ = invoke(prompt.output_type, prompt, counted=False)
+            except _EmitFailed:
+                return None
+            properties = result.model_dump(exclude_unset=True, exclude_none=True)
+            try:
+                frame = assemble(fragment, profile, chart_properties=properties)
+                return frame, bind(frame, data, backend=backend)
+            except (SpecShapeError, SchemaDriftError):
+                return None
+
+        (frame, envelope), review = spend_repair_budget(
+            first,
+            review,
+            budget,
+            request=request,
+            reviewer=lambda candidate: self._reviewer(
+                profile, candidate[0], candidate[1], backend, instruction
+            ),
+            repairable=_FLINT_REPAIRABLE,
+        )
+        return ChartResult(envelope=envelope, review=review)
 
     def _hop(
         self,

@@ -1880,3 +1880,116 @@ def test_patch_ask_on_a_hopped_recipe_receives_the_frames_semantic_types() -> No
     )
     agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
     assert "Quantity" in calls["user"][3]
+
+
+# --- #242: Flint's review repair on a presentational failure ---------------
+
+
+def _flint_report(*failing: str) -> ReviewReport:
+    checks = [CheckResult("injection_pattern", "pass")]
+    checks += [CheckResult(name, "fail") for name in failing]  # type: ignore[arg-type]
+    return ReviewReport(
+        tiers_run=(1, 2),
+        tiers_skipped={},
+        passed=not failing,
+        budget_exhausted=False,
+        checks=tuple(checks),
+    )
+
+
+def _flint_repairing_agent(
+    *reports: ReviewReport, replies: tuple[Any, ...] = (("step2", {}),)
+) -> tuple[ChartAgent, dict[str, Any], list[Any]]:
+    agent = _agent()
+    queue = list(reports)
+    reviewed: list[Any] = []
+
+    def reviewer(
+        profile: Any, frame: Any, envelope: Any, backend: Any, instruction: Any
+    ) -> ReviewReport:
+        reviewed.append((frame, envelope, backend))
+        return queue.pop(0)
+
+    agent._reviewer = reviewer
+    calls = _install(agent, ("Fragment", _FRAGMENT), ("step2", {}), *replies)
+    return agent, calls, reviewed
+
+
+def test_presentational_failure_at_balanced_gets_one_step2_repair() -> None:
+    agent, calls, reviewed = _flint_repairing_agent(
+        _flint_report("axis_labels_present"), _flint_report()
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 3
+    assert calls["step2"] == 2
+    assert len(reviewed) == 2
+    assert result.envelope is reviewed[1][1]
+    assert result.review is not None
+    assert result.review.passed is True and result.review.budget_exhausted is False
+
+
+def test_repair_prompt_carries_names_and_static_hints_only() -> None:
+    agent, calls, _ = _flint_repairing_agent(
+        _flint_report("axis_labels_present", "legend_presence"), _flint_report()
+    )
+    agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    system, user = calls["system"][2], calls["user"][2]
+    assert "axis_labels_present" in system and "legend_presence" in system
+    assert "Set a readable title on every axis" in system
+    assert "Rejected emit" not in user and "Checker" not in user
+    assert system != calls["system"][1]
+
+
+def test_repair_keeps_chart_type_encodings_and_backend() -> None:
+    agent, _, reviewed = _flint_repairing_agent(
+        _flint_report("label_overlap"), _flint_report()
+    )
+    agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    (before, _, backend_before), (after, _, backend_after) = reviewed
+    assert after.chart_spec.chart_type == before.chart_spec.chart_type
+    assert after.chart_spec.encodings == before.chart_spec.encodings
+    assert after.x_chartagent == before.x_chartagent
+    assert backend_after == backend_before
+
+
+def test_fast_makes_no_repair_ask_and_is_exhausted() -> None:
+    agent, calls, _ = _flint_repairing_agent(_flint_report("label_overlap"))
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="fast")
+    assert calls["model"] == 2
+    assert result.review is not None
+    assert result.review.passed is False and result.review.budget_exhausted is True
+
+
+def test_passing_flint_review_makes_no_repair_ask() -> None:
+    agent, calls, reviewed = _flint_repairing_agent(_flint_report())
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 2 and len(reviewed) == 1
+    assert result.review is not None and result.review.budget_exhausted is False
+
+
+def test_repair_ask_is_off_the_cap_and_the_step_counts() -> None:
+    agent, calls, _ = _flint_repairing_agent(
+        _flint_report("label_overlap"), _flint_report()
+    )
+    attempts = _observe(agent)
+    agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 3
+    assert [(a.step, a.ask) for a in attempts] == [(1, 1), (2, 1)]
+
+
+def test_transport_error_on_the_repair_ask_propagates() -> None:
+    agent, _, _ = _flint_repairing_agent(
+        _flint_report("label_overlap"),
+        replies=(RuntimeError("transport down"),),
+    )
+    with pytest.raises(RuntimeError, match="transport down"):
+        agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+
+
+def test_default_flint_review_is_returned_as_today() -> None:
+    agent = _agent()
+    calls = _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert calls["model"] == 2
+    assert result.envelope is not None
+    assert result.review is not None and result.review.budget_exhausted is False
