@@ -19,12 +19,17 @@ from chartagent.review import CheckName, ReviewReport
 _A = TypeVar("_A")
 
 
-def _repairable_failures(review: ReviewReport) -> list[CheckName]:
-    """injection_pattern is never repaired and must not veto the other names."""
+def _repairable_failures(
+    review: ReviewReport, names: frozenset[CheckName] | None
+) -> list[CheckName]:
+    """injection_pattern is never repaired and must not veto the other names.
+    ``names`` narrows a rail to the checks it can repair; ``None`` is all."""
     return [
         check.name
         for check in review.checks
-        if check.outcome == "fail" and check.name != "injection_pattern"
+        if check.outcome == "fail"
+        and check.name != "injection_pattern"
+        and (names is None or check.name in names)
     ]
 
 
@@ -35,10 +40,11 @@ def spend_repair_budget(
     *,
     request: Callable[[_A, list[CheckName]], _A | None],
     reviewer: Callable[[_A], ReviewReport],
+    repairable: frozenset[CheckName] | None = None,
 ) -> tuple[_A, ReviewReport]:
     """Returns the best artifact and its report. ``request`` returns ``None``
     for a discarded ask. Never raises on review."""
-    failing = _repairable_failures(review)
+    failing = _repairable_failures(review, repairable)
     while budget > 0 and failing:
         budget -= 1
         repaired = request(artifact, failing)

@@ -32,6 +32,7 @@ from chartagent.transform.raw_sql import sql_source_refs
 if TYPE_CHECKING:
     from chartagent.plan.recipe import DocumentDraft, RecipeDraft
     from chartagent.recipe import EscapeReason
+    from chartagent.review import CheckName
 
 
 @dataclass(frozen=True)
@@ -174,6 +175,50 @@ def render_step2(
         user=f"{fragment_json}\n\n{scoped}",
         output_type=properties_model(backend, fragment.chart_type),
     )
+
+
+# Flint review-repair payload (#242): host-authored, keyed by the closed name,
+# in the system prompt's trust class. These are `chartProperties` edits, not
+# the custom rail's code patches. Never the critic's free text, never a PNG.
+_FLINT_REPAIR_HINTS: dict[CheckName, str] = {
+    "axis_labels_present": ("Set a readable title on every axis the chart draws."),
+    "legend_presence": ("Show a legend that names each series the chart draws."),
+    "label_overlap": (
+        "Change the label settings (angle, size, interval or placement) so no "
+        "label overlaps another label or a mark."
+    ),
+    "bar_chart_y_axis_baseline": (
+        "Set the y axis to start at zero so the bars are not truncated."
+    ),
+}
+
+FLINT_REPAIRABLE_CHECKS: tuple[CheckName, ...] = tuple(_FLINT_REPAIR_HINTS)
+
+
+def render_review_repair(
+    profile: Profile,
+    fragment: Fragment,
+    instruction: str,
+    backend: Backend,
+    failures: Sequence[CheckName],
+    *,
+    nonce: str | None = None,
+) -> Step2Prompt:
+    """The review-repair turn on the step-2 prompt: the same user turn and
+    output schema, plus the failing names and a static hint per name in the
+    system prompt. A different turn from the emit-repair one, which carries a
+    rejected emit and a checker error."""
+    base = render_step2(profile, fragment, instruction, backend, nonce=nonce)
+    hints = "\n".join(f"- `{name}`: {_FLINT_REPAIR_HINTS[name]}" for name in failures)
+    system = (
+        f"{base.system}\n\n"
+        "## Repair\n"
+        "The chart built from your chartProperties failed review. Emit "
+        "chartProperties again for the same chart. Fix every failing check. "
+        "Each hint is the host's, and it is the only guidance for that check:\n"
+        f"{hints}"
+    )
+    return Step2Prompt(system=system, user=base.user, output_type=base.output_type)
 
 
 def render_critique(
