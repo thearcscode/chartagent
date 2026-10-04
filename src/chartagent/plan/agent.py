@@ -80,7 +80,7 @@ from chartagent.recipe import ChartRecipe, EscapeReason
 from chartagent.result import ChartResult
 from chartagent.review import CheckName, ReviewReport, flint_review, tier1_review
 
-_FLINT_REPAIRABLE = cast(frozenset[CheckName], frozenset(FLINT_REPAIRABLE_CHECKS))
+_FLINT_REPAIRABLE = frozenset(FLINT_REPAIRABLE_CHECKS)
 _STEP1_RETRIES = 1
 _STEP2_RETRIES = 2
 _CALL_CAP = 5
@@ -361,6 +361,8 @@ class ChartAgent:
                 hopped = self._hop(profile, instruction, decision, frame, invoke)
                 if hopped is not None:
                     return hopped
+                # marks_present suppresses repair that round (ADR-0026 D6).
+                return ChartResult(envelope=envelope, review=review)
             return self._repair_flint(
                 profile,
                 data,

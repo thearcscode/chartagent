@@ -1993,3 +1993,28 @@ def test_default_flint_review_is_returned_as_today() -> None:
     assert calls["model"] == 2
     assert result.envelope is not None
     assert result.review is not None and result.review.budget_exhausted is False
+
+
+def test_failed_hop_does_not_fall_through_to_a_presentational_repair() -> None:
+    agent = _agent()
+    agent._reviewer = lambda p, f, e, b, i: ReviewReport(
+        tiers_run=(1, 2),
+        tiers_skipped={},
+        passed=False,
+        budget_exhausted=False,
+        checks=(
+            CheckResult("marks_present", "fail"),
+            CheckResult("label_overlap", "fail"),
+        ),
+    )
+    calls = _install(
+        agent,
+        ("Fragment", _FRAGMENT),
+        ("step2", {}),
+        ("step2", {"module": 3}),
+        ("step2", {"module": 3}),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert result.envelope is not None
+    assert calls["step2"] == calls["model"] - 1
+    assert all("label_overlap" not in s for s in calls["system"])

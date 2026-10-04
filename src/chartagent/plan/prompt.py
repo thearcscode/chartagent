@@ -32,6 +32,7 @@ from chartagent.transform.raw_sql import sql_source_refs
 if TYPE_CHECKING:
     from chartagent.plan.recipe import DocumentDraft, RecipeDraft
     from chartagent.recipe import EscapeReason
+    from chartagent.review import CheckName
 
 
 @dataclass(frozen=True)
@@ -179,7 +180,7 @@ def render_step2(
 # Flint review-repair payload (#242): host-authored, keyed by the closed name,
 # in the system prompt's trust class. These are `chartProperties` edits, not
 # the custom rail's code patches. Never the critic's free text, never a PNG.
-_FLINT_REPAIR_HINTS: dict[str, str] = {
+_FLINT_REPAIR_HINTS: dict[CheckName, str] = {
     "axis_labels_present": ("Set a readable title on every axis the chart draws."),
     "legend_presence": ("Show a legend that names each series the chart draws."),
     "label_overlap": (
@@ -191,7 +192,7 @@ _FLINT_REPAIR_HINTS: dict[str, str] = {
     ),
 }
 
-FLINT_REPAIRABLE_CHECKS: tuple[str, ...] = tuple(_FLINT_REPAIR_HINTS)
+FLINT_REPAIRABLE_CHECKS: tuple[CheckName, ...] = tuple(_FLINT_REPAIR_HINTS)
 
 
 def render_review_repair(
@@ -199,7 +200,7 @@ def render_review_repair(
     fragment: Fragment,
     instruction: str,
     backend: Backend,
-    failures: Sequence[str],
+    failures: Sequence[CheckName],
     *,
     nonce: str | None = None,
 ) -> Step2Prompt:
