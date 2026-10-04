@@ -68,6 +68,7 @@ from chartagent.plan.recipe import (
     generate_recipe,
     patch_document,
 )
+from chartagent.plan.repair import spend_repair_budget
 from chartagent.plan.schema import Fragment, Inexpressible, Step1Result, Unanswerable
 from chartagent.plan.select import select_backend
 from chartagent.profile.models import Profile
@@ -476,37 +477,33 @@ class ChartAgent:
         recipe as it was. A discarded patch changes nothing. Best-so-far is the
         recipe that passed, else the first one emitted; the returned report is
         always that recipe's (ADR-0027 Decision 7). Never raises on review."""
-        review = self._recipe_reviewer(profile, recipe, instruction)
-        failing = _repairable_failures(review)
-        while budget > 0 and failing:
-            budget -= 1
+
+        def request(
+            current: ChartRecipe, failing: list[CheckName]
+        ) -> ChartRecipe | None:
             patched = patch_document(
                 profile,
                 instruction,
-                recipe.document,
+                current.document,
                 failing,
                 semantic_types=semantic_types,
                 resolver=self._library_resolver,
                 invoke=invoke,
             )
             if isinstance(patched, PatchDiscarded):
-                continue
-            repaired = replace(recipe, document=patched)
-            repaired_review = self._recipe_reviewer(profile, repaired, instruction)
-            if repaired_review.passed:
-                return ChartResult(recipe=repaired, review=repaired_review)
-        if failing:
-            review = replace(review, budget_exhausted=True)
-        return ChartResult(recipe=recipe, review=review)
+                return None
+            return replace(current, document=patched)
 
-
-def _repairable_failures(review: ReviewReport) -> list[CheckName]:
-    """injection_pattern is never patched and must not veto the other names."""
-    return [
-        check.name
-        for check in review.checks
-        if check.outcome == "fail" and check.name != "injection_pattern"
-    ]
+        best, review = spend_repair_budget(
+            recipe,
+            self._recipe_reviewer(profile, recipe, instruction),
+            budget,
+            request=request,
+            reviewer=lambda candidate: self._recipe_reviewer(
+                profile, candidate, instruction
+            ),
+        )
+        return ChartResult(recipe=best, review=review)
 
 
 def _tier1_recipe_review(
