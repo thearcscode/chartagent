@@ -458,6 +458,15 @@ re-review is dropped and the next round patches the recipe as it was. A discarde
 returns the unrepaired recipe, and `budget_exhausted` is set on the returned report iff a
 repairable failure remains with no budget left.
 
+(#232) The budget is counted per patch ask, so a discarded round does not end the loop: while
+budget and a repairable failure remain, the next round patches the same recipe against the
+same failures. A discarded round changes nothing, so it is not re-reviewed. A patch that
+decodes is re-reviewed in full and kept only if it passes. A patch's libraries are
+re-resolved as on first generation (Decision 14), so with no resolver a patch that names one
+is a discard. A hopped recipe enters the loop with only the budget the Flint attempt left;
+a miss-path recipe starts with the full `quality=` count. Both are reviewed and repaired in
+this one loop, and neither can hop again.
+
 ## Related
 
 - [#175](https://github.com/thearcscode/chartagent/issues/175) — the ticket this ADR settles.
