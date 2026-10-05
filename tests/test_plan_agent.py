@@ -2173,3 +2173,94 @@ def test_transport_error_on_a_second_round_propagates() -> None:
     )
     with pytest.raises(RuntimeError, match="transport down"):
         agent.create_chart(_SALES, "revenue by quarter", quality="best")
+
+
+# --- #244: which names spend the review-repair budget on Flint -------------
+
+
+def _flint_checks_report(*checks: CheckResult) -> ReviewReport:
+    return ReviewReport(
+        tiers_run=(1, 2),
+        tiers_skipped={},
+        passed=not any(c.outcome == "fail" for c in checks),
+        budget_exhausted=False,
+        checks=checks,
+    )
+
+
+@pytest.mark.parametrize("name", ["colorblind_safe_palette", "data_truthfulness"])
+@pytest.mark.parametrize("quality", ["balanced", "best"])
+def test_non_presentational_repairable_name_spends_a_repair(
+    name: str, quality: str
+) -> None:
+    agent, calls, reviewed = _flint_repairing_agent(
+        _flint_report(name), _flint_report()
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality=quality)  # type: ignore[arg-type]
+    assert calls["model"] == 3 and calls["step2"] == 2
+    assert result.envelope is reviewed[1][1]
+    assert result.review is not None
+    assert result.review.passed is True and result.review.budget_exhausted is False
+    assert name in calls["system"][2]
+
+
+@pytest.mark.parametrize("name", ["colorblind_safe_palette", "data_truthfulness"])
+def test_non_presentational_repairable_name_at_fast_is_not_repaired(name: str) -> None:
+    agent, calls, _ = _flint_repairing_agent(_flint_report(name))
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="fast")
+    assert calls["model"] == 2
+    assert result.review is not None
+    assert result.review.passed is False and result.review.budget_exhausted is True
+
+
+def test_several_failing_names_make_one_step2_ask_carrying_all_of_them() -> None:
+    names = ("colorblind_safe_palette", "data_truthfulness", "label_overlap")
+    agent, calls, reviewed = _flint_repairing_agent(
+        _flint_report(*names), _flint_report()
+    )
+    agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert calls["model"] == 3 and len(reviewed) == 2
+    assert all(name in calls["system"][2] for name in names)
+
+
+@pytest.mark.parametrize("name", ["injection_pattern", "painted"])
+@pytest.mark.parametrize("quality", ["fast", "balanced", "best"])
+def test_unrepairable_failure_makes_no_repair_ask_and_is_not_exhausted(
+    name: str, quality: str
+) -> None:
+    report = _flint_checks_report(CheckResult(name, "fail"))  # type: ignore[arg-type]
+    agent, calls, reviewed = _flint_repairing_agent(report)
+    result = agent.create_chart(_SALES, "revenue by quarter", quality=quality)  # type: ignore[arg-type]
+    assert calls["model"] == 2 and len(reviewed) == 1
+    assert result.envelope is reviewed[0][1]
+    assert result.review == report
+    assert result.review.budget_exhausted is False
+
+
+def test_unrepairable_failure_does_not_veto_a_repairable_one() -> None:
+    mixed = _flint_checks_report(
+        CheckResult("painted", "fail"), CheckResult("label_overlap", "fail")
+    )
+    agent, calls, _ = _flint_repairing_agent(mixed, _flint_report())
+    agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 3
+    assert "label_overlap" in calls["system"][2]
+    assert "painted" not in calls["system"][2]
+
+
+@pytest.mark.parametrize("quality", ["fast", "balanced", "best"])
+def test_inconclusive_tier_two_triggers_no_repair_and_no_critic_call(
+    quality: str,
+) -> None:
+    report = _flint_checks_report(
+        CheckResult("injection_pattern", "pass"),
+        CheckResult("colorblind_safe_palette", "not_checked"),
+        CheckResult("data_truthfulness", "not_checked"),
+        CheckResult("label_overlap", "not_checked"),
+        CheckResult("marks_present", "not_checked"),
+    )
+    agent, calls, reviewed = _flint_repairing_agent(report)
+    result = agent.create_chart(_SALES, "revenue by quarter", quality=quality)  # type: ignore[arg-type]
+    assert calls["model"] == 2 and len(reviewed) == 1
+    assert result.review == report
+    assert result.review.budget_exhausted is False

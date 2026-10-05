@@ -190,6 +190,14 @@ _FLINT_REPAIR_HINTS: dict[CheckName, str] = {
     "bar_chart_y_axis_baseline": (
         "Set the y axis to start at zero so the bars are not truncated."
     ),
+    "colorblind_safe_palette": (
+        "Use a colour palette whose series stay distinguishable under common "
+        "colour-vision deficiencies."
+    ),
+    "data_truthfulness": (
+        "Change the scale, axis and aggregation settings so the chart states "
+        "the data as it is, without distorting or hiding values."
+    ),
 }
 
 FLINT_REPAIRABLE_CHECKS: tuple[CheckName, ...] = tuple(_FLINT_REPAIR_HINTS)
