@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -2018,3 +2019,157 @@ def test_failed_hop_does_not_fall_through_to_a_presentational_repair() -> None:
     assert result.envelope is not None
     assert calls["step2"] == calls["model"] - 1
     assert all("label_overlap" not in s for s in calls["system"])
+
+
+# --- #243: rounds, discards and best-so-far on Flint ------------------------
+
+_FLINT_MALFORMED = ("step2", {"nonsense": True})
+
+
+def test_best_runs_two_repair_rounds_on_a_failing_review() -> None:
+    failing = _flint_report("label_overlap")
+    agent, calls, reviewed = _flint_repairing_agent(
+        failing, failing, failing, replies=(("step2", {}), ("step2", {}))
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert calls["model"] == 4 and calls["step2"] == 3
+    assert len(reviewed) == 3
+    assert result.envelope is reviewed[0][1]
+    assert result.review == replace(failing, budget_exhausted=True)
+
+
+def test_balanced_runs_one_repair_round_then_is_exhausted() -> None:
+    failing = _flint_report("label_overlap")
+    agent, calls, _ = _flint_repairing_agent(failing, failing)
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 3
+    assert result.review is not None
+    assert result.review.passed is False and result.review.budget_exhausted is True
+
+
+def test_undecodable_repair_keeps_the_unrepaired_frame_and_spends_a_unit() -> None:
+    agent, calls, reviewed = _flint_repairing_agent(
+        _flint_report("label_overlap"), replies=(_FLINT_MALFORMED,)
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 3 and len(reviewed) == 1
+    assert result.envelope is reviewed[0][1]
+    assert result.review is not None
+    assert result.review.passed is False and result.review.budget_exhausted is True
+
+
+@pytest.mark.parametrize("stage", ["assemble", "bind"])
+@pytest.mark.parametrize(
+    "error", [SpecShapeError("x"), SchemaDriftError("x", stage="source", drifted=())]
+)
+def test_unbuildable_repair_keeps_the_unrepaired_frame_and_spends_a_unit(
+    stage: str, error: Exception, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from chartagent.plan import agent as agent_module
+
+    agent, calls, reviewed = _flint_repairing_agent(_flint_report("label_overlap"))
+    real = getattr(agent_module, stage)
+    seen = {"n": 0}
+
+    def flaky(*args: Any, **kwargs: Any) -> Any:
+        if stage == "bind" or "chart_properties" in kwargs:
+            seen["n"] += 1
+        if seen["n"] == 2:
+            raise error
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(agent_module, stage, flaky)
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 3 and len(reviewed) == 1
+    assert result.envelope is reviewed[0][1]
+    assert result.review is not None and result.review.budget_exhausted is True
+
+
+def test_discard_at_best_is_followed_by_a_second_round() -> None:
+    agent, calls, reviewed = _flint_repairing_agent(
+        _flint_report("label_overlap"),
+        _flint_report(),
+        replies=(_FLINT_MALFORMED, ("step2", {})),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert calls["model"] == 4 and len(reviewed) == 2
+    assert result.envelope is reviewed[1][1]
+    assert result.review is not None
+    assert result.review.passed is True and result.review.budget_exhausted is False
+
+
+def test_discard_at_balanced_makes_no_second_round() -> None:
+    agent, calls, _ = _flint_repairing_agent(
+        _flint_report("label_overlap"), replies=(_FLINT_MALFORMED,)
+    )
+    agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 3
+
+
+def test_repair_that_fails_re_review_is_dropped_for_the_first_frame() -> None:
+    first, worse = (
+        _flint_report("label_overlap"),
+        _flint_report("label_overlap", "legend_presence"),
+    )
+    agent, calls, reviewed = _flint_repairing_agent(first, worse)
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert calls["model"] == 3 and len(reviewed) == 2
+    assert result.envelope is reviewed[0][1]
+    assert result.review == replace(first, budget_exhausted=True)
+
+
+def test_passing_repair_is_returned_with_its_own_report_and_no_second_round() -> None:
+    agent, calls, reviewed = _flint_repairing_agent(
+        _flint_report("label_overlap"), _flint_report()
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert calls["model"] == 3 and len(reviewed) == 2
+    assert result.envelope is reviewed[1][1]
+    assert result.review is not None and result.review.passed is True
+
+
+def test_reviewer_error_on_a_repaired_frame_propagates() -> None:
+    agent = _agent()
+    queue = [_flint_report("label_overlap")]
+
+    def reviewer(*_args: Any) -> ReviewReport:
+        if queue:
+            return queue.pop()
+        raise RuntimeError("reviewer broke")
+
+    agent._reviewer = reviewer
+    _install(agent, ("Fragment", _FRAGMENT), ("step2", {}), ("step2", {}))
+    with pytest.raises(RuntimeError, match="reviewer broke"):
+        agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+
+
+def test_two_discards_at_best_keep_the_frame_and_are_exhausted() -> None:
+    agent, calls, reviewed = _flint_repairing_agent(
+        _flint_report("label_overlap"),
+        replies=(_FLINT_MALFORMED, _FLINT_MALFORMED),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert calls["model"] == 4 and len(reviewed) == 1
+    assert result.envelope is reviewed[0][1]
+    assert result.review is not None
+    assert result.review.passed is False and result.review.budget_exhausted is True
+
+
+def test_dropped_repair_is_followed_by_a_second_round_at_best() -> None:
+    failing = _flint_report("label_overlap")
+    agent, calls, reviewed = _flint_repairing_agent(
+        failing, failing, _flint_report(), replies=(("step2", {}), ("step2", {}))
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert calls["model"] == 4 and len(reviewed) == 3
+    assert result.envelope is reviewed[2][1]
+    assert result.review is not None and result.review.passed is True
+
+
+def test_transport_error_on_a_second_round_propagates() -> None:
+    agent, _, _ = _flint_repairing_agent(
+        _flint_report("label_overlap"),
+        replies=(_FLINT_MALFORMED, RuntimeError("transport down")),
+    )
+    with pytest.raises(RuntimeError, match="transport down"):
+        agent.create_chart(_SALES, "revenue by quarter", quality="best")
