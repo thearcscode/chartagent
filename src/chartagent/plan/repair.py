@@ -11,8 +11,8 @@ is requested and what a replaced artifact is — comes in as callables."""
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import replace
-from typing import TypeVar
+from dataclasses import dataclass, replace
+from typing import Generic, TypeVar
 
 from chartagent.review import CheckName, ReviewReport
 
@@ -33,6 +33,18 @@ def _repairable_failures(
     ]
 
 
+@dataclass(frozen=True)
+class RepairOutcome(Generic[_A]):
+    """The best artifact and its report. ``halted`` is the most recently
+    reviewed artifact and its report when ``halt`` stopped the loop, else
+    ``None``; ``spent`` is the asks charged."""
+
+    artifact: _A
+    review: ReviewReport
+    spent: int
+    halted: tuple[_A, ReviewReport] | None = None
+
+
 def spend_repair_budget(
     artifact: _A,
     review: ReviewReport,
@@ -41,18 +53,29 @@ def spend_repair_budget(
     request: Callable[[_A, list[CheckName]], _A | None],
     reviewer: Callable[[_A], ReviewReport],
     repairable: frozenset[CheckName] | None = None,
-) -> tuple[_A, ReviewReport]:
-    """Returns the best artifact and its report. ``request`` returns ``None``
-    for a discarded ask. Never raises on review."""
+    halt: Callable[[ReviewReport, int], bool] | None = None,
+) -> RepairOutcome[_A]:
+    """``request`` returns ``None`` for a discarded ask. ``halt`` is read on the
+    most recently reviewed report with the asks spent so far, before every round
+    and after the last one; when it fires the loop stops with no further ask and
+    reports that artifact in ``halted``. Never raises on review."""
     failing = _repairable_failures(review, repairable)
-    while budget > 0 and failing:
+    latest: tuple[_A, ReviewReport] = (artifact, review)
+    spent = 0
+    while True:
+        if halt is not None and halt(latest[1], spent):
+            return RepairOutcome(artifact, review, spent, halted=latest)
+        if budget <= 0 or not failing:
+            break
         budget -= 1
+        spent += 1
         repaired = request(artifact, failing)
         if repaired is None:
             continue
         repaired_review = reviewer(repaired)
         if repaired_review.passed:
-            return repaired, repaired_review
+            return RepairOutcome(repaired, repaired_review, spent)
+        latest = (repaired, repaired_review)
     if failing:
         review = replace(review, budget_exhausted=True)
-    return artifact, review
+    return RepairOutcome(artifact, review, spent)
