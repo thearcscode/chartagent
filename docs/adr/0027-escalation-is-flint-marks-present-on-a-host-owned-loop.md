@@ -97,7 +97,8 @@ patch-prompt call (custom). Do not fold this into ADR-0019’s emit cap (1 / 2 /
 `marks_present` fail consumes **zero** review repairs.
 
 `colorblind_safe_palette` spends this budget (success unblocks Tier 2). `data_truthfulness`
-spends it via the custom patch prompt. `injection_pattern` does not — fail-closed, taint is
+spends it via the custom patch prompt. *(Erratum 2026-10-05, #246: `data_truthfulness` also spends it on Flint, via a step-2
+re-ask; see ADR-0026 Decision 6's erratum.)* `injection_pattern` does not — fail-closed, taint is
 in the data. Never raise a review fail; return best-so-far.
 
 A `balanced` call that spends its 1 on colourblind, then hits `marks_present`, still hops
@@ -228,7 +229,8 @@ Changed-checks-only patch review is the history/patch surface on
   never hops; `painted` fail-closes; `colorblind_safe_palette` spends the review-repair
   budget then fail-closes.
 - **ADR-0025 *Leaves open*** — `data_truthfulness: fail` does not hop (already custom rail);
-  it spends the review-repair budget via the patch prompt, then fail-closes.
+  it spends the review-repair budget (on Flint, a step-2 re-ask — #246 — or the patch prompt
+  on custom rail), then fail-closes.
 - **ADR-0026 *Leaves open*** — repair counts, inconclusive retry, the `marks_present` hop,
   critic-as-subagent, and `quality=` / `rasteriser=` / `critique_model=` wiring are closed
   here. The critic stays the leaf call (the option ADR-0026 Decision 8 kept open).
@@ -323,3 +325,5 @@ Changed-checks-only patch review is the history/patch surface on
   agent** and **Chart result**.
 
 **Erratum (2026-10-05, #245).** The Decision 3 hop trigger is read from the most recently reviewed Flint frame, not only the first, so a `marks_present` failure revealed after a repair unblocked Tier 2 still hops. The recipe receives the dial count minus the repairs spent, floored at 0. A terminal hop failure returns best-so-far (Decision 7) with its own report, and `budget_exhausted` follows the usual rule on that report.
+
+**Erratum (2026-10-05, #246).** Flint's round semantics — one `chartProperties` re-ask per round, the budget counted per ask, a discard spending a unit, best-so-far, and `data_truthfulness` repairable on either rail — are recorded in ADR-0026 Decision 6's erratum of the same date.

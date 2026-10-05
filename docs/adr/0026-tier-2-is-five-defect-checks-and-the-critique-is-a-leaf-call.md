@@ -177,6 +177,28 @@ counts are `fast=0`, `balanced=1`, `best=2`, same on both rails, separate from t
 `balanced`/`best`; `fast` never escalates. `budget_exhausted` is true iff a repairable fail
 was present and remaining budget was 0.
 
+**Erratum — 2026-10-05 ([#240](https://github.com/thearcscode/chartagent/issues/240)/#242/#243/#244/#245/#246,
+[ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) Decision 3).** Flint
+round semantics as shipped, recorded in place; they follow the shared accounting of ADR-0030's
+2026-10-03 erratum.
+
+- **One ask per round.** A Flint round is one uncounted `chartProperties` re-ask naming every
+  repairable failing check; step 1 is not re-run, and chart type, encodings, `transform` and
+  backend are the carried ones.
+- **The budget is counted per ask.** Each ask spends one unit of the `quality=` budget, kept or
+  not. A response that fails to decode, assemble or bind is a **discard**: it spends a unit, is
+  not re-reviewed, and the unrepaired chart is kept for the next round, if budget and a
+  repairable failure remain. A repaired chart is reviewed in full and kept only if it passes;
+  otherwise it is dropped. Best-so-far is the last chart that passed review, else the first
+  emitted.
+- **The hop reads the latest review.** The `marks_present` trigger is read from the most
+  recently reviewed frame, so a failure revealed after a repair still hops, with only the
+  budget the repairs left (Decision 3's erratum in ADR-0027).
+- **Repairable on Flint:** the four presentational items above, plus `colorblind_safe_palette`
+  and `data_truthfulness` whenever a reviewer reports them. `data_truthfulness` is repairable
+  on either rail. A Flint `marks_present` fail stays unrepairable and still suppresses repair
+  that round. `injection_pattern` is never repaired.
+
 **What a repair may change.**
 
 - **Deterministic rail: step 2 only.** A Tier-2 repair re-asks `chartProperties`. It never changes
