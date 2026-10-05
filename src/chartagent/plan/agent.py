@@ -431,9 +431,10 @@ class ChartAgent:
             halt=lambda report, spent: decide(report, spent) is not None,
         )
         if outcome.halted is not None:
-            decision = decide(outcome.halted[1], outcome.spent)
+            (latest_frame, _), latest_review = outcome.halted
+            decision = decide(latest_review, outcome.spent)
             if decision is not None:
-                hopped = self._hop(profile, instruction, decision, first[0], invoke)
+                hopped = self._hop(profile, instruction, decision, latest_frame, invoke)
                 if hopped is not None:
                     return hopped
         return ChartResult(envelope=outcome.artifact[1], review=outcome.review)
@@ -449,8 +450,8 @@ class ChartAgent:
         """Bucket 4: the failed frame's transform goes to ``generate_recipe``;
         step 1 is not re-run. The recipe enters the review-repair loop with only
         the budget the decision left, and ``frame.semantic_types`` go to the
-        patch ask since a recipe stores none. There is no second hop: the loop
-        never calls ``decide_escalation``. ``None`` means the seam
+        patch ask since a recipe stores none. There is no second hop: the recipe
+        loop never calls ``decide_escalation``. ``None`` means the seam
         failed terminally and the caller returns best-so-far.
         """
         reason = EscapeReason(bucket=4)

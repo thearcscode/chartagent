@@ -64,6 +64,8 @@ def spend_repair_budget(
     spent = 0
     while True:
         if halt is not None and halt(latest[1], spent):
+            if failing and budget <= 0:
+                review = replace(review, budget_exhausted=True)
             return RepairOutcome(artifact, review, spent, halted=latest)
         if budget <= 0 or not failing:
             break

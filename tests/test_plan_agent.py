@@ -2322,10 +2322,13 @@ def test_best_with_one_repair_spent_hops_and_the_recipe_gets_one_patch_round() -
     result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
     assert result.recipe is not None
     assert calls["model"] == 5
+    assert (
+        "label_overlap" in calls["system"][-1] or "label_overlap" in calls["user"][-1]
+    )
 
 
 def test_terminal_hop_failure_returns_the_best_flint_frame_unpassed() -> None:
-    agent, calls, reviewed = _flint_repairing_agent(
+    agent, _, reviewed = _flint_repairing_agent(
         _flint_report("label_overlap"),
         _flint_report("marks_present"),
         replies=(("step2", {}), ("step2", {"module": 3}), ("step2", {"module": 3})),
@@ -2335,6 +2338,7 @@ def test_terminal_hop_failure_returns_the_best_flint_frame_unpassed() -> None:
     assert result.envelope is reviewed[0][1]
     assert result.review is not None and result.review.passed is False
     assert result.review.checks == _flint_report("label_overlap").checks
+    assert result.review.budget_exhausted is True
 
 
 def test_fast_never_hops_even_on_marks_present() -> None:
