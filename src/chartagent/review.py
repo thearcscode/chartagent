@@ -285,9 +285,9 @@ def flint_review(
 ) -> ReviewReport:
     """Tier 1, then — when both a rasteriser and a critic are supplied and
     Tier 1 did not fail — a Flint critique (ADR-0026, ADR-0027). Stops at
-    the report: review-repair (spending the ``quality=`` budget on a
-    presentational Tier-2 fail) is a separate, not-yet-built loop, so
-    ``budget_exhausted`` stays false here (#201's scope)."""
+    the report: review repair (spending the ``quality=`` budget on a
+    repairable fail) is the planner's loop, so ``budget_exhausted`` stays
+    false here."""
     checks = _tier1_checks(profile, backend)
     tier1_failed = any(check.outcome == "fail" for check in checks)
     if tier1_failed:

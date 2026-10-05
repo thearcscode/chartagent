@@ -321,3 +321,5 @@ Changed-checks-only patch review is the history/patch surface on
   [ADR-0029](0029-the-eval-benchmark-is-a-frozen-150.md).
 - `CONTEXT.md` gains **Escalation**, **Review repair**, **Quality**, and rewrites **Chart
   agent** and **Chart result**.
+
+**Erratum (2026-10-05, #245).** The Decision 3 hop trigger is read from the most recently reviewed Flint frame, not only the first, so a `marks_present` failure revealed after a repair unblocked Tier 2 still hops. The recipe receives the dial count minus the repairs spent, floored at 0. A terminal hop failure returns best-so-far (Decision 7) with its own report, and `budget_exhausted` follows the usual rule on that report.

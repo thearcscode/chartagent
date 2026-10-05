@@ -2264,3 +2264,84 @@ def test_inconclusive_tier_two_triggers_no_repair_and_no_critic_call(
     assert calls["model"] == 2 and len(reviewed) == 1
     assert result.review == report
     assert result.review.budget_exhausted is False
+
+
+# --- #245: the hop reads the latest review and inherits the leftover budget --
+
+
+def _hop_after_repair_agent(
+    flint_reports: list[ReviewReport],
+    recipe_reports: list[ReviewReport],
+    *replies: Any,
+) -> tuple[ChartAgent, dict[str, Any], list[Any]]:
+    agent, calls, reviewed = _flint_repairing_agent(*flint_reports, replies=replies)
+    queue = list(recipe_reports)
+    agent._recipe_reviewer = lambda profile, recipe, instruction: queue.pop(0)
+    return agent, calls, reviewed
+
+
+def test_marks_present_with_a_presentational_failure_hops_without_repair() -> None:
+    agent, calls, reviewed = _hop_after_repair_agent(
+        [
+            _flint_checks_report(
+                CheckResult("marks_present", "fail"),
+                CheckResult("label_overlap", "fail"),
+            )
+        ],
+        [_recipe_report()],
+        ("step2", _HOP_DOC),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert result.recipe is not None and result.envelope is None
+    assert calls["model"] == 3 and len(reviewed) == 1
+
+
+def test_balanced_repair_spent_then_marks_present_hops_with_no_patch_ask() -> None:
+    agent, calls, reviewed = _hop_after_repair_agent(
+        [_flint_report("colorblind_safe_palette"), _flint_report("marks_present")],
+        [_recipe_report("label_overlap")],
+        ("step2", {}),
+        ("step2", _HOP_DOC),
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert result.recipe is not None and result.envelope is None
+    assert calls["model"] == 4 and len(reviewed) == 2
+    assert result.review is not None and result.review.budget_exhausted is True
+
+
+def test_best_with_one_repair_spent_hops_and_the_recipe_gets_one_patch_round() -> None:
+    agent, calls, _ = _hop_after_repair_agent(
+        [_flint_report("colorblind_safe_palette"), _flint_report("marks_present")],
+        [_recipe_report("label_overlap"), _recipe_report("label_overlap")],
+        ("step2", {}),
+        ("step2", _HOP_DOC),
+        ("step2", _PATCHED_DOC),
+        ("step2", _PATCHED_DOC),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
+    assert result.recipe is not None
+    assert calls["model"] == 5
+    assert (
+        "label_overlap" in calls["system"][-1] or "label_overlap" in calls["user"][-1]
+    )
+
+
+def test_terminal_hop_failure_returns_the_best_flint_frame_unpassed() -> None:
+    agent, _, reviewed = _flint_repairing_agent(
+        _flint_report("label_overlap"),
+        _flint_report("marks_present"),
+        replies=(("step2", {}), ("step2", {"module": 3}), ("step2", {"module": 3})),
+    )
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
+    assert result.recipe is None
+    assert result.envelope is reviewed[0][1]
+    assert result.review is not None and result.review.passed is False
+    assert result.review.checks == _flint_report("label_overlap").checks
+    assert result.review.budget_exhausted is True
+
+
+def test_fast_never_hops_even_on_marks_present() -> None:
+    agent, calls, _ = _flint_repairing_agent(_flint_report("marks_present"))
+    result = agent.create_chart(_SALES, "revenue by quarter", quality="fast")
+    assert result.envelope is not None and calls["model"] == 2

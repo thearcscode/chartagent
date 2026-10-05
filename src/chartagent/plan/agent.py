@@ -356,13 +356,6 @@ class ChartAgent:
                 continue
             observe(2, step2_ask, "ok")
             review = self._reviewer(profile, frame, envelope, backend, instruction)
-            decision = decide_escalation(review, frame, quality=resolved_quality)
-            if decision is not None:
-                hopped = self._hop(profile, instruction, decision, frame, invoke)
-                if hopped is not None:
-                    return hopped
-                # marks_present suppresses repair that round (ADR-0026 D6).
-                return ChartResult(envelope=envelope, review=review)
             return self._repair_flint(
                 profile,
                 data,
@@ -371,7 +364,7 @@ class ChartAgent:
                 backend,
                 (frame, envelope),
                 review,
-                _REVIEW_REPAIRS[resolved_quality],
+                resolved_quality,
                 invoke,
             )
         raise PlannerFailureError(
@@ -388,7 +381,7 @@ class ChartAgent:
         backend: Backend,
         first: tuple[InputFrame, Envelope],
         review: ReviewReport,
-        budget: int,
+        quality: Quality,
         invoke: Any,
     ) -> ChartResult:
         """Spend the budget on step-2 re-asks for a presentational failure.
@@ -397,7 +390,10 @@ class ChartAgent:
         failing repairable name; chart type, encodings, transform and backend
         are the carried ones and step 1 is not re-run. A response that fails to
         decode, assemble or bind is a discard that still spends a unit. A
-        repaired chart is reviewed in full. Never raises on review."""
+        repaired chart is reviewed in full. The hop trigger is read from the
+        latest review, so a ``marks_present`` failure revealed by a repair still
+        hops, with only what the repairs left; a terminal hop failure returns
+        best-so-far with its own report. Never raises on review."""
 
         def request(
             _current: tuple[InputFrame, Envelope], failing: list[CheckName]
@@ -416,17 +412,32 @@ class ChartAgent:
             except (SpecShapeError, SchemaDriftError):
                 return None
 
-        (frame, envelope), review = spend_repair_budget(
+        total = _REVIEW_REPAIRS[quality]
+
+        def decide(report: ReviewReport, spent: int) -> EscalationDecision | None:
+            return decide_escalation(
+                report, first[0], quality=quality, repairs_spent=spent
+            )
+
+        outcome = spend_repair_budget(
             first,
             review,
-            budget,
+            total,
             request=request,
             reviewer=lambda candidate: self._reviewer(
                 profile, candidate[0], candidate[1], backend, instruction
             ),
             repairable=_FLINT_REPAIRABLE,
+            halt=lambda report, spent: decide(report, spent) is not None,
         )
-        return ChartResult(envelope=envelope, review=review)
+        if outcome.halted is not None:
+            (latest_frame, _), latest_review = outcome.halted
+            decision = decide(latest_review, outcome.spent)
+            if decision is not None:
+                hopped = self._hop(profile, instruction, decision, latest_frame, invoke)
+                if hopped is not None:
+                    return hopped
+        return ChartResult(envelope=outcome.artifact[1], review=outcome.review)
 
     def _hop(
         self,
@@ -439,9 +450,9 @@ class ChartAgent:
         """Bucket 4: the failed frame's transform goes to ``generate_recipe``;
         step 1 is not re-run. The recipe enters the review-repair loop with only
         the budget the decision left, and ``frame.semantic_types`` go to the
-        patch ask since a recipe stores none. There is no second hop: the loop
-        never calls ``decide_escalation``. ``None`` means the seam
-        failed terminally and the caller returns the Flint result unchanged.
+        patch ask since a recipe stores none. There is no second hop: the recipe
+        loop never calls ``decide_escalation``. ``None`` means the seam
+        failed terminally and the caller returns best-so-far.
         """
         reason = EscapeReason(bucket=4)
         try:
@@ -558,7 +569,7 @@ class ChartAgent:
                 return None
             return replace(current, document=patched)
 
-        best, review = spend_repair_budget(
+        outcome = spend_repair_budget(
             recipe,
             self._recipe_reviewer(profile, recipe, instruction),
             budget,
@@ -567,7 +578,7 @@ class ChartAgent:
                 profile, candidate, instruction
             ),
         )
-        return ChartResult(recipe=best, review=review)
+        return ChartResult(recipe=outcome.artifact, review=outcome.review)
 
 
 def _tier1_recipe_review(
