@@ -182,7 +182,7 @@ was present and remaining budget was 0.
 round semantics as shipped, recorded in place; they follow the shared accounting of ADR-0030's
 2026-10-03 erratum.
 
-- **One ask per round.** A Flint round is one uncounted `chartProperties` re-ask naming every
+- **One ask per round.** A Flint round is one `chartProperties` re-ask, outside the planner's emit cap, naming every
   repairable failing check; step 1 is not re-run, and chart type, encodings, `transform` and
   backend are the carried ones.
 - **The budget is counted per ask.** Each ask spends one unit of the `quality=` budget, kept or
@@ -193,10 +193,10 @@ round semantics as shipped, recorded in place; they follow the shared accounting
   emitted.
 - **The hop reads the latest review.** The `marks_present` trigger is read from the most
   recently reviewed frame, so a failure revealed after a repair still hops, with only the
-  budget the repairs left (Decision 3's erratum in ADR-0027).
+  budget the repairs left (the #245 erratum at the end of ADR-0027).
 - **Repairable on Flint:** the four presentational items above, plus `colorblind_safe_palette`
   and `data_truthfulness` whenever a reviewer reports them. `data_truthfulness` is repairable
-  on either rail. A Flint `marks_present` fail stays unrepairable and still suppresses repair
+  on either rail (ADR-0024 expects it never to fail on Flint, so on that rail the repair path is a defensive wiring, not an expected route). A Flint `marks_present` fail stays unrepairable and still suppresses repair
   that round. `injection_pattern` is never repaired.
 
 **What a repair may change.**
