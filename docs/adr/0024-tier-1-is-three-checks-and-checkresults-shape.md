@@ -307,3 +307,14 @@ The #254 and #255 errata above are the record of record; this entry ties them to
   Greys, gridlines, text and the page background never count as series hues.
 - **`data_truthfulness` stays omitted on Flint.** Flint's compiled output is `input.data`, so the
   check cannot fail by construction; on the custom rail it stays `not_checked` until recipe scoring exists.
+
+## Erratum (2026-10-06, #262): the page background is the unsaturated colour
+
+Corrects two readings of the #254/#255 errata. (1) The palette check does not treat the most common
+pixel as the page background: any pixel at HSV saturation >= 0.35 is a candidate series colour, however much of the
+canvas it covers, so a red-dominant red/green chart fails. Greys, near-white and near-black fall
+below the saturation floor and never count; a chrome-only grey chart still passes with "fewer than
+two hues: nothing to confuse". (The `painted` ink floor still measures against the most common
+colour; that is a separate, coarse check.) (2) A `painted` fail leaves `colorblind_safe_palette`
+`not_checked` with the host-authored detail "canvas is blank: no palette to judge"; the detail
+"unavailable" is reserved for a review with no rasteriser.

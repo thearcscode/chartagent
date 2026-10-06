@@ -1,7 +1,8 @@
 """Colour-vision-deficiency scoring for ``colorblind_safe_palette`` (ADR-0024
 erratum, #255).
 
-Takes the saturated, non-background hues of a rasterised chart, simulates
+Takes the saturated hues of a rasterised chart (greys, near-white and
+near-black are chrome or background, never hues), simulates
 protan, deutan and tritan vision (Machado et al. 2009, severity 1.0, applied
 in linear RGB) and fails when two distinct hues land closer than
 ``MIN_SIMULATED_DELTA_E`` (CIE76) under any simulation. Every threshold lives
@@ -70,11 +71,10 @@ def _mark_hues(raster: Raster) -> list[Rgb]:
         counts[pixel] = counts.get(pixel, 0) + 1
     if not counts:
         return []
-    background = max(counts, key=lambda p: counts[p])
+    # The page background is whatever is unsaturated, not the modal pixel: a
+    # saturated hue covering most of the canvas is still a series colour.
     saturated = {
-        pixel: n
-        for pixel, n in counts.items()
-        if pixel != background and _hsv(pixel)[1] >= SATURATION_FLOOR
+        pixel: n for pixel, n in counts.items() if _hsv(pixel)[1] >= SATURATION_FLOOR
     }
     total = sum(saturated.values())
     clusters: list[tuple[float, dict[Rgb, int]]] = []

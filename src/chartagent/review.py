@@ -345,14 +345,22 @@ def flint_review(
             _painted(raster) if check.name == "painted" else check for check in checks
         ]
         # A blank canvas has no palette to judge, so the palette check stays
-        # not_checked on a `painted` fail.
-        if not any(check.outcome == "fail" for check in checks):
-            checks = [
-                _colorblind_safe_palette(raster)
-                if check.name == "colorblind_safe_palette"
-                else check
-                for check in checks
-            ]
+        # not_checked on a `painted` fail, with a detail that says why.
+        painted_failed = any(check.outcome == "fail" for check in checks)
+        checks = [
+            (
+                CheckResult(
+                    "colorblind_safe_palette",
+                    "not_checked",
+                    "canvas is blank: no palette to judge",
+                )
+                if painted_failed
+                else _colorblind_safe_palette(raster)
+            )
+            if check.name == "colorblind_safe_palette"
+            else check
+            for check in checks
+        ]
         if any(check.outcome == "fail" for check in checks):
             return ReviewReport(
                 tiers_run=(1,),

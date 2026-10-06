@@ -691,7 +691,26 @@ def test_antialiasing_fringes_do_not_count_as_a_third_hue() -> None:
 
 def test_a_painted_fail_leaves_the_palette_not_checked() -> None:
     check = _palette(BLANK_PNG)
-    assert check.outcome == "not_checked"
+    assert (check.outcome, check.detail) == (
+        "not_checked",
+        "canvas is blank: no palette to judge",
+    )
+
+
+def test_a_saturated_hue_covering_most_of_the_canvas_still_counts() -> None:
+    def pixel(x: int, y: int) -> tuple[int, int, int]:
+        return _GREEN if x >= 36 else _RED
+
+    check = _palette(_png(40, 30, pixel))
+    assert check.outcome == "fail"
+
+
+def test_near_white_and_near_black_never_count_as_hues() -> None:
+    def pixel(x: int, y: int) -> tuple[int, int, int]:
+        return (5, 5, 5) if x < 20 else (250, 250, 250)
+
+    check = _palette(_png(40, 30, pixel))
+    assert check.detail == "fewer than two hues: nothing to confuse"
 
 
 def test_a_palette_fail_skips_the_critic() -> None:
