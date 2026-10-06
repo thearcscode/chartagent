@@ -278,3 +278,15 @@ is one flat colour or fewer than `_PAINTED_INK_FLOOR` (0.1%) of pixels differ fr
 colour; it stays coarse and whole-canvas. A blank-canvas fail is not repairable and does not hop
 (ADR-0027). `RasterisationError` still raises. Decoding is stdlib-only (`zlib`), so the base
 dependencies do not grow, so the table's "`not_checked` if extra missing" for `painted` now reads "`not_checked` if no rasteriser". `colorblind_safe_palette` stays `not_checked` until its own ticket.
+
+## Erratum (2026-10-06, #255): `colorblind_safe_palette` is scored on Flint
+
+With a rasteriser, `colorblind_safe_palette` resolves from the same single PNG as `painted`. The
+saturated (HSV saturation >= 0.35), non-background colours are clustered into hues (within 20
+degrees; a hue needs >= 5% of the saturated pixels, so antialiasing fringes never count); protan,
+deutan and tritan vision are simulated (Machado 2009, severity 1.0, linear RGB) and the check fails
+when two distinct hues fall under a CIE76 distance of 10 in any simulation. Fewer than two hues
+passes with the detail "fewer than two hues: nothing to confuse"; chrome (greys) is never judged.
+A `painted` fail leaves the check `not_checked`. A palette fail returns a Tier-1-only report with
+Tier 2 `blocked` and no critic call. All thresholds are named constants in `_palette.py`; details
+are host-authored static text. Without a rasteriser it stays `not_checked: unavailable`.
