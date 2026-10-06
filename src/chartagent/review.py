@@ -1,5 +1,6 @@
 """``ReviewReport`` and ``CheckResult`` — the review gate's result types
-(ADR-0005 Decision 9, ADR-0024), the Tier-1 checks that need no rasteriser,
+(ADR-0005 Decision 9, ADR-0024), the Tier-1 checks (``injection_pattern``
+needs no rasteriser; ``painted`` and ``colorblind_safe_palette`` need one),
 and Tier 2 (ADR-0026, ADR-0027): the applicability table over the 48 chart
 types and ``flint_review``, which runs Tier 1 then, when a rasteriser and a
 critic are both supplied, a Flint critique.
@@ -7,7 +8,8 @@ critic are both supplied, a Flint critique.
 With a rasteriser, a Flint review rasterises once and ``painted`` resolves
 from that picture (#254); the same PNG feeds the critic. Without one it stays
 ``not_checked`` ("unavailable"). ``colorblind_safe_palette`` is scored from
-the same picture (#255), unless ``painted`` failed. An internal
+the same picture (#255), unless ``painted`` failed. ``data_truthfulness`` is
+omitted on Flint (its output is ``input.data``; ADR-0024). An internal
 error in a check raises; it never becomes a ``CheckResult`` (ADR-0024
 Decision 2).
 """
