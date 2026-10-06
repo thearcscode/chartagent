@@ -6,8 +6,8 @@ critic are both supplied, a Flint critique.
 
 With a rasteriser, a Flint review rasterises once and ``painted`` resolves
 from that picture (#254); the same PNG feeds the critic. Without one it stays
-``not_checked`` ("unavailable"). ``colorblind_safe_palette`` stays
-``not_checked`` — scoring it from pixels is a later ticket. An internal
+``not_checked`` ("unavailable"). ``colorblind_safe_palette`` is scored from
+the same picture (#255), unless ``painted`` failed. An internal
 error in a check raises; it never becomes a ``CheckResult`` (ADR-0024
 Decision 2).
 """
@@ -19,7 +19,8 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from chartagent._pixels import decode_png
+from chartagent._palette import score_palette
+from chartagent._pixels import Raster, decode_png
 from chartagent.critique import (
     Critique,
     CritiqueContext,
@@ -115,8 +116,7 @@ def _tier1_checks(profile: Profile, backend: Backend | None) -> list[CheckResult
 _PAINTED_INK_FLOOR = 0.001
 
 
-def _painted(png: bytes) -> CheckResult:
-    raster = decode_png(png)
+def _painted(raster: Raster) -> CheckResult:
     counts: dict[tuple[int, int, int], int] = {}
     for pixel in raster.pixels:
         counts[pixel] = counts.get(pixel, 0) + 1
@@ -124,6 +124,21 @@ def _painted(png: bytes) -> CheckResult:
     if ink / max(len(raster.pixels), 1) < _PAINTED_INK_FLOOR:
         return CheckResult("painted", "fail", "canvas is blank")
     return CheckResult("painted", "pass")
+
+
+def _colorblind_safe_palette(raster: Raster) -> CheckResult:
+    verdict = score_palette(raster)
+    if verdict.collapsed:
+        return CheckResult(
+            "colorblind_safe_palette",
+            "fail",
+            "two mark colours look alike under colour-blind vision",
+        )
+    if verdict.hue_count < 2:
+        return CheckResult(
+            "colorblind_safe_palette", "pass", "fewer than two hues: nothing to confuse"
+        )
+    return CheckResult("colorblind_safe_palette", "pass")
 
 
 def tier1_review(profile: Profile, *, backend: Backend | None) -> ReviewReport:
@@ -322,9 +337,19 @@ def flint_review(
     png: bytes | None = None
     if rasteriser is not None:
         png = rasteriser.rasterise(envelope)
+        raster = decode_png(png)
         checks = [
-            _painted(png) if check.name == "painted" else check for check in checks
+            _painted(raster) if check.name == "painted" else check for check in checks
         ]
+        # A blank canvas has no palette to judge, so the palette check stays
+        # not_checked on a `painted` fail.
+        if not any(check.outcome == "fail" for check in checks):
+            checks = [
+                _colorblind_safe_palette(raster)
+                if check.name == "colorblind_safe_palette"
+                else check
+                for check in checks
+            ]
         if any(check.outcome == "fail" for check in checks):
             return ReviewReport(
                 tiers_run=(1,),

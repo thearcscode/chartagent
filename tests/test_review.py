@@ -523,7 +523,7 @@ def test_painted_passes_on_a_drawn_chart_without_a_critic() -> None:
     report = _review(_FakeRasteriser(DRAWN_PNG))
     checks = _named(report)
     assert checks["painted"].outcome == "pass"
-    assert checks["colorblind_safe_palette"].outcome == "not_checked"
+    assert checks["colorblind_safe_palette"].outcome == "pass"
     assert report.tiers_run == (1,)
     assert report.tiers_skipped == {2: "unavailable"}
     assert report.passed is True
@@ -621,3 +621,104 @@ def test_a_no_critic_review_makes_exactly_one_rasterise_call() -> None:
 def test_an_undecodable_png_raises_rasterisation_error() -> None:
     with pytest.raises(RasterisationError):
         _review(_FakeRasteriser(b"not-a-png"))
+
+
+# --- #255: colorblind_safe_palette gets a real verdict ---------------------
+
+_RED, _GREEN = (214, 39, 40), (44, 160, 44)
+_BLUE, _ORANGE = (31, 119, 180), (255, 127, 14)
+_WHITE = (255, 255, 255)
+
+
+def _two_bars(a: tuple[int, int, int], b: tuple[int, int, int]) -> bytes:
+    def pixel(x: int, y: int) -> tuple[int, int, int]:
+        if y < 15:
+            return _WHITE
+        return a if 5 <= x < 15 else b if 25 <= x < 35 else _WHITE
+
+    return _png(40, 30, pixel)
+
+
+def _palette(png: bytes) -> CheckResult:
+    return _named(_review(_FakeRasteriser(png)))["colorblind_safe_palette"]
+
+
+def test_a_red_green_pair_that_collapses_under_deuteranopia_fails() -> None:
+    report = _review(_FakeRasteriser(_two_bars(_RED, _GREEN)))
+    assert _named(report)["colorblind_safe_palette"].outcome == "fail"
+    assert report.passed is False
+    assert report.tiers_run == (1,)
+    assert report.tiers_skipped == {2: "blocked"}
+
+
+def test_a_blue_orange_pair_passes() -> None:
+    check = _palette(_two_bars(_BLUE, _ORANGE))
+    assert (check.outcome, check.detail) == ("pass", None)
+
+
+def test_a_single_hue_chart_passes_with_the_nothing_to_confuse_detail() -> None:
+    check = _palette(DRAWN_PNG)
+    assert check.outcome == "pass"
+    assert check.detail == "fewer than two hues: nothing to confuse"
+
+
+def test_light_and_dark_shades_of_one_hue_are_one_hue() -> None:
+    check = _palette(_two_bars(_BLUE, (120, 180, 230)))
+    assert check.detail == "fewer than two hues: nothing to confuse"
+
+
+def test_a_chrome_only_grey_chart_is_judged_on_its_marks() -> None:
+    def pixel(x: int, y: int) -> tuple[int, int, int]:
+        if x == 5 or y == 25:
+            return (0, 0, 0)
+        return (200, 200, 200) if 10 <= x < 20 and 10 <= y < 25 else _WHITE
+
+    check = _palette(_png(40, 30, pixel))
+    assert check.outcome == "pass"
+    assert check.detail == "fewer than two hues: nothing to confuse"
+
+
+def test_antialiasing_fringes_do_not_count_as_a_third_hue() -> None:
+    def pixel(x: int, y: int) -> tuple[int, int, int]:
+        if y < 15:
+            return _WHITE
+        if x == 20:
+            return (240, 80, 160)
+        return _BLUE if 5 <= x < 20 else _ORANGE if 21 <= x < 36 else _WHITE
+
+    assert _palette(_png(40, 30, pixel)).outcome == "pass"
+
+
+def test_a_painted_fail_leaves_the_palette_not_checked() -> None:
+    check = _palette(BLANK_PNG)
+    assert check.outcome == "not_checked"
+
+
+def test_a_palette_fail_skips_the_critic() -> None:
+    def fn(_m: object, _i: AgentInfo) -> ModelResponse:
+        raise AssertionError("critic must not run")
+
+    critic = ModelClient("test")
+    critic._model = FunctionModel(fn)  # type: ignore[assignment]
+    report = _review(_FakeRasteriser(_two_bars(_RED, _GREEN)), critic)
+    assert report.tiers_skipped == {2: "blocked"}
+    assert report.passed is False
+
+
+def test_no_critic_passes_iff_tier_one_resolved_and_nothing_failed() -> None:
+    assert _review(_FakeRasteriser(_two_bars(_BLUE, _ORANGE))).passed is True
+    assert _review(_FakeRasteriser(_two_bars(_RED, _GREEN))).passed is False
+
+
+def test_palette_is_unavailable_without_a_rasteriser_and_absent_on_excel() -> None:
+    check = _named(_review(None))["colorblind_safe_palette"]
+    assert (check.outcome, check.detail) == ("not_checked", "unavailable")
+    assert "colorblind_safe_palette" not in _named(
+        tier1_review(_CLEAN, backend="excel")
+    )
+
+
+def test_palette_fail_detail_is_static_text() -> None:
+    assert _palette(_two_bars(_RED, _GREEN)).detail == (
+        "two mark colours look alike under colour-blind vision"
+    )
