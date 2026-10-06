@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import dataclasses
+import struct
+import zlib
 from typing import Any, Literal
 
 import pytest
@@ -292,10 +294,36 @@ def _envelope() -> Envelope:
     )
 
 
+def _png(width: int, height: int, pixel: Any, *, color_type: int = 2) -> bytes:
+    """A real 8-bit PNG; ``pixel(x, y)`` returns the channel tuple."""
+
+    def chunk(kind: bytes, body: bytes) -> bytes:
+        crc = zlib.crc32(kind + body)
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", crc)
+
+    rows = b"".join(
+        b"\x00" + b"".join(bytes(pixel(x, y)) for x in range(width))
+        for y in range(height)
+    )
+    header = struct.pack(">IIBBBBB", width, height, 8, color_type, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+BLANK_PNG = _png(40, 30, lambda x, y: (255, 255, 255))
+DRAWN_PNG = _png(
+    40, 30, lambda x, y: (31, 119, 180) if 10 <= x < 20 and y >= 15 else (255, 255, 255)
+)
+
+
 class _FakeRasteriser:
     """Records every call; returns fixed bytes — never a real render."""
 
-    def __init__(self, png: bytes = b"fake-png") -> None:
+    def __init__(self, png: bytes = DRAWN_PNG) -> None:
         self.png = png
         self.calls: list[Envelope] = []
 
@@ -364,7 +392,7 @@ def test_a_frame_that_paints_chrome_without_marks_yields_marks_present_fail() ->
     """The acceptance criterion: a real Tier-2 round, through a fake
     Rasteriser and a scripted critic, produces an actual Flint
     ``marks_present: fail`` (#201)."""
-    rasteriser = _FakeRasteriser(png=b"chrome-but-no-marks")
+    rasteriser = _FakeRasteriser()
     critic = _scripted_critic(
         {
             "marks_present": "fail",
@@ -474,3 +502,111 @@ def test_rasterisation_error_is_a_chartagent_error() -> None:
     from chartagent.errors import ChartAgentError
 
     assert isinstance(RasterisationError("boom"), ChartAgentError)
+
+
+# --- #254: painted gets a real verdict -------------------------------------
+
+
+def _review(rasteriser: Any, critic: ModelClient | None = None) -> ReviewReport:
+    return flint_review(
+        _CLEAN,
+        _FRAME,
+        _envelope(),
+        "vegalite",
+        "bar chart of revenue by quarter",
+        rasteriser=rasteriser,
+        critique_client=critic,
+    )
+
+
+def test_painted_passes_on_a_drawn_chart_without_a_critic() -> None:
+    report = _review(_FakeRasteriser(DRAWN_PNG))
+    checks = _named(report)
+    assert checks["painted"].outcome == "pass"
+    assert checks["colorblind_safe_palette"].outcome == "not_checked"
+    assert report.tiers_run == (1,)
+    assert report.tiers_skipped == {2: "unavailable"}
+    assert report.passed is True
+
+
+def test_painted_fails_on_a_blank_canvas_and_blocks_tier_two() -> None:
+    critic_calls: list[object] = []
+
+    def fn(_m: object, _i: AgentInfo) -> ModelResponse:
+        critic_calls.append(1)
+        raise AssertionError("critic must not run")
+
+    critic = ModelClient("test")
+    critic._model = FunctionModel(fn)  # type: ignore[assignment]
+    report = _review(_FakeRasteriser(BLANK_PNG), critic)
+    assert _named(report)["painted"].outcome == "fail"
+    assert report.tiers_run == (1,)
+    assert report.tiers_skipped == {2: "blocked"}
+    assert report.passed is False
+    assert report.budget_exhausted is False
+    assert critic_calls == []
+
+
+def test_painted_fails_below_the_ink_floor() -> None:
+    one_pixel = _png(
+        100, 100, lambda x, y: (0, 0, 0) if (x, y) == (3, 3) else (255, 255, 255)
+    )
+    assert _named(_review(_FakeRasteriser(one_pixel)))["painted"].outcome == "fail"
+
+
+def test_painted_reads_rgba_and_grey_pngs() -> None:
+    rgba = _png(
+        20,
+        20,
+        lambda x, y: (0, 0, 0, 255) if x < 10 else (255, 255, 255, 255),
+        color_type=6,
+    )
+    grey = _png(20, 20, lambda x, y: (0,) if x < 10 else (255,), color_type=0)
+    assert _named(_review(_FakeRasteriser(rgba)))["painted"].outcome == "pass"
+    assert _named(_review(_FakeRasteriser(grey)))["painted"].outcome == "pass"
+
+
+def test_one_rasterise_call_per_review_with_a_critic() -> None:
+    rasteriser = _FakeRasteriser()
+    critic = _scripted_critic(
+        {
+            "marks_present": "pass",
+            "axis_labels_present": "pass",
+            "label_overlap": "pass",
+            "bar_chart_y_axis_baseline": "pass",
+            "note": None,
+        }
+    )
+    report = _review(rasteriser, critic)
+    assert len(rasteriser.calls) == 1
+    assert _named(report)["painted"].outcome == "pass"
+    assert report.tiers_run == (1, 2)
+
+
+def test_rasterisation_error_propagates_and_is_not_a_check_result() -> None:
+    class Boom:
+        def rasterise(self, target: object, *, format: str = "png") -> bytes:
+            raise RasterisationError("renderer rejected the spec")
+
+    with pytest.raises(RasterisationError):
+        _review(Boom())
+
+
+def test_painted_without_a_rasteriser_stays_unavailable() -> None:
+    check = _named(_review(None))["painted"]
+    assert (check.outcome, check.detail) == ("not_checked", "unavailable")
+
+
+def test_painted_details_are_static_text() -> None:
+    assert _named(_review(_FakeRasteriser(BLANK_PNG)))["painted"].detail == (
+        "canvas is blank"
+    )
+    assert _named(_review(_FakeRasteriser(DRAWN_PNG)))["painted"].detail is None
+
+
+def test_excel_and_custom_rail_still_omit_painted_and_flint_omits_truthfulness() -> (
+    None
+):
+    assert "painted" not in _named(tier1_review(_CLEAN, backend="excel"))
+    assert "painted" not in _named(tier1_review(_CLEAN, backend=None))
+    assert "data_truthfulness" not in _named(_review(_FakeRasteriser()))

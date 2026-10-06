@@ -4,10 +4,10 @@ and Tier 2 (ADR-0026, ADR-0027): the applicability table over the 48 chart
 types and ``flint_review``, which runs Tier 1 then, when a rasteriser and a
 critic are both supplied, a Flint critique.
 
-``painted`` and ``colorblind_safe_palette`` stay ``not_checked``
-("unavailable") even once a rasteriser exists — actually scoring them from
-pixels is a separate, not-yet-built ticket; #201 builds only Tier 2's
-detection (`marks_present` and the other four defect checks). An internal
+With a rasteriser, a Flint review rasterises once and ``painted`` resolves
+from that picture (#254); the same PNG feeds the critic. Without one it stays
+``not_checked`` ("unavailable"). ``colorblind_safe_palette`` stays
+``not_checked`` — scoring it from pixels is a later ticket. An internal
 error in a check raises; it never becomes a ``CheckResult`` (ADR-0024
 Decision 2).
 """
@@ -19,6 +19,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from typing import Literal
 
+from chartagent._pixels import decode_png
 from chartagent.critique import (
     Critique,
     CritiqueContext,
@@ -105,6 +106,24 @@ def _tier1_checks(profile: Profile, backend: Backend | None) -> list[CheckResult
             CheckResult("colorblind_safe_palette", "not_checked", "unavailable")
         )
     return checks
+
+
+# `painted` is a coarse whole-canvas non-blank check (ADR-0024): the canvas
+# fails when it is one flat colour or when fewer than this fraction of its
+# pixels differ from the most common colour. One named number so `pass` means
+# the same on every deployment.
+_PAINTED_INK_FLOOR = 0.001
+
+
+def _painted(png: bytes) -> CheckResult:
+    raster = decode_png(png)
+    counts: dict[tuple[int, int, int], int] = {}
+    for pixel in raster.pixels:
+        counts[pixel] = counts.get(pixel, 0) + 1
+    ink = len(raster.pixels) - max(counts.values(), default=0)
+    if ink / max(len(raster.pixels), 1) < _PAINTED_INK_FLOOR:
+        return CheckResult("painted", "fail", "canvas is blank")
+    return CheckResult("painted", "pass")
 
 
 def tier1_review(profile: Profile, *, backend: Backend | None) -> ReviewReport:
@@ -283,8 +302,10 @@ def flint_review(
     rasteriser: Rasteriser | None,
     critique_client: ModelClient | None,
 ) -> ReviewReport:
-    """Tier 1, then — when both a rasteriser and a critic are supplied and
-    Tier 1 did not fail — a Flint critique (ADR-0026, ADR-0027). Stops at
+    """Tier 1, which rasterises once when a rasteriser is supplied and scores
+    ``painted`` from the picture, then — when a critic is also supplied and
+    Tier 1 did not fail — a Flint critique on the same PNG (ADR-0026,
+    ADR-0027, #254). Stops at
     the report: review repair (spending the ``quality=`` budget on a
     repairable fail) is the planner's loop, so ``budget_exhausted`` stays
     false here."""
@@ -298,8 +319,22 @@ def flint_review(
             budget_exhausted=False,
             checks=tuple(checks),
         )
+    png: bytes | None = None
+    if rasteriser is not None:
+        png = rasteriser.rasterise(envelope)
+        checks = [
+            _painted(png) if check.name == "painted" else check for check in checks
+        ]
+        if any(check.outcome == "fail" for check in checks):
+            return ReviewReport(
+                tiers_run=(1,),
+                tiers_skipped={2: "blocked"},
+                passed=False,
+                budget_exhausted=False,
+                checks=tuple(checks),
+            )
     tier1_resolved = any(check.outcome != "not_checked" for check in checks)
-    if rasteriser is None or critique_client is None:
+    if png is None or critique_client is None:
         return ReviewReport(
             tiers_run=(1,),
             tiers_skipped={2: "unavailable"},
@@ -313,7 +348,6 @@ def flint_review(
         for channel, encoding in frame.chart_spec.encodings.items()
     }
     items = applicable_tier2_items(frame.chart_spec.chart_type, encodings)
-    png = rasteriser.rasterise(envelope)
     context = CritiqueContext(
         instruction=instruction,
         chart_type=frame.chart_spec.chart_type,

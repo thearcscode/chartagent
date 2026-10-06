@@ -1756,9 +1756,40 @@ def test_default_recipe_review_is_tier_one_only_with_no_patch_ask() -> None:
 # --- #201: rasteriser= / critique_model= construction and real Tier-2 wiring -
 
 
+def _flat_png(ink: bool) -> bytes:
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, body: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(body))
+            + kind
+            + body
+            + struct.pack(">I", zlib.crc32(kind + body))
+        )
+
+    rows = b"".join(
+        b"\x00"
+        + b"".join(
+            b"\x00\x00\x00" if ink and x < 10 else b"\xff\xff\xff" for x in range(20)
+        )
+        for _ in range(20)
+    )
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 20, 20, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+_DRAWN_PNG = _flat_png(True)
+_BLANK_PNG = _flat_png(False)
+
+
 class _FakeRasteriser:
     def rasterise(self, target: Any, *, format: str = "png") -> bytes:
-        return b"chrome-but-no-marks"
+        return _DRAWN_PNG
 
 
 def test_critique_model_is_construction_checked_like_model() -> None:
@@ -1809,6 +1840,28 @@ def test_a_real_flint_review_marks_present_fail_hops_through_create_chart(
     assert result.envelope is None
     assert result.recipe is not None
     assert result.recipe.escape_reason.bucket == 4
+
+
+class _BlankRasteriser:
+    def rasterise(self, target: Any, *, format: str = "png") -> bytes:
+        return _BLANK_PNG
+
+
+@pytest.mark.parametrize("quality", ["fast", "balanced", "best"])
+def test_a_real_blank_painted_fail_stays_on_rail_through_create_chart(
+    quality: str,
+) -> None:
+    """No reviewer stub: a blank canvas makes no repair ask, no hop, and no
+    budget is spent (#254)."""
+    agent = create_chart_agent(model="test", rasteriser=_BlankRasteriser())
+    calls = _install(agent, ("Fragment", _FRAGMENT), ("step2", {}))
+    result = agent.create_chart(_SALES, "revenue by quarter", quality=quality)  # type: ignore[arg-type]
+    assert result.envelope is not None
+    assert result.recipe is None
+    assert result.review is not None
+    assert result.review.passed is False
+    assert result.review.budget_exhausted is False
+    assert calls["model"] == 2
 
 
 # --- #230: a hopped recipe enters the review-repair loop -------------------
