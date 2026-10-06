@@ -290,3 +290,20 @@ passes with the detail "fewer than two hues: nothing to confuse"; chrome (greys)
 A `painted` fail leaves the check `not_checked`. A palette fail returns a Tier-1-only report with
 Tier 2 `blocked` and no critic call. All thresholds are named constants in `_palette.py`; details
 are host-authored static text. Without a rasteriser it stays `not_checked: unavailable`.
+
+## Erratum (2026-10-06, #257; spec #253): summary of real Flint scoring
+
+The #254 and #255 errata above are the record of record; this entry ties them together.
+
+- **Rasterise once.** With a `Rasteriser`, a Flint review rasterises exactly once, with or without
+  a critic. The one PNG feeds `painted`, `colorblind_safe_palette` and, when Tier 2 runs, the critic.
+  Without a rasteriser both checks stay `not_checked: unavailable`. In the table above, "`not_checked`
+  if extra missing" for these two Flint cells reads "`not_checked` if no rasteriser".
+- **Palette method and thresholds.** Saturated, non-background pixels are clustered into hues;
+  protan, deutan and tritan simulations must keep every pair of hues at CIE76 distance >= 10. The
+  numbers live as named constants in `_palette.py` (`painted`'s `_PAINTED_INK_FLOOR` in `review.py`), so `pass` means
+  the same on every deployment.
+- **Single-hue rule.** Fewer than two hues passes, with a detail saying there is nothing to confuse.
+  Greys, gridlines, text and the page background never count as series hues.
+- **`data_truthfulness` stays omitted on Flint.** Flint's compiled output is `input.data`, so the
+  check cannot fail by construction; on the custom rail it stays `not_checked` until recipe scoring exists.

@@ -1,5 +1,6 @@
 """``ReviewReport`` and ``CheckResult`` — the review gate's result types
-(ADR-0005 Decision 9, ADR-0024), the Tier-1 checks that need no rasteriser,
+(ADR-0005 Decision 9, ADR-0024), the Tier-1 checks (``injection_pattern``
+needs no rasteriser; ``painted`` and ``colorblind_safe_palette`` need one),
 and Tier 2 (ADR-0026, ADR-0027): the applicability table over the 48 chart
 types and ``flint_review``, which runs Tier 1 then, when a rasteriser and a
 critic are both supplied, a Flint critique.
@@ -7,7 +8,8 @@ critic are both supplied, a Flint critique.
 With a rasteriser, a Flint review rasterises once and ``painted`` resolves
 from that picture (#254); the same PNG feeds the critic. Without one it stays
 ``not_checked`` ("unavailable"). ``colorblind_safe_palette`` is scored from
-the same picture (#255), unless ``painted`` failed. An internal
+the same picture (#255), unless ``painted`` failed. ``data_truthfulness`` is
+omitted on Flint (its output is ``input.data``; ADR-0024). An internal
 error in a check raises; it never becomes a ``CheckResult`` (ADR-0024
 Decision 2).
 """
@@ -92,9 +94,10 @@ def _tier1_checks(profile: Profile, backend: Backend | None) -> list[CheckResult
     """Which checks appear follows ADR-0024 Decision 4: Excel gets only
     ``injection_pattern``; Flint adds ``painted`` and
     ``colorblind_safe_palette``; the custom rail adds ``colorblind_safe_palette``
-    and ``data_truthfulness``. The image-derived ones are ``not_checked`` —
-    they could pass or fail with a rasteriser, and #201 does not build them
-    (module docstring)."""
+    and ``data_truthfulness``. The image-derived ones start as
+    ``not_checked`` placeholders; ``flint_review`` resolves the Flint ones
+    from the rasterised picture when a rasteriser is supplied (module
+    docstring)."""
     checks = [_injection_pattern(profile)]
     if backend is None:
         checks.append(

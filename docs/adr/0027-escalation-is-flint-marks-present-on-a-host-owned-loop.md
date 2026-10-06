@@ -329,3 +329,5 @@ Changed-checks-only patch review is the history/patch surface on
 **Erratum (2026-10-05, #246).** Flint's round semantics — one `chartProperties` re-ask per round, the budget counted per ask, a discard spending a unit, best-so-far, and `data_truthfulness` repairable on either rail — are recorded in ADR-0026 Decision 6's erratum of the same date.
 
 **Erratum (2026-10-06, #254).** Flint `painted` is now scored from the one rasterised PNG; a blank-canvas fail stays on-rail as above. See ADR-0024's erratum of the same date.
+
+**Erratum (2026-10-06, #257).** Flint `colorblind_safe_palette` is now also scored from the same PNG, so the review-repair loop spends on it from a real report. See ADR-0024's erratum of the same date (spec #253).
