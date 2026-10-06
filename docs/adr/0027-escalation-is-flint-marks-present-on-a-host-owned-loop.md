@@ -327,3 +327,5 @@ Changed-checks-only patch review is the history/patch surface on
 **Erratum (2026-10-05, #245).** The Decision 3 hop trigger is read from the most recently reviewed Flint frame, not only the first, so a `marks_present` failure revealed after a repair unblocked Tier 2 still hops. The recipe receives the dial count minus the repairs spent, floored at 0. A terminal hop failure returns best-so-far (Decision 7) with its own report, and `budget_exhausted` follows the usual rule on that report.
 
 **Erratum (2026-10-05, #246).** Flint's round semantics — one `chartProperties` re-ask per round, the budget counted per ask, a discard spending a unit, best-so-far, and `data_truthfulness` repairable on either rail — are recorded in ADR-0026 Decision 6's erratum of the same date.
+
+**Erratum (2026-10-06, #254).** Flint `painted` is now scored from the one rasterised PNG; a blank-canvas fail stays on-rail as above. See ADR-0024's erratum of the same date.
