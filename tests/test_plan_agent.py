@@ -1756,7 +1756,8 @@ def test_default_recipe_review_is_tier_one_only_with_no_patch_ask() -> None:
 # --- #201: rasteriser= / critique_model= construction and real Tier-2 wiring -
 
 
-def _flat_png(ink: bool) -> bytes:
+def _png(width: int, height: int, pixel: Callable[[int, int], bytes]) -> bytes:
+    """A real 8-bit RGB PNG; ``pixel(x, y)`` returns the three channel bytes."""
     import struct
     import zlib
 
@@ -1769,17 +1770,21 @@ def _flat_png(ink: bool) -> bytes:
         )
 
     rows = b"".join(
-        b"\x00"
-        + b"".join(
-            b"\x00\x00\x00" if ink and x < 10 else b"\xff\xff\xff" for x in range(20)
-        )
-        for _ in range(20)
+        b"\x00" + b"".join(pixel(x, y) for x in range(width)) for y in range(height)
     )
     return (
         b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", struct.pack(">IIBBBBB", 20, 20, 8, 2, 0, 0, 0))
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
         + chunk(b"IDAT", zlib.compress(rows))
         + chunk(b"IEND", b"")
+    )
+
+
+def _flat_png(ink: bool) -> bytes:
+    return _png(
+        20,
+        20,
+        lambda x, y: b"\x00\x00\x00" if ink and x < 10 else b"\xff\xff\xff",
     )
 
 
@@ -2404,27 +2409,14 @@ def test_fast_never_hops_even_on_marks_present() -> None:
 
 
 def _two_bars_png(a: tuple[int, int, int], b: tuple[int, int, int]) -> bytes:
-    import struct
-    import zlib
+    def pixel(x: int, y: int) -> bytes:
+        if y >= 15 and 5 <= x < 15:
+            return bytes(a)
+        if y >= 15 and 25 <= x < 35:
+            return bytes(b)
+        return b"\xff\xff\xff"
 
-    def chunk(kind: bytes, body: bytes) -> bytes:
-        crc = zlib.crc32(kind + body)
-        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", crc)
-
-    def pixel(x: int, y: int) -> tuple[int, int, int]:
-        if y < 15:
-            return (255, 255, 255)
-        return a if 5 <= x < 15 else b if 25 <= x < 35 else (255, 255, 255)
-
-    rows = b"".join(
-        b"\x00" + b"".join(bytes(pixel(x, y)) for x in range(40)) for y in range(30)
-    )
-    return (
-        b"\x89PNG\r\n\x1a\n"
-        + chunk(b"IHDR", struct.pack(">IIBBBBB", 40, 30, 8, 2, 0, 0, 0))
-        + chunk(b"IDAT", zlib.compress(rows))
-        + chunk(b"IEND", b"")
-    )
+    return _png(40, 30, pixel)
 
 
 _CONFUSABLE_PNG = _two_bars_png((200, 40, 40), (40, 160, 40))
@@ -2504,16 +2496,29 @@ def test_real_palette_fail_at_best_gets_a_second_ask() -> None:
         raster, _CRITIC_PASS, replies=(("step2", {}), ("step2", {}))
     )
     result = agent.create_chart(_SALES, "revenue by quarter", quality="best")
-    assert calls["model"] == 4
+    assert calls["model"] == 4 and raster.calls == 3
     assert result.review is not None and result.review.passed is True
+    assert result.review.tiers_run == (1, 2)
+    assert result.review.budget_exhausted is False
 
 
 def test_real_palette_fail_at_balanced_still_failing_is_dropped_for_the_first() -> None:
     raster = _SequencedRasteriser(_CONFUSABLE_PNG)
     agent, calls = _palette_agent(raster, replies=(("step2", {}),))
+    real_reviewer = agent._reviewer
+    envelopes: list[Any] = []
+
+    def spy(
+        profile: Any, frame: Any, envelope: Any, backend: Any, instruction: Any
+    ) -> Any:
+        envelopes.append(envelope)
+        return real_reviewer(profile, frame, envelope, backend, instruction)
+
+    agent._reviewer = spy
     result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
     assert calls["model"] == 3
-    assert result.envelope is not None
+    assert len(envelopes) == 2 and raster.calls == 2
+    assert result.envelope is envelopes[0]
     assert result.review is not None
     assert result.review.passed is False and result.review.budget_exhausted is True
 
