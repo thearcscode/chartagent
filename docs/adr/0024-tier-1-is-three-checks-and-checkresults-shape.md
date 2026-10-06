@@ -268,7 +268,7 @@ Phase-2 or lives to be reviewed; never both.
 - [ADR-0027](0027-escalation-is-flint-marks-present-on-a-host-owned-loop.md) — Tier-1
   escalation policy.
 
-## Erratum (#254): `painted` is scored on Flint
+## Erratum (2026-10-06, #254): `painted` is scored on Flint
 
 When a `Rasteriser` is supplied, a Flint review rasterises exactly once — with or without a critic
 — and `painted` resolves from that picture; the same PNG feeds the critic. A fail in Tier 1
@@ -277,4 +277,4 @@ fail still precedes everything, so the rasteriser is never called. `painted` fai
 is one flat colour or fewer than `_PAINTED_INK_FLOOR` (0.1%) of pixels differ from the most common
 colour; it stays coarse and whole-canvas. A blank-canvas fail is not repairable and does not hop
 (ADR-0027). `RasterisationError` still raises. Decoding is stdlib-only (`zlib`), so the base
-dependencies do not grow. `colorblind_safe_palette` stays `not_checked` until its own ticket.
+dependencies do not grow, so the table's "`not_checked` if extra missing" for `painted` now reads "`not_checked` if no rasteriser". `colorblind_safe_palette` stays `not_checked` until its own ticket.

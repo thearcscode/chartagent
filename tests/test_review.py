@@ -610,3 +610,14 @@ def test_excel_and_custom_rail_still_omit_painted_and_flint_omits_truthfulness()
     assert "painted" not in _named(tier1_review(_CLEAN, backend="excel"))
     assert "painted" not in _named(tier1_review(_CLEAN, backend=None))
     assert "data_truthfulness" not in _named(_review(_FakeRasteriser()))
+
+
+def test_a_no_critic_review_makes_exactly_one_rasterise_call() -> None:
+    rasteriser = _FakeRasteriser()
+    _review(rasteriser)
+    assert len(rasteriser.calls) == 1
+
+
+def test_an_undecodable_png_raises_rasterisation_error() -> None:
+    with pytest.raises(RasterisationError):
+        _review(_FakeRasteriser(b"not-a-png"))
