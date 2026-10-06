@@ -94,9 +94,10 @@ def _tier1_checks(profile: Profile, backend: Backend | None) -> list[CheckResult
     """Which checks appear follows ADR-0024 Decision 4: Excel gets only
     ``injection_pattern``; Flint adds ``painted`` and
     ``colorblind_safe_palette``; the custom rail adds ``colorblind_safe_palette``
-    and ``data_truthfulness``. The image-derived ones are ``not_checked`` —
-    they could pass or fail with a rasteriser, and #201 does not build them
-    (module docstring)."""
+    and ``data_truthfulness``. The image-derived ones start as
+    ``not_checked`` placeholders; ``flint_review`` resolves the Flint ones
+    from the rasterised picture when a rasteriser is supplied (module
+    docstring)."""
     checks = [_injection_pattern(profile)]
     if backend is None:
         checks.append(

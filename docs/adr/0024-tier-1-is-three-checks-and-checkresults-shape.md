@@ -301,10 +301,9 @@ The #254 and #255 errata above are the record of record; this entry ties them to
   if extra missing" for these two Flint cells reads "`not_checked` if no rasteriser".
 - **Palette method and thresholds.** Saturated, non-background pixels are clustered into hues;
   protan, deutan and tritan simulations must keep every pair of hues at CIE76 distance >= 10. The
-  numbers live as named constants in `_palette.py` (`painted`'s in `_pixels.py`), so `pass` means
+  numbers live as named constants in `_palette.py` (`painted`'s `_PAINTED_INK_FLOOR` in `review.py`), so `pass` means
   the same on every deployment.
 - **Single-hue rule.** Fewer than two hues passes, with a detail saying there is nothing to confuse.
   Greys, gridlines, text and the page background never count as series hues.
 - **`data_truthfulness` stays omitted on Flint.** Flint's compiled output is `input.data`, so the
-  check cannot fail by construction; it remains `not_checked` only on the custom rail until recipe
-  scoring exists.
+  check cannot fail by construction; on the custom rail it stays `not_checked` until recipe scoring exists.
