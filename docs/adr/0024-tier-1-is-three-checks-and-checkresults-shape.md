@@ -277,7 +277,7 @@ fail still precedes everything, so the rasteriser is never called. `painted` fai
 is one flat colour or fewer than `_PAINTED_INK_FLOOR` (0.1%) of pixels differ from the most common
 colour; it stays coarse and whole-canvas. A blank-canvas fail is not repairable and does not hop
 (ADR-0027). `RasterisationError` still raises. Decoding is stdlib-only (`zlib`), so the base
-dependencies do not grow, so the table's "`not_checked` if extra missing" for `painted` now reads "`not_checked` if no rasteriser". `colorblind_safe_palette` stays `not_checked` until its own ticket.
+dependencies do not grow, so the table's "`not_checked` if extra missing" for `painted` now reads "`not_checked` if no rasteriser". `colorblind_safe_palette` stays `not_checked` until its own ticket (superseded by the #255 erratum below).
 
 ## Erratum (2026-10-06, #255): `colorblind_safe_palette` is scored on Flint
 
