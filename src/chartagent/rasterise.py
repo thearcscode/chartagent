@@ -30,6 +30,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from html import escape as html_escape
 from pathlib import Path
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -38,6 +39,8 @@ from chartagent.envelope import Envelope
 from chartagent.errors import RasterisationError, RasteriserUnavailableError
 from chartagent.frame.input import Backend
 from chartagent.recipe import BoundDocument
+from chartagent.shell import build_shell
+from chartagent.transform.serialize import serialize_rows
 
 _EXTRA = "chartagent[review]"
 
@@ -56,18 +59,33 @@ class Rasteriser(Protocol):
     implementer owns compile-then-render.
 
     ``target``'s union is frozen at ADR-0005 Decision 9 as amended by
-    ADR-0017 Decision 6 — ``Envelope | BoundDocument`` — even though nothing
-    in the library constructs a ``BoundDocument`` yet (the custom-rail
-    rendering path is a later ticket's). ``format`` is fixed at ``"png"``
+    ADR-0017 Decision 6 — ``Envelope | BoundDocument``. The library's own
+    review constructs a ``BoundDocument`` and paints it on the custom rail
+    (:func:`~chartagent.review.custom_review`, #264). ``format`` is fixed at ``"png"``
     for v1 (ADR-0003 Decision 2). Raises
     :class:`~chartagent.errors.RasterisationError` on a failed render; never
     returns bytes for a chart it did not actually draw (ADR-0003's stated
     hazard — bytes without an exception is not proof of a render).
+
+    The protocol stays PNG-only. A rasteriser that also offers the sibling
+    ``paint_document(bound) -> DocumentPaint`` (ADR-0017 Decision 6 erratum,
+    #264) additionally returns the module's ``getPlottedSeries()``
+    declaration from the same single paint; the review prefers it and falls
+    back to ``rasterise`` (no declaration) when it is absent.
     """
 
     def rasterise(
         self, target: Envelope | BoundDocument, *, format: Literal["png"] = "png"
     ) -> bytes: ...
+
+
+@dataclass(frozen=True)
+class DocumentPaint:
+    """One paint of a custom-rail document: the picture and the declaration
+    ``getPlottedSeries()`` returned for it. Internal, not in ``__all__``."""
+
+    png: bytes
+    declaration: Any
 
 
 @dataclass(frozen=True)
@@ -244,6 +262,43 @@ def _harness_html(
 </html>"""
 
 
+def _duckdb_type_of(arrow_type: Any) -> str:
+    # serialize_rows keys its wire rules on DuckDB reported types; a bound
+    # Arrow table only needs the temporal and float distinctions.
+    import pyarrow as pa
+
+    if pa.types.is_timestamp(arrow_type):
+        return "TIMESTAMP WITH TIME ZONE" if arrow_type.tz else "TIMESTAMP"
+    if pa.types.is_date(arrow_type):
+        return "DATE"
+    if pa.types.is_floating(arrow_type):
+        return "DOUBLE"
+    return "VARCHAR"
+
+
+# Host harness for the custom rail (ADR-0017 Decision 6): the shell lives in
+# a sandboxed srcdoc iframe, never as the top-level page. ``__paint`` posts
+# the paint message and records the shell's ``chartagent/painted`` reply.
+_DOCUMENT_HARNESS_JS = """
+window.__result = null;
+window.addEventListener("message", function (event) {
+  var frame = document.getElementById("doc");
+  if (event.source !== frame.contentWindow) return;
+  if (event.data && event.data.type === "chartagent/painted") {
+    window.__result = event.data;
+  }
+});
+window.__paint = function (rows, width, height) {
+  var frame = document.getElementById("doc");
+  frame.contentWindow.postMessage(
+    { type: "chartagent/paint", contractVersion: 1, rows: rows, theme: {},
+      container: { width: width, height: height } },
+    "*"
+  );
+};
+"""
+
+
 class BrowserRasteriser:
     """The ADR-0003 reference ``Rasteriser``.
 
@@ -297,12 +352,7 @@ class BrowserRasteriser:
         self, target: Envelope | BoundDocument, *, format: Literal["png"] = "png"
     ) -> bytes:
         if isinstance(target, BoundDocument):
-            # The custom-rail rendering path (build_shell, the sandboxed
-            # iframe) is not built yet (ADR-0017 Decisions 10-12) — nothing
-            # produces a BoundDocument today, so nothing here can paint one.
-            raise RasterisationError(
-                "BoundDocument rasterisation is not yet implemented"
-            )
+            return self.paint_document(target).png
         backend = target.backend
         if backend not in _RASTERISABLE:
             raise RasterisationError(
@@ -334,5 +384,65 @@ class BrowserRasteriser:
             if error:
                 raise RasterisationError(error)
             return bytes(page.locator("#container").screenshot(type=format))
+        finally:
+            page.close()
+
+    def paint_document(self, bound: BoundDocument) -> DocumentPaint:
+        """Paint a custom-rail document once; return the PNG and the
+        ``getPlottedSeries()`` declaration from that one paint.
+
+        The shell comes from :func:`~chartagent.shell.build_shell` (a
+        :class:`~chartagent.errors.DocumentAssemblyError` passes through) and
+        runs in a sandboxed iframe inside a harness page. No Flint bundle,
+        no network. Raises :class:`~chartagent.errors.RasterisationError` on
+        a false paint signal, a throw, a missing symbol, a hang, or an empty
+        container (ADR-0017 Decision 15).
+        """
+        shell = build_shell(bound.document, libraries=bound.libraries)
+        types = {field.name: _duckdb_type_of(field.type) for field in bound.rows.schema}
+        rows, _ = serialize_rows(bound.rows, types)
+        pad = 32  # the shell body's margin must not clip the container
+        sandbox = " ".join(shell.sandbox)
+        html = f"""<!doctype html>
+<html><body style="margin:0">
+<iframe id="doc" sandbox="{sandbox}"
+  style="border:0;width:{self._width + pad}px;height:{self._height + pad}px"
+  srcdoc="{html_escape(shell.html)}"></iframe>
+<script>{_DOCUMENT_HARNESS_JS}</script>
+</body></html>"""
+        page = self._browser.new_page(
+            viewport={"width": self._width + pad, "height": self._height + pad}
+        )
+        try:
+            page.route("**/*", lambda route: route.abort())
+            page.set_default_timeout(self._timeout * 1000)
+            try:
+                page.set_content(html, wait_until="load")
+                page.evaluate(
+                    "([r, w, h]) => window.__paint(r, w, h)",
+                    [rows, self._width, self._height],
+                )
+                page.wait_for_function("window.__result !== null")
+                result = page.evaluate("window.__result")
+            except Exception as exc:
+                raise RasterisationError(f"paint did not complete: {exc}") from exc
+            if not result.get("ok"):
+                raise RasterisationError(
+                    "paint failed: render threw, or render/getPlottedSeries is "
+                    "not defined"
+                )
+            container = page.frame_locator("#doc").locator("#chartagent-container")
+            try:
+                drawn = container.evaluate(
+                    "el => el.childElementCount > 0 || el.textContent.trim() !== ''"
+                )
+                if not drawn:
+                    raise RasterisationError("paint left the container empty")
+                png = bytes(container.screenshot(type="png"))
+            except RasterisationError:
+                raise
+            except Exception as exc:
+                raise RasterisationError(f"screenshot failed: {exc}") from exc
+            return DocumentPaint(png=png, declaration=result.get("plottedSeries"))
         finally:
             page.close()

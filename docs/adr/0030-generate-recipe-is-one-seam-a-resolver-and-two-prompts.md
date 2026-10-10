@@ -456,6 +456,15 @@ ask, not the whole budget. A discarded patch keeps the unrepaired recipe and spe
 (`_recipe_reviewer`, default Tier 1 only), so production behaviour is unchanged until real
 custom-rail scoring replaces it.
 
+**Erratum (2026-10-10, [#264](https://github.com/thearcscode/chartagent/issues/264)): real scoring and the paint-failure split.**
+The default `_recipe_reviewer` is now `custom_review` whenever a rasteriser is configured (Tier 1
+only without one), so the loop runs on real `colorblind_safe_palette` and `data_truthfulness`
+verdicts and a custom-rail Tier-2 critique. The reviewer receives the transform's rows and the
+request's `libraries` map beside the recipe. Paint failures split by where they occur: the first
+review of the first recipe that cannot paint propagates its `RasterisationError` (or
+`DocumentAssemblyError`), as the hop already did; a repair patch whose re-review cannot paint is a
+discard that still spends its unit, scored as an unpassed report that never replaces best-so-far.
+
 (#227) The loop keeps the first recipe unless a patched one passes review: a failing
 re-review is dropped and the next round patches the recipe as it was. A discarded patch
 returns the unrepaired recipe, and `budget_exhausted` is set on the returned report iff a
@@ -481,3 +490,9 @@ recipe are reviewed and repaired in this one loop, and neither can hop again.
   era-conditional reading of cell 1.
 - `CONTEXT.md` amends **Escalation**, **Escape reason**, **Review repair**; gains
   **`generate_recipe`**.
+
+(#264 review note) Recipes are never authored at `fast` in `create_chart`: a bucket 1/2 miss
+raises there (Decision 10), so `_review_and_repair` is never entered with budget 0 from the
+public API. The `fast` row of the dial (`_REVIEW_REPAIRS["fast"] == 0`) is reachable only by
+calling the seam directly, where a failing review makes no patch call and returns the failing
+report with `budget_exhausted=True`; a test pins it there.
