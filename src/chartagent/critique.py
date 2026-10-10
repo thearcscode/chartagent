@@ -80,11 +80,14 @@ class CritiqueContext:
     """
 
     instruction: str
-    chart_type: str
-    backend: Backend
-    encodings: Mapping[str, str]
     row_count: int
     items: tuple[Tier2CheckName, ...]
+    chart_type: str | None = None
+    backend: Backend | None = None
+    encodings: Mapping[str, str] | None = None
+    # Custom rail (ADR-0026 Decision 7): the transform-output column names
+    # stand where a Flint spec's chart type, backend and encodings would.
+    columns: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -148,6 +151,7 @@ def critique(png: bytes, context: CritiqueContext, *, client: ModelClient) -> Cr
         context.row_count,
         context.instruction,
         context.items,
+        columns=context.columns,
     )
     image = BinaryContent(data=png, media_type="image/png")
     response = client.run(output_type, _SYSTEM_PROMPT, [user_text, image])

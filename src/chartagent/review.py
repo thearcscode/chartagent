@@ -17,9 +17,11 @@ Decision 2).
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Literal
+
+import pyarrow as pa
 
 from chartagent._palette import score_palette
 from chartagent._pixels import Raster, decode_png
@@ -35,6 +37,7 @@ from chartagent.frame.input import Backend, InputFrame
 from chartagent.plan.client import ModelClient
 from chartagent.profile.models import Profile, StringColumn
 from chartagent.rasterise import Rasteriser
+from chartagent.recipe import BoundDocument, ChartRecipe
 
 CheckName = Literal[
     "injection_pattern",
@@ -394,6 +397,100 @@ def flint_review(
     )
     result = critique(png, context, client=critique_client)
     tier2_checks = tuple(_verdict_to_check(name, result) for name in items)
+    all_checks = tuple(checks) + tier2_checks
+    any_fail = any(check.outcome == "fail" for check in all_checks)
+    tier2_resolved = any(check.outcome != "not_checked" for check in tier2_checks)
+    return ReviewReport(
+        tiers_run=(1, 2),
+        tiers_skipped={},
+        passed=tier1_resolved and tier2_resolved and not any_fail,
+        budget_exhausted=False,
+        checks=all_checks,
+    )
+
+
+def _paint_png(rasteriser: Rasteriser, bound: BoundDocument) -> bytes:
+    """One paint. A rasteriser that offers the sibling ``paint_document``
+    (#265) paints once and its PNG is used; a protocol-only one is asked for
+    the PNG alone. Duck-typed: the ``Rasteriser`` protocol is unchanged."""
+    paint = getattr(rasteriser, "paint_document", None)
+    if paint is None:
+        return rasteriser.rasterise(bound)
+    painted = paint(bound)
+    png = getattr(painted, "png", None)
+    return bytes(png if png is not None else painted[0])
+
+
+def custom_review(
+    profile: Profile,
+    recipe: ChartRecipe,
+    rows: Sequence[Mapping[str, object]],
+    libraries: Mapping[str, bytes],
+    instruction: str,
+    *,
+    rasteriser: Rasteriser | None,
+    critique_client: ModelClient | None,
+) -> ReviewReport:
+    """The custom rail's review, symmetric to :func:`flint_review`
+    (ADR-0024, ADR-0026; #266). ``injection_pattern`` runs first and a fail
+    returns at once with no paint. With a rasteriser the recipe is painted
+    once and ``colorblind_safe_palette`` is scored from that PNG; ``painted``
+    is omitted on this rail. ``data_truthfulness`` has no verdict here (it
+    stays ``not_checked`` "unavailable"). When a critic is supplied and
+    Tier 1 did not fail, Tier 2 runs on the same PNG with the custom-rail
+    context: the instruction, the transform-output column names and
+    ``row_count``. Stops at the report; repair is the planner's loop."""
+    checks = _tier1_checks(profile, None)
+    if any(check.outcome == "fail" for check in checks):
+        return ReviewReport(
+            tiers_run=(1,),
+            tiers_skipped={2: "blocked"},
+            passed=False,
+            budget_exhausted=False,
+            checks=tuple(checks),
+        )
+    png: bytes | None = None
+    if rasteriser is not None:
+        bound = BoundDocument(
+            document=recipe.document,
+            rows=pa.Table.from_pylist([dict(row) for row in rows]),
+            theme={},
+            libraries=libraries,
+        )
+        png = _paint_png(rasteriser, bound)
+        raster = decode_png(png)
+        checks = [
+            _colorblind_safe_palette(raster)
+            if check.name == "colorblind_safe_palette"
+            else check
+            for check in checks
+        ]
+        if any(check.outcome == "fail" for check in checks):
+            return ReviewReport(
+                tiers_run=(1,),
+                tiers_skipped={2: "blocked"},
+                passed=False,
+                budget_exhausted=False,
+                checks=tuple(checks),
+            )
+    tier1_resolved = any(check.outcome != "not_checked" for check in checks)
+    if png is None or critique_client is None:
+        return ReviewReport(
+            tiers_run=(1,),
+            tiers_skipped={2: "unavailable"},
+            passed=tier1_resolved,
+            budget_exhausted=False,
+            checks=tuple(checks),
+        )
+    columns = tuple(dict.fromkeys(key for row in rows for key in row))
+    context = CritiqueContext(
+        instruction=instruction,
+        row_count=len(rows),
+        items=_TIER2_ITEMS,
+        columns=columns,
+    )
+    result = critique(png, context, client=critique_client)
+    tier2_checks = tuple(_verdict_to_check(name, result) for name in _TIER2_ITEMS)
     all_checks = tuple(checks) + tier2_checks
     any_fail = any(check.outcome == "fail" for check in all_checks)
     tier2_resolved = any(check.outcome != "not_checked" for check in tier2_checks)
