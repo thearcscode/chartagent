@@ -318,3 +318,16 @@ two hues: nothing to confuse". (The `painted` ink floor still measures against t
 colour; that is a separate, coarse check.) (2) A `painted` fail leaves `colorblind_safe_palette`
 `not_checked` with the host-authored detail "canvas is blank: no palette to judge"; the detail
 "unavailable" is reserved for a review with no rasteriser.
+
+## Erratum (2026-10-10, [#264](https://github.com/thearcscode/chartagent/issues/264)): real scoring on the custom rail
+
+The Flint-only wording above ("on the custom rail it stays `not_checked` until recipe scoring
+exists") is superseded. `custom_review` paints the recipe once (as a `BoundDocument`, rows from the
+transform output, empty theme, the request's library bytes) and scores from that one paint.
+`injection_pattern` still runs first and a fail returns with no paint. `colorblind_safe_palette`
+uses the Flint scorer on the painted PNG. `data_truthfulness` compares the module's
+`getPlottedSeries()` declaration to the rows by ADR-0025's multiset match. `painted` stays omitted
+on this rail: a blank paint raises `RasterisationError`, it is not a `CheckResult`. Without a
+rasteriser nothing is painted and the checks stay `not_checked: unavailable`; the same holds for
+`data_truthfulness` when the rasteriser has no `paint_document`. A Tier-1 fail returns a Tier-1-only
+report with Tier 2 `blocked`; otherwise the critic, if supplied, sees the same PNG.

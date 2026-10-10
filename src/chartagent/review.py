@@ -3,7 +3,10 @@
 needs no rasteriser; ``painted`` and ``colorblind_safe_palette`` need one),
 and Tier 2 (ADR-0026, ADR-0027): the applicability table over the 48 chart
 types and ``flint_review``, which runs Tier 1 then, when a rasteriser and a
-critic are both supplied, a Flint critique.
+critic are both supplied, a Flint critique. :func:`custom_review` is the
+custom rail's counterpart (#264): it paints the recipe once as a
+``BoundDocument`` and scores ``colorblind_safe_palette`` and
+``data_truthfulness`` from that paint.
 
 With a rasteriser, a Flint review rasterises once and ``painted`` resolves
 from that picture (#254); the same PNG feeds the critic. Without one it stays

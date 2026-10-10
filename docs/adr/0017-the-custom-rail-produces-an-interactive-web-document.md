@@ -489,3 +489,15 @@ stays here at `build_shell`, because `bind_recipe` never reads `module`, `styles
 - Measured 2026-08-28, minified via jsDelivr: Chart.js 4 ≈ 203 KB, D3 7 ≈ 273 KB,
   ECharts 5 ≈ 1,009 KB, Plotly 2 ≈ 4,451 KB
 - PRD §7.3, §7.5, §7.7, §9 P0.5 / P0.8 / P0.10, §11
+
+## Erratum (2026-10-10, [#264](https://github.com/thearcscode/chartagent/issues/264), D6): a sibling paint method
+
+Decision 6's `Rasteriser.rasterise(target) -> bytes` is unchanged and stays PNG-only. A
+`BoundDocument` is now constructed and painted by the library's own review (`custom_review`).
+`PlaywrightRasteriser` gains a sibling `paint_document(bound) -> DocumentPaint` (`png` plus the
+`getPlottedSeries()` declaration), because the declaration is only observable from the same paint
+that produced the picture and `rasterise` returns bytes. `rasterise(BoundDocument)` delegates to it
+and keeps the bytes. `paint_document` is not on the `Rasteriser` protocol, so third-party
+implementers are not broken: the review looks it up and, when absent, paints through `rasterise`
+and leaves `data_truthfulness` `not_checked: unavailable`. `DocumentPaint` is internal, not in
+`__all__`. Decisions 13 and 15 are unchanged: a failed paint still raises `RasterisationError`.
