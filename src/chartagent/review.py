@@ -39,7 +39,7 @@ from chartagent.envelope import Envelope
 from chartagent.frame.input import Backend, InputFrame
 from chartagent.plan.client import ModelClient
 from chartagent.profile.models import Profile, StringColumn
-from chartagent.rasterise import Rasteriser
+from chartagent.rasterise import DocumentPaint, Rasteriser
 from chartagent.recipe import BoundDocument, ChartRecipe
 
 CheckName = Literal[
@@ -316,6 +316,17 @@ def _verdict_to_check(name: Tier2CheckName, critique_result: Critique) -> CheckR
     return CheckResult(name, to_check_outcome(verdict), critique_result.note)
 
 
+def _blocked_report(checks: Sequence[CheckResult]) -> ReviewReport:
+    """A Tier-1 fail: the report stops here and Tier 2 is blocked."""
+    return ReviewReport(
+        tiers_run=(1,),
+        tiers_skipped={2: "blocked"},
+        passed=False,
+        budget_exhausted=False,
+        checks=tuple(checks),
+    )
+
+
 def flint_review(
     profile: Profile,
     frame: InputFrame,
@@ -336,13 +347,7 @@ def flint_review(
     checks = _tier1_checks(profile, backend)
     tier1_failed = any(check.outcome == "fail" for check in checks)
     if tier1_failed:
-        return ReviewReport(
-            tiers_run=(1,),
-            tiers_skipped={2: "blocked"},
-            passed=False,
-            budget_exhausted=False,
-            checks=tuple(checks),
-        )
+        return _blocked_report(checks)
     png: bytes | None = None
     if rasteriser is not None:
         png = rasteriser.rasterise(envelope)
@@ -368,13 +373,7 @@ def flint_review(
             for check in checks
         ]
         if any(check.outcome == "fail" for check in checks):
-            return ReviewReport(
-                tiers_run=(1,),
-                tiers_skipped={2: "blocked"},
-                passed=False,
-                budget_exhausted=False,
-                checks=tuple(checks),
-            )
+            return _blocked_report(checks)
     tier1_resolved = any(check.outcome != "not_checked" for check in checks)
     if png is None or critique_client is None:
         return ReviewReport(
@@ -412,25 +411,24 @@ def flint_review(
     )
 
 
-_ABSENT: object = object()
 # ADR-0025 Decision 6: frozen in library code, never configuration.
 _REL_TOL = 1e-9
 _ABS_TOL = 1e-12
+# The declaration of a paint that offered none (a protocol-only rasteriser).
+_NO_DECLARATION: object = object()
 
 
 def _paint_png(rasteriser: Rasteriser, bound: BoundDocument) -> tuple[bytes, object]:
     """One paint. A rasteriser that offers the sibling ``paint_document``
-    (#265) paints once; its PNG and the module's ``getPlottedSeries()``
-    declaration come back. A protocol-only one is asked for the PNG alone and
-    the declaration is ``_ABSENT``. Duck-typed: the ``Rasteriser`` protocol is
-    unchanged."""
+    (#265) paints once and returns a ``DocumentPaint``; its PNG and the
+    module's ``getPlottedSeries()`` declaration come back. A protocol-only one
+    is asked for the PNG alone and the declaration is ``_NO_DECLARATION``.
+    Duck-typed: the ``Rasteriser`` protocol is unchanged."""
     paint = getattr(rasteriser, "paint_document", None)
     if paint is None:
-        return rasteriser.rasterise(bound), _ABSENT
-    painted = paint(bound)
-    if hasattr(painted, "png"):
-        return bytes(painted.png), getattr(painted, "declaration", None)
-    return bytes(painted[0]), painted[1]
+        return rasteriser.rasterise(bound), _NO_DECLARATION
+    painted: DocumentPaint = paint(bound)
+    return painted.png, painted.declaration
 
 
 def _is_number(value: object) -> bool:
@@ -538,13 +536,7 @@ def custom_review(
     ``row_count``. Stops at the report; repair is the planner's loop."""
     checks = _tier1_checks(profile, None)
     if any(check.outcome == "fail" for check in checks):
-        return ReviewReport(
-            tiers_run=(1,),
-            tiers_skipped={2: "blocked"},
-            passed=False,
-            budget_exhausted=False,
-            checks=tuple(checks),
-        )
+        return _blocked_report(checks)
     png: bytes | None = None
     if rasteriser is not None:
         bound = BoundDocument(
@@ -559,18 +551,14 @@ def custom_review(
         for check in checks:
             if check.name == "colorblind_safe_palette":
                 check = _colorblind_safe_palette(raster)
-            elif check.name == "data_truthfulness" and declaration is not _ABSENT:
+            elif (
+                check.name == "data_truthfulness" and declaration is not _NO_DECLARATION
+            ):
                 check = _data_truthfulness(declaration, rows)
             resolved.append(check)
         checks = resolved
         if any(check.outcome == "fail" for check in checks):
-            return ReviewReport(
-                tiers_run=(1,),
-                tiers_skipped={2: "blocked"},
-                passed=False,
-                budget_exhausted=False,
-                checks=tuple(checks),
-            )
+            return _blocked_report(checks)
     tier1_resolved = any(check.outcome != "not_checked" for check in checks)
     if png is None or critique_client is None:
         return ReviewReport(

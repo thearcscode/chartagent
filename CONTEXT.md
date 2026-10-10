@@ -243,7 +243,7 @@ What the custom rail **stores**: `module` + optional `styles` + a tuple of `Libr
 _Avoid_: unioning `ChartDocument` where a paintable type is required, storing it as the whole custom-rail artifact (it has no `transform`, so refresh has no rows), putting bytes on a `LibraryPin`, calling the stored triple an HTML document, inlining libraries into the stored artifact
 
 **Rasteriser**:
-The review gate's picture-maker: `rasterise(Envelope | BoundDocument) -> bytes` (PNG only; ADR-0005 D9, ADR-0017 D6). A Flint `Envelope` is compiled then drawn; a custom-rail `BoundDocument` (document + rows + theme + library bytes) is painted through the **shell**. The shipped `PlaywrightRasteriser` also offers a sibling `paint_document(bound) -> DocumentPaint` returning the PNG and the **plotted-series declaration** from one paint (#264). It raises `RasterisationError` on a failed render and never returns bytes for a chart it did not draw.
+The review gate's picture-maker: `rasterise(Envelope | BoundDocument) -> bytes` (PNG only; ADR-0005 D9, ADR-0017 D6). A Flint `Envelope` is compiled then drawn; a custom-rail `BoundDocument` (document + rows + theme + library bytes) is painted through the **shell**. The shipped `BrowserRasteriser` also offers a sibling `paint_document(bound) -> DocumentPaint` returning the PNG and the **plotted-series declaration** from one paint (#264). It raises `RasterisationError` on a failed render and never returns bytes for a chart it did not draw.
 _Avoid_: widening the protocol to return the declaration, painting twice (once for the picture, once for the declaration), navigating to the generated HTML as the top-level page
 
 **Shell**:

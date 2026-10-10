@@ -490,3 +490,9 @@ recipe are reviewed and repaired in this one loop, and neither can hop again.
   era-conditional reading of cell 1.
 - `CONTEXT.md` amends **Escalation**, **Escape reason**, **Review repair**; gains
   **`generate_recipe`**.
+
+(#264 review note) Recipes are never authored at `fast` in `create_chart`: a bucket 1/2 miss
+raises there (Decision 10), so `_review_and_repair` is never entered with budget 0 from the
+public API. The `fast` row of the dial (`_REVIEW_REPAIRS["fast"] == 0`) is reachable only by
+calling the seam directly, where a failing review makes no patch call and returns the failing
+report with `budget_exhausted=True`; a test pins it there.

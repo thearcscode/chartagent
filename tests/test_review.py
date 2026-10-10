@@ -27,7 +27,7 @@ from chartagent.profile.models import (
     StringStats,
     TopValue,
 )
-from chartagent.rasterise import Rasteriser
+from chartagent.rasterise import DocumentPaint, Rasteriser
 from chartagent.recipe import BoundDocument
 from chartagent.review import (
     _BASELINE_APPLICABLE,
@@ -798,9 +798,9 @@ class _Painter(_ProtocolOnly):
         self.declaration = declaration
         self.paints: list[BoundDocument] = []
 
-    def paint_document(self, bound: BoundDocument) -> tuple[bytes, object]:
+    def paint_document(self, bound: BoundDocument) -> DocumentPaint:
         self.paints.append(bound)
-        return self.png, self.declaration
+        return DocumentPaint(png=self.png, declaration=self.declaration)
 
 
 def _custom(
@@ -853,6 +853,37 @@ def test_protocol_only_rasteriser_leaves_truthfulness_unavailable() -> None:
     assert isinstance(rasteriser.calls[0], BoundDocument)
     assert rasteriser.calls[0].libraries == _LIBS
     assert rasteriser.calls[0].rows.to_pylist() == _ROWS_266
+
+
+def test_bound_rows_survive_the_paint_wire_round_trip_unchanged() -> None:
+    """``custom_review`` rebuilds an Arrow table from the (already serialised)
+    transform rows and the rasteriser serialises it again with
+    ``_duckdb_type_of``. That second pass must leave dates, decimals, nulls
+    and floats exactly as declared, or truthfulness would fail a faithful
+    module (#264)."""
+    from chartagent.rasterise import _duckdb_type_of
+    from chartagent.transform.serialize import serialize_rows
+
+    rows = [
+        {"d": "2026-01-02", "dec": 10, "frac": 2.5, "f": 1.0, "n": None},
+        {"d": "2026-01-03", "dec": 10.25, "frac": 3, "f": None, "n": None},
+    ]
+    rasteriser = _Painter(declaration=rows)
+    report = custom_review(
+        _CLEAN,
+        _RECIPE,
+        rows,
+        _LIBS,
+        "revenue",
+        rasteriser=rasteriser,
+        critique_client=None,
+    )
+    assert _named(report)["data_truthfulness"].outcome == "pass"
+    table = rasteriser.paints[0].rows
+    types = {field.name: _duckdb_type_of(field.type) for field in table.schema}
+    sent, advisories = serialize_rows(table, types)
+    assert sent == rows
+    assert advisories == ()
 
 
 def test_paint_document_is_used_once_instead_of_rasterise() -> None:
@@ -1014,6 +1045,11 @@ def test_truthfulness_tolerance_edges() -> None:
     assert _truth([{"v": 1.0 + 1e-8}], [{"v": 1.0}]).outcome == "fail"
     assert _truth([{"v": 5e-13}], [{"v": 0.0}]).outcome == "pass"
     assert _truth([{"v": 5e-12}], [{"v": 0.0}]).outcome == "fail"
+    # Tight on both sides of rel_tol=1e-9 and abs_tol=1e-12 (ADR-0025 D6).
+    assert _truth([{"v": 1.0 + 9e-10}], [{"v": 1.0}]).outcome == "pass"
+    assert _truth([{"v": 1.0 + 1.5e-9}], [{"v": 1.0}]).outcome == "fail"
+    assert _truth([{"v": 9e-13}], [{"v": 0.0}]).outcome == "pass"
+    assert _truth([{"v": 1.5e-12}], [{"v": 0.0}]).outcome == "fail"
     assert _truth([{"v": 1_000_000}], [{"v": 1_000_001}]).outcome == "fail"
 
 
