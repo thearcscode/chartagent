@@ -223,7 +223,7 @@ def test_paint_document_returns_one_paints_png_and_declaration() -> None:
         painted = rasteriser.paint_document(_bound())
     assert painted.png.startswith(_PNG_MAGIC)
     assert len(painted.png) > 1000
-    assert painted.plotted_series == [
+    assert painted.declaration == [
         {"series": "s", "x": "a", "y": 30},
         {"series": "s", "x": "b", "y": 60},
         {"series": "s", "x": "c", "y": 90},

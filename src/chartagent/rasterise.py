@@ -79,7 +79,7 @@ class DocumentPaint:
     ``getPlottedSeries()`` returned for it. Internal, not in ``__all__``."""
 
     png: bytes
-    plotted_series: Any
+    declaration: Any
 
 
 @dataclass(frozen=True)
@@ -437,6 +437,6 @@ class BrowserRasteriser:
                 raise
             except Exception as exc:
                 raise RasterisationError(f"screenshot failed: {exc}") from exc
-            return DocumentPaint(png=png, plotted_series=result.get("plottedSeries"))
+            return DocumentPaint(png=png, declaration=result.get("plottedSeries"))
         finally:
             page.close()
