@@ -230,13 +230,14 @@ def render_review_repair(
 
 
 def render_critique(
-    chart_type: str,
-    backend: Backend,
-    encodings: Mapping[str, str],
+    chart_type: str | None,
+    backend: Backend | None,
+    encodings: Mapping[str, str] | None,
     row_count: int,
     instruction: str,
     items: Sequence[str],
     *,
+    columns: Sequence[str] | None = None,
     nonce: str | None = None,
 ) -> str:
     """The Tier-2 critic's user turn (ADR-0026 Decision 7): ``chartType``,
@@ -244,15 +245,19 @@ def render_critique(
     ours except the encodings' field names, which are untrusted and so ride
     inside the same one nonce-fenced block every other untrusted payload
     uses. The caller's instruction stays outside it (ADR-0022 Decision 2).
-    Never row cells, never the custom rail's code."""
+    Never row cells, never the custom rail's code. The custom rail has no
+    chart type, backend or encodings: it sends the transform-output column
+    names (also untrusted, same block) instead."""
     nonce_value = _nonce(nonce)
-    payload: dict[str, Any] = {
-        "chart_type": chart_type,
-        "backend": backend,
-        "encodings": dict(encodings),
-        "row_count": row_count,
-        "applicable_items": list(items),
-    }
+    payload: dict[str, Any] = {}
+    if chart_type is not None:
+        payload["chart_type"] = chart_type
+        payload["backend"] = backend
+        payload["encodings"] = dict(encodings or {})
+    if columns is not None:
+        payload["columns"] = list(columns)
+    payload["row_count"] = row_count
+    payload["applicable_items"] = list(items)
     return _user_turn(nonce_value, payload, instruction)
 
 
