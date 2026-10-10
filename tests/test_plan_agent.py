@@ -1694,6 +1694,33 @@ def test_zero_budget_marks_a_repairable_failure_exhausted_with_no_ask(
     assert result.review.passed is False
 
 
+def test_review_and_repair_with_the_fast_budget_makes_no_patch_call() -> None:
+    """The seam, not the product: ``create_chart`` never authors a recipe at
+    ``fast`` (a miss raises), so budget 0 is reachable only here (#264)."""
+    from chartagent.profile.source import profile_source
+
+    failing = _recipe_report("label_overlap")
+    agent, _, reviewed = _repairing_agent(_recipe_report(), failing)
+    first = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert first.recipe is not None
+    calls = _install(agent)  # any model call would pop an empty queue
+    agent._recipe_reviewer = lambda profile, recipe, rows, libs, instruction: failing
+    result = agent._review_and_repair(
+        profile_source(_SALES),
+        _SALES,
+        "a 3D globe",
+        first.recipe,
+        {},
+        None,
+        {},
+        escalate_module._REVIEW_REPAIRS["fast"],
+        None,
+    )
+    assert calls["model"] == 0
+    assert result.recipe is first.recipe
+    assert result.review == replace(failing, budget_exhausted=True)
+
+
 def test_injection_failure_alone_never_sets_budget_exhausted() -> None:
     agent, calls, _ = _repairing_agent(_recipe_report("injection_pattern"))
     result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")

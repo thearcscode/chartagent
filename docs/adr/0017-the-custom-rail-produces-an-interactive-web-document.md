@@ -494,7 +494,7 @@ stays here at `build_shell`, because `bind_recipe` never reads `module`, `styles
 
 Decision 6's `Rasteriser.rasterise(target) -> bytes` is unchanged and stays PNG-only. A
 `BoundDocument` is now constructed and painted by the library's own review (`custom_review`).
-`PlaywrightRasteriser` gains a sibling `paint_document(bound) -> DocumentPaint` (`png` plus the
+`BrowserRasteriser` gains a sibling `paint_document(bound) -> DocumentPaint` (`png` plus the
 `getPlottedSeries()` declaration), because the declaration is only observable from the same paint
 that produced the picture and `rasterise` returns bytes. `rasterise(BoundDocument)` delegates to it
 and keeps the bytes. `paint_document` is not on the `Rasteriser` protocol, so third-party
