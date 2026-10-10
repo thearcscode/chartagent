@@ -25,7 +25,9 @@ ReviewReport``. ``rows`` are the recipe's bound transform output and
 ``libraries`` the in-request ``(sha256 -> bytes)`` map the resolver produced
 (ADR-0030 Decision 6); neither rides the recipe. Its default is
 :func:`~chartagent.review.custom_review` when a rasteriser is configured,
-else Tier 1 only.
+else Tier 1 only (no rasteriser means nothing can be painted). A first
+paint that raises propagates; a repair patch that fails to paint is a
+discard (ADR-0030 erratum, #264).
 """
 
 from __future__ import annotations

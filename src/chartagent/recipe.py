@@ -203,7 +203,8 @@ class _RecipeModel(BaseModel):
 class BoundRecipe:
     """A recipe's transform output plus diagnostics. Not paintable and not
     serialisable (ADR-0018 Decision 5): it carries no ``document`` and has no
-    ``to_dict``."""
+    ``to_dict``. The paintable form is :class:`BoundDocument`, which the
+    review composes at paint time."""
 
     rows: list[dict[str, Any]]
     theme_spec: str | ThemeSpec | None

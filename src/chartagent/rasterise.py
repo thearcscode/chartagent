@@ -59,13 +59,19 @@ class Rasteriser(Protocol):
     implementer owns compile-then-render.
 
     ``target``'s union is frozen at ADR-0005 Decision 9 as amended by
-    ADR-0017 Decision 6 — ``Envelope | BoundDocument`` — even though nothing
-    in the library constructs a ``BoundDocument`` yet (the custom-rail
-    rendering path is a later ticket's). ``format`` is fixed at ``"png"``
+    ADR-0017 Decision 6 — ``Envelope | BoundDocument``. The library's own
+    review constructs a ``BoundDocument`` and paints it on the custom rail
+    (:func:`~chartagent.review.custom_review`, #264). ``format`` is fixed at ``"png"``
     for v1 (ADR-0003 Decision 2). Raises
     :class:`~chartagent.errors.RasterisationError` on a failed render; never
     returns bytes for a chart it did not actually draw (ADR-0003's stated
     hazard — bytes without an exception is not proof of a render).
+
+    The protocol stays PNG-only. A rasteriser that also offers the sibling
+    ``paint_document(bound) -> DocumentPaint`` (ADR-0017 Decision 6 erratum,
+    #264) additionally returns the module's ``getPlottedSeries()``
+    declaration from the same single paint; the review prefers it and falls
+    back to ``rasterise`` (no declaration) when it is absent.
     """
 
     def rasterise(
