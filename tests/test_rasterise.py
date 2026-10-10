@@ -213,7 +213,7 @@ def _bound(module: str = _PAINTING_MODULE, **kwargs: object) -> BoundDocument:
         rows=pa.table({"k": ["a", "b", "c"], "v": [30, 60, 90]}),
         theme={},
         libraries={},
-        **kwargs,  # type: ignore[arg-type]
+        **kwargs,
     )
 
 

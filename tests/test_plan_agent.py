@@ -2645,7 +2645,7 @@ class _PaintSource:
 
 
 def _recipe_agent(source: _PaintSource, *replies: Any) -> ChartAgent:
-    agent = create_chart_agent(model="test", rasteriser=source)  # type: ignore[arg-type]
+    agent = create_chart_agent(model="test", rasteriser=source)
     _install(agent, _inexpressible(1), ("step2", _MISS_DRAFT), *replies)
     return agent
 
@@ -2711,7 +2711,7 @@ def test_a_patch_that_fails_to_paint_is_discarded_and_spends_a_unit() -> None:
 
 def test_resolved_library_bytes_reach_the_reviewer_with_the_document() -> None:
     source = _PaintSource(_TRUTHFUL)
-    agent = create_chart_agent(model="test", rasteriser=source)  # type: ignore[arg-type]
+    agent = create_chart_agent(model="test", rasteriser=source)
     agent._library_resolver = lambda name, version: ("f" * 64, b"lib")
     _install(agent, _inexpressible(1), ("step2", _draft_with_d3()))
     agent.create_chart(_SALES, "a 3D globe", quality="balanced")
