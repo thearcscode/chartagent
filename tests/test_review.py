@@ -787,13 +787,20 @@ class _ProtocolOnly:
 class _Painter(_ProtocolOnly):
     """Also offers the sibling paint method (#265)."""
 
-    def __init__(self, png: bytes = DRAWN_PNG) -> None:
+    def __init__(
+        self,
+        png: bytes = DRAWN_PNG,
+        declaration: object = (  # noqa: B008
+            [{"quarter": "Q1", "revenue": 1}]
+        ),
+    ) -> None:
         super().__init__(png)
+        self.declaration = declaration
         self.paints: list[BoundDocument] = []
 
     def paint_document(self, bound: BoundDocument) -> tuple[bytes, object]:
         self.paints.append(bound)
-        return self.png, [{"quarter": "Q1", "revenue": 1}]
+        return self.png, self.declaration
 
 
 def _custom(
@@ -850,10 +857,9 @@ def test_protocol_only_rasteriser_leaves_truthfulness_unavailable() -> None:
 
 def test_paint_document_is_used_once_instead_of_rasterise() -> None:
     rasteriser = _Painter()
-    checks = _named(_custom(rasteriser))
+    _custom(rasteriser)
     assert len(rasteriser.paints) == 1
     assert rasteriser.calls == []
-    assert checks["data_truthfulness"].outcome == "not_checked"
     assert rasteriser.paints[0].theme == {}
 
 
@@ -929,3 +935,106 @@ def test_a_tier_two_fail_fails_the_custom_report() -> None:
     report = _custom(_ProtocolOnly(_two_bars(_BLUE, _ORANGE)), critic)
     assert report.passed is False
     assert _named(report)["marks_present"].outcome == "fail"
+
+
+# --- #267: data_truthfulness from the declaration + bound rows (ADR-0025) ---
+
+
+def _truth(declaration: object, rows: list[dict[str, Any]] | None = None) -> Any:
+    report = custom_review(
+        _CLEAN,
+        _RECIPE,
+        _ROWS_266 if rows is None else rows,
+        _LIBS,
+        "x",
+        rasteriser=_Painter(declaration=declaration),
+        critique_client=None,
+    )
+    return _named(report)["data_truthfulness"]
+
+
+def test_truthfulness_passes_echoed_rows() -> None:
+    check = _truth(list(_ROWS_266))
+    assert check.outcome == "pass"
+
+
+def test_truthfulness_top_n_and_partial_columns_pass() -> None:
+    assert _truth([{"revenue": 2}]).outcome == "pass"
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        [],
+        {},
+        "x",
+        None,
+        3,
+        [{}],
+        [1],
+        [[1]],
+        [{"a": {"b": 1}}],
+        [{"a": [1]}],
+        [{"": 1}],
+        [{"revenue": 1}, {}],
+    ],
+)
+def test_truthfulness_malformed_or_empty_is_not_checked(declaration: object) -> None:
+    check = _truth(declaration)
+    assert check.outcome == "not_checked"
+
+
+def test_truthfulness_fabricated_value_fails_naming_column_and_position() -> None:
+    check = _truth([{"revenue": 1}, {"quarter": "Q2", "revenue": 99}])
+    assert check.outcome == "fail"
+    assert check.detail is not None
+    assert "point 2" in check.detail and "revenue" in check.detail
+    assert "99" not in check.detail and "Q2" not in check.detail
+
+
+def test_truthfulness_unknown_column_fails() -> None:
+    check = _truth([{"profit": 1}])
+    assert check.outcome == "fail"
+    assert check.detail is not None and "profit" in check.detail
+
+
+def test_truthfulness_one_row_reused_for_several_marks_fails() -> None:
+    check = _truth([{"quarter": "Q1"}, {"quarter": "Q1"}])
+    assert check.outcome == "fail"
+
+
+def test_truthfulness_identical_rows_justify_that_many_points() -> None:
+    rows = [{"v": 1}, {"v": 1}]
+    assert _truth([{"v": 1}, {"v": 1}], rows).outcome == "pass"
+    assert _truth([{"v": 1}] * 3, rows).outcome == "fail"
+
+
+def test_truthfulness_tolerance_edges() -> None:
+    assert _truth([{"v": 1.0 + 5e-10}], [{"v": 1.0}]).outcome == "pass"
+    assert _truth([{"v": 1.0 + 1e-8}], [{"v": 1.0}]).outcome == "fail"
+    assert _truth([{"v": 5e-13}], [{"v": 0.0}]).outcome == "pass"
+    assert _truth([{"v": 5e-12}], [{"v": 0.0}]).outcome == "fail"
+    assert _truth([{"v": 1_000_000}], [{"v": 1_000_001}]).outcome == "fail"
+
+
+def test_truthfulness_non_numbers_compare_exactly() -> None:
+    rows = [{"a": "x", "b": True, "c": None}]
+    assert _truth([{"a": "x", "b": True, "c": None}], rows).outcome == "pass"
+    assert _truth([{"a": "X"}], rows).outcome == "fail"
+    assert _truth([{"b": 1}], rows).outcome == "fail"
+    assert _truth([{"b": False}], rows).outcome == "fail"
+    assert _truth([{"c": 0}], rows).outcome == "fail"
+
+
+def test_truthfulness_fail_makes_report_fail() -> None:
+    report = custom_review(
+        _CLEAN,
+        _RECIPE,
+        _ROWS_266,
+        _LIBS,
+        "x",
+        rasteriser=_Painter(declaration=[{"revenue": 7}]),
+        critique_client=None,
+    )
+    assert report.passed is False
+    assert report.tiers_skipped == {2: "blocked"}

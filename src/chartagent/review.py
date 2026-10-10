@@ -409,16 +409,108 @@ def flint_review(
     )
 
 
-def _paint_png(rasteriser: Rasteriser, bound: BoundDocument) -> bytes:
+_ABSENT: object = object()
+# ADR-0025 Decision 6: frozen in library code, never configuration.
+_REL_TOL = 1e-9
+_ABS_TOL = 1e-12
+
+
+def _paint_png(rasteriser: Rasteriser, bound: BoundDocument) -> tuple[bytes, object]:
     """One paint. A rasteriser that offers the sibling ``paint_document``
-    (#265) paints once and its PNG is used; a protocol-only one is asked for
-    the PNG alone. Duck-typed: the ``Rasteriser`` protocol is unchanged."""
+    (#265) paints once; its PNG and the module's ``getPlottedSeries()``
+    declaration come back. A protocol-only one is asked for the PNG alone and
+    the declaration is ``_ABSENT``. Duck-typed: the ``Rasteriser`` protocol is
+    unchanged."""
     paint = getattr(rasteriser, "paint_document", None)
     if paint is None:
-        return rasteriser.rasterise(bound)
+        return rasteriser.rasterise(bound), _ABSENT
     painted = paint(bound)
-    png = getattr(painted, "png", None)
-    return bytes(png if png is not None else painted[0])
+    if hasattr(painted, "png"):
+        return bytes(painted.png), getattr(painted, "declaration", None)
+    return bytes(painted[0]), painted[1]
+
+
+def _is_number(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _scalar_equal(declared: object, real: object) -> bool:
+    if _is_number(declared) and _is_number(real):
+        d, r = float(declared), float(real)  # type: ignore[arg-type]
+        return abs(d - r) <= max(_REL_TOL * max(abs(d), abs(r)), _ABS_TOL)
+    return type(declared) is type(real) and declared == real
+
+
+def _point_matches(point: Mapping[str, object], row: Mapping[str, object]) -> bool:
+    return all(
+        key in row and _scalar_equal(value, row[key]) for key, value in point.items()
+    )
+
+
+def _valid_point(point: object) -> bool:
+    return (
+        isinstance(point, dict)
+        and len(point) > 0
+        and all(
+            isinstance(key, str)
+            and key != ""
+            and (value is None or isinstance(value, (str, int, float, bool)))
+            for key, value in point.items()
+        )
+    )
+
+
+def _data_truthfulness(
+    declaration: object, rows: Sequence[Mapping[str, object]]
+) -> CheckResult:
+    """ADR-0025: a shape gate, then multiset containment of the declared
+    points in the bound rows. Pure: the declaration and rows in, a verdict
+    out. ``detail`` is display-only and echoes no row values."""
+    if (
+        not isinstance(declaration, list)
+        or not declaration
+        or not all(_valid_point(point) for point in declaration)
+    ):
+        return CheckResult(
+            "data_truthfulness", "not_checked", "no comparable declaration"
+        )
+    owner: dict[int, int] = {}  # row index -> point index
+
+    def assign(point_index: int, seen: set[int]) -> bool:
+        for row_index, row in enumerate(rows):
+            if row_index in seen or not _point_matches(declaration[point_index], row):
+                continue
+            seen.add(row_index)
+            if row_index not in owner or assign(owner[row_index], seen):
+                owner[row_index] = point_index
+                return True
+        return False
+
+    for position, point in enumerate(declaration, start=1):
+        if assign(position - 1, set()):
+            continue
+        known = {key for row in rows for key in row}
+        unknown = next((key for key in point if key not in known), None)
+        if unknown is not None:
+            detail = f"point {position}: unknown column {unknown!r}"
+        else:
+            column = next(
+                (
+                    key
+                    for key in point
+                    if not any(
+                        key in row and _scalar_equal(point[key], row[key])
+                        for row in rows
+                    )
+                ),
+                None,
+            )
+            if column is not None:
+                detail = f"point {position}: {column!r} matches no row"
+            else:
+                detail = f"point {position}: no unused row left to match"
+        return CheckResult("data_truthfulness", "fail", detail)
+    return CheckResult("data_truthfulness", "pass")
 
 
 def custom_review(
@@ -435,9 +527,10 @@ def custom_review(
     (ADR-0024, ADR-0026; #266). ``injection_pattern`` runs first and a fail
     returns at once with no paint. With a rasteriser the recipe is painted
     once and ``colorblind_safe_palette`` is scored from that PNG; ``painted``
-    is omitted on this rail. ``data_truthfulness`` has no verdict here (it
-    stays ``not_checked`` "unavailable"). When a critic is supplied and
-    Tier 1 did not fail, Tier 2 runs on the same PNG with the custom-rail
+    is omitted on this rail. ``data_truthfulness`` is scored from the
+    painted module's declaration against ``rows`` (ADR-0025; #267), and
+    stays ``not_checked`` "unavailable" without a ``paint_document``. When a
+    critic is supplied and Tier 1 did not fail, Tier 2 runs on the same PNG with the custom-rail
     context: the instruction, the transform-output column names and
     ``row_count``. Stops at the report; repair is the planner's loop."""
     checks = _tier1_checks(profile, None)
@@ -457,14 +550,16 @@ def custom_review(
             theme={},
             libraries=libraries,
         )
-        png = _paint_png(rasteriser, bound)
+        png, declaration = _paint_png(rasteriser, bound)
         raster = decode_png(png)
-        checks = [
-            _colorblind_safe_palette(raster)
-            if check.name == "colorblind_safe_palette"
-            else check
-            for check in checks
-        ]
+        resolved: list[CheckResult] = []
+        for check in checks:
+            if check.name == "colorblind_safe_palette":
+                check = _colorblind_safe_palette(raster)
+            elif check.name == "data_truthfulness" and declaration is not _ABSENT:
+                check = _data_truthfulness(declaration, rows)
+            resolved.append(check)
+        checks = resolved
         if any(check.outcome == "fail" for check in checks):
             return ReviewReport(
                 tiers_run=(1,),
