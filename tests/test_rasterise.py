@@ -180,16 +180,138 @@ def test_browser_rasteriser_raises_on_excel() -> None:
             rasteriser.rasterise(_envelope("excel"))
 
 
-@pytestmark_live
-def test_browser_rasteriser_raises_on_a_bound_document() -> None:
-    doc = ChartDocument(module="function render(){}", styles=None, libraries=())
-    bound = BoundDocument(
-        document=doc, rows=pa.table({"x": [1]}), theme={}, libraries={}
+_PAINTING_MODULE = """
+function render(data, el) {
+  el.style.background = "#fff";
+  var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", "100%");
+  data.forEach(function (row, i) {
+    var r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    r.setAttribute("x", String(10 + i * 40));
+    r.setAttribute("y", String(120 - row.v));
+    r.setAttribute("width", "30");
+    r.setAttribute("height", String(row.v));
+    r.setAttribute("fill", "#d62728");
+    svg.appendChild(r);
+  });
+  el.appendChild(svg);
+  window.__rows = data;
+}
+function getPlottedSeries() {
+  return window.__rows.map(function (row) {
+    return { series: "s", x: row.k, y: row.v };
+  });
+}
+"""
+
+
+def _bound(module: str = _PAINTING_MODULE, **kwargs: object) -> BoundDocument:
+    doc = ChartDocument(module=module, styles=None, libraries=())
+    return BoundDocument(
+        document=doc,
+        rows=pa.table({"k": ["a", "b", "c"], "v": [30, 60, 90]}),
+        theme={},
+        libraries={},
+        **kwargs,  # type: ignore[arg-type]
     )
-    renderers = load_vendored_renderers(_VENDOR_DIR)
-    with BrowserRasteriser(renderers) as rasteriser:
-        with pytest.raises(RasterisationError, match="BoundDocument"):
-            rasteriser.rasterise(bound)
+
+
+@pytestmark_live
+def test_paint_document_returns_one_paints_png_and_declaration() -> None:
+    with BrowserRasteriser({}, width=480, height=320) as rasteriser:
+        painted = rasteriser.paint_document(_bound())
+    assert painted.png.startswith(_PNG_MAGIC)
+    assert len(painted.png) > 1000
+    assert painted.plotted_series == [
+        {"series": "s", "x": "a", "y": 30},
+        {"series": "s", "x": "b", "y": 60},
+        {"series": "s", "x": "c", "y": 90},
+    ]
+
+
+@pytestmark_live
+def test_rasterise_bound_document_returns_png_bytes() -> None:
+    with BrowserRasteriser({}, width=480, height=320) as rasteriser:
+        png = rasteriser.rasterise(_bound())
+    assert png.startswith(_PNG_MAGIC)
+
+
+@pytestmark_live
+def test_paint_uses_the_rasterisers_own_width_and_height() -> None:
+    import struct
+
+    with BrowserRasteriser({}, width=480, height=320) as rasteriser:
+        png = rasteriser.paint_document(_bound()).png
+    width, height = struct.unpack(">II", png[16:24])
+    assert (width, height) == (480, 320)
+
+
+@pytestmark_live
+@pytest.mark.parametrize(
+    "module",
+    [
+        "function render(d, el) { throw new Error('boom'); }\n"
+        "function getPlottedSeries() { return []; }",
+        "function getPlottedSeries() { return []; }",
+        "function render(d, el) { el.textContent = 'x'; }",
+        "function render(d, el) {}\nfunction getPlottedSeries() { return []; }",
+    ],
+    ids=["throwing-render", "missing-render", "missing-symbol", "empty-container"],
+)
+def test_a_broken_document_raises_rasterisation_error(module: str) -> None:
+    with BrowserRasteriser({}) as rasteriser:
+        with pytest.raises(RasterisationError):
+            rasteriser.paint_document(_bound(module))
+
+
+@pytestmark_live
+def test_a_hanging_render_raises_rasterisation_error() -> None:
+    module = (
+        "function render(d, el) { while (true) {} }\n"
+        "function getPlottedSeries() { return []; }"
+    )
+    with BrowserRasteriser({}, timeout=1.0) as rasteriser:
+        with pytest.raises(RasterisationError):
+            rasteriser.paint_document(_bound(module))
+
+
+@pytestmark_live
+def test_a_bad_library_pin_is_an_assembly_error_not_a_rasterisation_error() -> None:
+    from chartagent.errors import DocumentAssemblyError
+    from chartagent.recipe import LibraryPin
+
+    pin = LibraryPin(name="lib", version="1", sha256="0" * 64)
+    doc = ChartDocument(module=_PAINTING_MODULE, styles=None, libraries=(pin,))
+    bound = BoundDocument(
+        document=doc, rows=pa.table({"k": ["a"], "v": [1]}), theme={}, libraries={}
+    )
+    with BrowserRasteriser({}) as rasteriser:
+        with pytest.raises(DocumentAssemblyError):
+            rasteriser.paint_document(bound)
+
+
+@pytestmark_live
+def test_paint_makes_no_network_request() -> None:
+    module = (
+        "function render(d, el) { el.textContent = 'x'; "
+        "fetch('http://example.invalid/'); "
+        "var i = new Image(); i.src = 'http://example.invalid/a.png'; "
+        "el.appendChild(i); }\n"
+        "function getPlottedSeries() { return [{series:'s', x:'a', y:1}]; }"
+    )
+    with BrowserRasteriser({}) as rasteriser:
+        seen: list[str] = []
+        original = rasteriser._browser.new_page
+
+        def spy(**kw: object) -> object:
+            page = original(**kw)
+            page.on("response", lambda r: seen.append(r.url))
+            return page
+
+        rasteriser._browser.new_page = spy
+        rasteriser.paint_document(_bound(module))
+    assert not [u for u in seen if u.startswith("http")]
 
 
 @pytestmark_live
