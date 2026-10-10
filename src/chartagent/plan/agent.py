@@ -19,15 +19,18 @@ both ``rasteriser=`` and ``critique_model=`` were supplied at construction —
 a Flint critique that can actually fail ``marks_present`` and wake the hop.
 Neither kwarg has a default; unset, Tier 2 stays ``unavailable`` and the hop
 stays dormant, exactly as before #201.
-``ChartAgent._recipe_reviewer`` (issue #226) is the same seam for a custom-rail
-recipe: ``(profile, recipe, instruction) -> ReviewReport``. Its default is
-Tier 1 only, so a recipe is never repaired in production until real
-custom-rail scoring replaces it.
+``ChartAgent._recipe_reviewer`` (issue #226, #268) is the same seam for a
+custom-rail recipe: ``(profile, recipe, rows, libraries, instruction) ->
+ReviewReport``. ``rows`` are the recipe's bound transform output and
+``libraries`` the in-request ``(sha256 -> bytes)`` map the resolver produced
+(ADR-0030 Decision 6); neither rides the recipe. Its default is
+:func:`~chartagent.review.custom_review` when a rasteriser is configured,
+else Tier 1 only.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Literal, cast, get_args
 
@@ -35,8 +38,10 @@ from chartagent.bind import DataSource, bind
 from chartagent.envelope import Envelope
 from chartagent.errors import (
     ChartAgentError,
+    DocumentAssemblyError,
     InexpressibleRequestError,
     PlannerFailureError,
+    RasterisationError,
     RawSqlRejectedError,
     SchemaDriftError,
     SpecShapeError,
@@ -76,9 +81,15 @@ from chartagent.plan.select import select_backend
 from chartagent.profile.models import Profile
 from chartagent.profile.source import profile_source
 from chartagent.rasterise import Rasteriser
-from chartagent.recipe import ChartRecipe, EscapeReason
+from chartagent.recipe import ChartRecipe, EscapeReason, bind_recipe
 from chartagent.result import ChartResult
-from chartagent.review import CheckName, ReviewReport, flint_review, tier1_review
+from chartagent.review import (
+    CheckName,
+    ReviewReport,
+    custom_review,
+    flint_review,
+    tier1_review,
+)
 
 _FLINT_REPAIRABLE = frozenset(FLINT_REPAIRABLE_CHECKS)
 _STEP1_RETRIES = 1
@@ -113,7 +124,16 @@ class Attempt:
 
 AttemptObserver = Callable[[Attempt], None]
 Reviewer = Callable[[Profile, InputFrame, Envelope, Backend, str], ReviewReport]
-RecipeReviewer = Callable[[Profile, ChartRecipe, str], ReviewReport]
+RecipeReviewer = Callable[
+    [
+        Profile,
+        ChartRecipe,
+        Sequence[Mapping[str, object]],
+        Mapping[str, bytes],
+        str,
+    ],
+    ReviewReport,
+]
 
 
 def _dump_emit(value: Any) -> Any:
@@ -203,7 +223,7 @@ class ChartAgent:
             None if critique_model is None else ModelClient(critique_model)
         )
         self._reviewer: Reviewer = self._flint_review
-        self._recipe_reviewer: RecipeReviewer = _tier1_recipe_review
+        self._recipe_reviewer: RecipeReviewer = self._default_recipe_review
 
     def _flint_review(
         self,
@@ -222,6 +242,45 @@ class ChartAgent:
             rasteriser=self._rasteriser,
             critique_client=self._critique_client,
         )
+
+    def _default_recipe_review(
+        self,
+        profile: Profile,
+        recipe: ChartRecipe,
+        rows: Sequence[Mapping[str, object]],
+        libraries: Mapping[str, bytes],
+        instruction: str,
+    ) -> ReviewReport:
+        if self._rasteriser is None:
+            return tier1_review(profile, backend=None)
+        return custom_review(
+            profile,
+            recipe,
+            rows,
+            libraries,
+            instruction,
+            rasteriser=self._rasteriser,
+            critique_client=self._critique_client,
+        )
+
+    def _recording_resolver(
+        self,
+    ) -> tuple[LibraryResolver | None, dict[str, bytes]]:
+        """The configured resolver, wrapped so each resolved ``(sha256,
+        bytes)`` lands in an in-request map keyed by sha256 (ADR-0030
+        Decision 6). The map outlives patches, so best-so-far's bytes stay
+        in it whichever document is current."""
+        libraries: dict[str, bytes] = {}
+        resolver = self._library_resolver
+        if resolver is None:
+            return None, libraries
+
+        def recording(name: str, version: str) -> tuple[str, bytes]:
+            sha256, blob = resolver(name, version)
+            libraries[sha256] = blob
+            return sha256, blob
+
+        return recording, libraries
 
     def _resolve_quality(self, quality: Quality | None) -> Quality:
         return self._quality if quality is None else _check_quality(quality)
@@ -318,7 +377,7 @@ class ChartAgent:
                 if resolved_quality == "fast":
                     raise
                 return self._author_miss(
-                    profile, instruction, miss, invoke, resolved_quality
+                    profile, data, instruction, miss, invoke, resolved_quality
                 )
             except _EmitFailed as exc:
                 last = exc.reason
@@ -434,7 +493,9 @@ class ChartAgent:
             (latest_frame, _), latest_review = outcome.halted
             decision = decide(latest_review, outcome.spent)
             if decision is not None:
-                hopped = self._hop(profile, instruction, decision, latest_frame, invoke)
+                hopped = self._hop(
+                    profile, data, instruction, decision, latest_frame, invoke
+                )
                 if hopped is not None:
                     return hopped
         return ChartResult(envelope=outcome.artifact[1], review=outcome.review)
@@ -442,6 +503,7 @@ class ChartAgent:
     def _hop(
         self,
         profile: Profile,
+        data: DataSource,
         instruction: str,
         decision: EscalationDecision,
         frame: InputFrame,
@@ -455,6 +517,7 @@ class ChartAgent:
         failed terminally and the caller returns best-so-far.
         """
         reason = EscapeReason(bucket=4)
+        resolver, libraries = self._recording_resolver()
         try:
             generated = generate_recipe(
                 profile,
@@ -462,7 +525,7 @@ class ChartAgent:
                 reason,
                 transform=decision.transform,
                 semantic_types=frame.semantic_types,
-                resolver=self._library_resolver,
+                resolver=resolver,
                 invoke=invoke,
             )
         except (DocumentGenerationFailed, PlannerFailureError):
@@ -481,8 +544,11 @@ class ChartAgent:
         )
         return self._review_and_repair(
             profile,
+            data,
             instruction,
             recipe,
+            libraries,
+            resolver,
             frame.semantic_types,
             decision.remaining_repairs,
             invoke,
@@ -491,6 +557,7 @@ class ChartAgent:
     def _author_miss(
         self,
         profile: Profile,
+        data: DataSource,
         instruction: str,
         miss: InexpressibleRequestError,
         invoke: Any,
@@ -503,13 +570,14 @@ class ChartAgent:
         terminal authoring or resolution failure re-raises the original bucket.
         """
         reason = EscapeReason(bucket=miss.bucket)
+        resolver, libraries = self._recording_resolver()
         try:
             generated = generate_recipe(
                 profile,
                 instruction,
                 reason,
                 transform=None,
-                resolver=self._library_resolver,
+                resolver=resolver,
                 invoke=invoke,
             )
         except DocumentGenerationFailed as exc:
@@ -527,8 +595,11 @@ class ChartAgent:
         )
         return self._review_and_repair(
             profile,
+            data,
             instruction,
             recipe,
+            libraries,
+            resolver,
             generated.semantic_types,
             _REVIEW_REPAIRS[quality],
             invoke,
@@ -537,8 +608,11 @@ class ChartAgent:
     def _review_and_repair(
         self,
         profile: Profile,
+        data: DataSource,
         instruction: str,
         recipe: ChartRecipe,
+        libraries: Mapping[str, bytes],
+        resolver: LibraryResolver | None,
         semantic_types: Mapping[str, SemanticTypeName],
         budget: int,
         invoke: Any,
@@ -551,7 +625,14 @@ class ChartAgent:
         it is the answer, otherwise it is dropped and the next round patches the
         recipe as it was. A discarded patch changes nothing. Best-so-far is the
         recipe that passed, else the first one emitted; the returned report is
-        always that recipe's (ADR-0027 Decision 7). Never raises on review."""
+        always that recipe's (ADR-0027 Decision 7).
+
+        The transform's rows and the in-request ``libraries`` map reach the
+        reviewer beside the recipe. A first review that cannot paint
+        propagates its :class:`~chartagent.errors.RasterisationError`; a
+        patch whose re-review cannot paint (or assemble) is a discard that
+        still spent its unit."""
+        rows = self._bound_rows(recipe, data)
 
         def request(
             current: ChartRecipe, failing: list[CheckName]
@@ -562,29 +643,53 @@ class ChartAgent:
                 current.document,
                 failing,
                 semantic_types=semantic_types,
-                resolver=self._library_resolver,
+                resolver=resolver,
                 invoke=invoke,
             )
             if isinstance(patched, PatchDiscarded):
                 return None
             return replace(current, document=patched)
 
+        def re_review(candidate: ChartRecipe) -> ReviewReport:
+            try:
+                return self._recipe_reviewer(
+                    profile, candidate, rows, libraries, instruction
+                )
+            except (RasterisationError, DocumentAssemblyError):
+                return _UNPAINTED
+
         outcome = spend_repair_budget(
             recipe,
-            self._recipe_reviewer(profile, recipe, instruction),
+            self._recipe_reviewer(profile, recipe, rows, libraries, instruction),
             budget,
             request=request,
-            reviewer=lambda candidate: self._recipe_reviewer(
-                profile, candidate, instruction
-            ),
+            reviewer=re_review,
         )
         return ChartResult(recipe=outcome.artifact, review=outcome.review)
 
+    def _bound_rows(
+        self, recipe: ChartRecipe, data: DataSource
+    ) -> list[dict[str, Any]]:
+        """The recipe's transform output, the review's ground truth. Without a
+        rasteriser nothing reads rows, so a transform that cannot run here
+        keeps the Tier 1 behaviour it always had."""
+        try:
+            return bind_recipe(recipe, data).rows
+        except ChartAgentError:
+            if self._rasteriser is not None:
+                raise
+            return []
 
-def _tier1_recipe_review(
-    profile: Profile, recipe: ChartRecipe, instruction: str
-) -> ReviewReport:
-    return tier1_review(profile, backend=None)
+
+# A re-review that could not paint: never passes, so it never replaces
+# best-so-far.
+_UNPAINTED = ReviewReport(
+    tiers_run=(),
+    tiers_skipped={},
+    passed=False,
+    budget_exhausted=False,
+    checks=(),
+)
 
 
 def _step1_attempt(

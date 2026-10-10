@@ -1370,7 +1370,9 @@ def _repairing_agent(
     queue = list(reports)
     reviewed: list[Any] = []
 
-    def reviewer(profile: Any, recipe: Any, instruction: Any) -> ReviewReport:
+    def reviewer(
+        profile: Any, recipe: Any, rows: Any, libraries: Any, instruction: Any
+    ) -> ReviewReport:
         reviewed.append(recipe)
         return queue.pop(0)
 
@@ -1438,7 +1440,7 @@ def test_passing_recipe_review_makes_no_patch_ask() -> None:
 
 def test_patch_ask_is_off_the_planner_cap() -> None:
     agent = _agent()
-    agent._recipe_reviewer = lambda p, r, i: (
+    agent._recipe_reviewer = lambda p, r, rows, libs, i: (
         _recipe_report("label_overlap")
         if r.document.module == _MISS_DRAFT["document"]["module"]
         else _recipe_report()
@@ -1465,7 +1467,9 @@ def _repairing_agent_with(
     queue = list(reports)
     reviewed: list[Any] = []
 
-    def reviewer(profile: Any, recipe: Any, instruction: Any) -> ReviewReport:
+    def reviewer(
+        profile: Any, recipe: Any, rows: Any, libraries: Any, instruction: Any
+    ) -> ReviewReport:
         reviewed.append(recipe)
         return queue.pop(0)
 
@@ -1479,7 +1483,7 @@ _MALFORMED = ("step2", {"nonsense": True})
 
 def _queued_reviewer(reports: list[ReviewReport]) -> Any:
     queue = list(reports)
-    return lambda profile, recipe, instruction: queue.pop(0)
+    return lambda profile, recipe, rows, libs, instruction: queue.pop(0)
 
 
 def _failing_names(result: ChartResult) -> list[str]:
@@ -1736,7 +1740,9 @@ def test_passing_recipe_review_is_not_budget_exhausted() -> None:
 def test_reviewer_error_propagates() -> None:
     agent = _agent()
 
-    def boom(profile: Any, recipe: Any, instruction: Any) -> ReviewReport:
+    def boom(
+        profile: Any, recipe: Any, rows: Any, libraries: Any, instruction: Any
+    ) -> ReviewReport:
         raise RuntimeError("reviewer broke")
 
     agent._recipe_reviewer = boom
@@ -1792,6 +1798,13 @@ _DRAWN_PNG = _flat_png(True)
 _BLANK_PNG = _flat_png(False)
 
 
+def _passing_recipe_review(
+    profile: Any, recipe: Any, rows: Any, libraries: Any, instruction: Any
+) -> ReviewReport:
+    """Stands in for the hopped recipe's review in tests about the Flint hop."""
+    return _recipe_report()
+
+
 class _FakeRasteriser:
     def rasterise(self, target: Any, *, format: str = "png") -> bytes:
         return _DRAWN_PNG
@@ -1840,6 +1853,7 @@ def test_a_real_flint_review_marks_present_fail_hops_through_create_chart(
             "note": "chrome painted, no bars",
         }
     )
+    agent._recipe_reviewer = _passing_recipe_review
     _install(agent, ("Fragment", _FRAGMENT), ("step2", {}), ("step2", _HOP_DOC))
     result = agent.create_chart(_SALES, "revenue by quarter", quality=quality)  # type: ignore[arg-type]
     assert result.envelope is None
@@ -1879,7 +1893,9 @@ def _hopped_repairing_agent(
     queue = list(reports)
     reviewed: list[Any] = []
 
-    def reviewer(profile: Any, recipe: Any, instruction: Any) -> ReviewReport:
+    def reviewer(
+        profile: Any, recipe: Any, rows: Any, libraries: Any, instruction: Any
+    ) -> ReviewReport:
         reviewed.append(recipe)
         return queue.pop(0)
 
@@ -2334,7 +2350,9 @@ def _hop_after_repair_agent(
 ) -> tuple[ChartAgent, dict[str, Any], list[Any]]:
     agent, calls, reviewed = _flint_repairing_agent(*flint_reports, replies=replies)
     queue = list(recipe_reports)
-    agent._recipe_reviewer = lambda profile, recipe, instruction: queue.pop(0)
+    agent._recipe_reviewer = lambda profile, recipe, rows, libs, instruction: queue.pop(
+        0
+    )
     return agent, calls, reviewed
 
 
@@ -2531,6 +2549,7 @@ def test_real_marks_present_fail_hops_with_the_leftover_budget(quality: str) -> 
         {**_CRITIC_PASS, "marks_present": "fail"},
         replies=(("step2", _HOP_DOC),),
     )
+    agent._recipe_reviewer = _passing_recipe_review
     result = agent.create_chart(_SALES, "revenue by quarter", quality=quality)  # type: ignore[arg-type]
     assert result.recipe is not None and result.envelope is None
     assert calls["model"] == 3
@@ -2543,6 +2562,7 @@ def test_real_marks_present_revealed_after_a_palette_repair_still_hops() -> None
         {**_CRITIC_PASS, "marks_present": "fail"},
         replies=(("step2", {}), ("step2", _HOP_DOC)),
     )
+    agent._recipe_reviewer = _passing_recipe_review
     result = agent.create_chart(_SALES, "revenue by quarter", quality="balanced")
     assert result.recipe is not None and result.envelope is None
     assert calls["model"] == 4
@@ -2564,3 +2584,108 @@ def test_real_injection_fail_stays_unrepaired_and_never_rasterises(
     assert result.envelope is not None
     assert result.review is not None and result.review.passed is False
     assert result.review.budget_exhausted is False
+
+
+# --- #268: the real recipe reviewer in create_chart ------------------------
+
+_TRUTHFUL = [
+    {"quarter": "Q1", "total": 100},
+    {"quarter": "Q2", "total": 200},
+]
+_FABRICATED = [{"quarter": "Q1", "total": 999}, {"quarter": "Q2", "total": 200}]
+
+
+class _PaintSource:
+    """Stands in for ``BrowserRasteriser.paint_document``: one scripted
+    outcome per paint (a declaration, or an exception to raise); the last
+    outcome repeats."""
+
+    def __init__(self, *outcomes: Any) -> None:
+        self.outcomes = list(outcomes)
+        self.bound: list[Any] = []
+
+    def rasterise(self, target: Any, *, format: str = "png") -> bytes:
+        return self.paint_document(target).png  # type: ignore[no-any-return]
+
+    def paint_document(self, bound: Any) -> Any:
+        from chartagent.rasterise import DocumentPaint
+
+        self.bound.append(bound)
+        outcome = self.outcomes.pop(0) if len(self.outcomes) > 1 else self.outcomes[0]
+        if isinstance(outcome, Exception):
+            raise outcome
+        return DocumentPaint(png=_SEPARABLE_PNG, declaration=outcome)
+
+
+def _recipe_agent(source: _PaintSource, *replies: Any) -> ChartAgent:
+    agent = create_chart_agent(model="test", rasteriser=source)  # type: ignore[arg-type]
+    _install(agent, _inexpressible(1), ("step2", _MISS_DRAFT), *replies)
+    return agent
+
+
+def _failed(result: ChartResult) -> list[str]:
+    assert result.review is not None
+    return [c.name for c in result.review.checks if c.outcome == "fail"]
+
+
+def test_a_fabricated_declaration_fails_truthfulness_and_spends_a_patch() -> None:
+    source = _PaintSource(_FABRICATED, _TRUTHFUL)
+    agent = _recipe_agent(source, ("step2", _PATCHED_DOC))
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.recipe is not None and result.review is not None
+    assert result.recipe.document.module == _PATCHED_DOC["module"]
+    assert result.review.passed is True
+    assert [b.document.module for b in source.bound] == [
+        _MISS_DRAFT["document"]["module"],
+        _PATCHED_DOC["module"],
+    ]
+    assert sorted(source.bound[0].rows.to_pylist(), key=lambda r: r["quarter"]) == (
+        _TRUTHFUL
+    )
+
+
+def test_a_passing_first_review_makes_no_patch_call() -> None:
+    source = _PaintSource(_TRUTHFUL)
+    agent = _recipe_agent(source)
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.review is not None and result.review.passed is True
+    assert len(source.bound) == 1
+
+
+def test_a_worsening_patch_keeps_best_so_far_and_its_report() -> None:
+    source = _PaintSource(_FABRICATED)
+    agent = _recipe_agent(source, ("step2", _PATCHED_DOC))
+    result = agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert result.recipe is not None
+    assert result.recipe.document.module == _MISS_DRAFT["document"]["module"]
+    assert _failed(result) == ["data_truthfulness"]
+    assert result.review is not None and result.review.budget_exhausted is True
+
+
+def test_first_paint_rasterisation_error_propagates() -> None:
+    from chartagent.errors import RasterisationError
+
+    agent = _recipe_agent(_PaintSource(RasterisationError("render threw")))
+    with pytest.raises(RasterisationError):
+        agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+
+
+def test_a_patch_that_fails_to_paint_is_discarded_and_spends_a_unit() -> None:
+    from chartagent.errors import RasterisationError
+
+    source = _PaintSource(_FABRICATED, RasterisationError("patch threw"))
+    agent = _recipe_agent(source, ("step2", _PATCHED_DOC), ("step2", _PATCHED_DOC))
+    result = agent.create_chart(_SALES, "a 3D globe", quality="best")
+    assert result.recipe is not None
+    assert result.recipe.document.module == _MISS_DRAFT["document"]["module"]
+    assert _failed(result) == ["data_truthfulness"]
+    assert len(source.bound) == 3  # first review plus two patch re-reviews
+
+
+def test_resolved_library_bytes_reach_the_reviewer_with_the_document() -> None:
+    source = _PaintSource(_TRUTHFUL)
+    agent = create_chart_agent(model="test", rasteriser=source)  # type: ignore[arg-type]
+    agent._library_resolver = lambda name, version: ("f" * 64, b"lib")
+    _install(agent, _inexpressible(1), ("step2", _draft_with_d3()))
+    agent.create_chart(_SALES, "a 3D globe", quality="balanced")
+    assert dict(source.bound[0].libraries) == {"f" * 64: b"lib"}
