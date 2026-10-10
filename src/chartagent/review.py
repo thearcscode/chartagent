@@ -530,8 +530,8 @@ def custom_review(
     is omitted on this rail. ``data_truthfulness`` is scored from the
     painted module's declaration against ``rows`` (ADR-0025; #267), and
     stays ``not_checked`` "unavailable" without a ``paint_document``. When a
-    critic is supplied and Tier 1 did not fail, Tier 2 runs on the same PNG with the custom-rail
-    context: the instruction, the transform-output column names and
+    critic is supplied and Tier 1 did not fail, Tier 2 runs on the same PNG
+    with the custom-rail context: the instruction, the transform-output column names and
     ``row_count``. Stops at the report; repair is the planner's loop."""
     checks = _tier1_checks(profile, None)
     if any(check.outcome == "fail" for check in checks):
