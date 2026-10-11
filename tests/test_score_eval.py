@@ -807,7 +807,7 @@ def test_no_figure_outside_the_allow_list_in_any_output_form(
         "executable",
         "delivery",
     }
-    assert set(tool.FIGURES) == {"executable", "delivery", "rubric"}
+    assert set(tool.FIGURES) == {"executable", "delivery", "rubric", "calibration"}
     for text in forms:
         lowered = text.lower()
         for banned in ("end-to-end", "combined", "overall"):
@@ -946,6 +946,167 @@ def test_markdown_names_the_era_and_how_to_read_it(tmp_path: Path) -> None:
     assert "seam shipped" in shipped
     assert "seam absent" in absent
     assert "expected miss" in absent
+
+
+# --- human calibration of the judge (#279) ------------------------------------
+
+
+def _labelled(*, disagree: dict[str, str] | None = None) -> dict[str, Any]:
+    """A judged balanced run plus one human label per executable hit.
+
+    ``disagree`` maps a case id to the item the rater marks ``fail`` where the
+    judge said ``pass``.
+    """
+    outputs = _judged()
+    labels = []
+    for case_id in _public_ids():
+        verdict = copy.deepcopy(_verdict_of(outputs, case_id, "balanced"))
+        for key in ("judge_model", "critic_model", "png_sha256", "provenance"):
+            verdict.pop(key)
+        if disagree and case_id in disagree:
+            verdict["verdicts"][disagree[case_id]] = "fail"
+        labels.append(verdict)
+    outputs["human_labels"] = labels
+    return outputs
+
+
+def _calibration(freeze: Freeze, outputs: dict[str, Any]) -> dict[str, Any]:
+    section: dict[str, Any] = _report(freeze, outputs)["calibration"]
+    return section
+
+
+def test_sample_is_first_thirty_hits_in_permutation_order() -> None:
+    tool = _tool()
+    permutation = [f"c{i:02d}" for i in range(40)]
+    hits = {f"c{i:02d}" for i in range(40) if i % 4 != 1}
+    sample = tool.calibration_sample(permutation, hits)
+    assert len(sample) == 30
+    assert sample == [c for c in permutation if c in hits][:30]
+    assert tool.calibration_sample(permutation, {"c07", "c03"}) == ["c03", "c07"]
+
+
+def test_sample_skips_misses_and_follows_the_permutation(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _labelled()
+    _with(outputs, "e02", "balanced", painted="fail")
+    _drop_verdicts(outputs, "balanced", "e02")
+    outputs["human_labels"] = [
+        label for label in outputs["human_labels"] if label["request_id"] != "e02"
+    ]
+    section = _calibration(freeze, outputs)
+    assert section["quality"] == "balanced"
+    assert section["sample"] == [i for i in _public_ids() if i != "e02"]
+    assert section["exact_match"]["n"] == 8
+
+
+def test_agreement_is_per_item_exact_match_with_a_disagreement_count(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    section = _calibration(
+        freeze,
+        _labelled(disagree={"e01": "label_overlap", "e04": "legend_presence"}),
+    )
+    assert section["exact_match"] == {"k": 7, "n": 9, "rate": 7 / 9}
+    assert section["disagreement_count"] == 2
+    by_id = {row["request_id"]: row for row in section["cases"]}
+    assert by_id["e01"]["match"] is False
+    assert by_id["e01"]["disagreements"] == ["label_overlap"]
+    assert by_id["e02"]["match"] is True
+    assert section["by_item"]["label_overlap"] == {"agree": 8, "n": 9}
+    assert section["by_item"]["legend_presence"] == {"agree": 2, "n": 3}
+
+
+def test_labels_never_move_the_rubric_or_executable_figures(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    plain = _report(freeze, _judged())
+    labelled = _report(freeze, _labelled(disagree={"e01": "label_overlap"}))
+    assert labelled["rubric"] == plain["rubric"]
+    assert labelled["executable"] == plain["executable"]
+    assert labelled["delivery"] == plain["delivery"]
+    assert "calibration" not in plain
+
+
+def test_a_label_outside_the_sample_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _labelled()
+    _with(outputs, "e02", "balanced", painted="fail")
+    _drop_verdicts(outputs, "balanced", "e02")
+    line = _refused(freeze.run(outputs), "CALIBRATION")
+    assert "e02" in line
+
+
+def test_a_missing_label_in_the_sample_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _labelled()
+    outputs["human_labels"] = outputs["human_labels"][:-1]
+    line = _refused(freeze.run(outputs), "CALIBRATION")
+    assert "e09" in line
+
+
+def test_labels_without_judge_verdicts_are_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _labelled()
+    del outputs["judge_verdicts"]
+    _refused(freeze.run(outputs), "CALIBRATION")
+
+
+def test_collapse_threshold_is_below_eighty_percent_exact_match(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    one = {"e01": "label_overlap"}
+    two = {**one, "e02": "label_overlap"}
+    three = {**two, "e03": "label_overlap"}
+    assert _calibration(freeze, _labelled(disagree=one))["collapsed"] is False
+    assert _calibration(freeze, _labelled(disagree=two))["collapsed"] is True  # 7/9
+    assert _calibration(freeze, _labelled(disagree=three))["collapsed"] is True
+
+
+def test_collapse_appends_a_dated_note_distinct_from_the_named_review(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    notes = tmp_path / "report-notes.md"
+    notes.write_text("# Notes\n\n## Named review (Decision 12) - 2026-01-01\n")
+    three = {i: "label_overlap" for i in ("e01", "e02", "e03")}
+    args = ("--notes", str(notes), "--date", "2026-10-11")
+    proc = freeze.run(_labelled(disagree=three), *args)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = notes.read_text(encoding="utf-8")
+    assert "## Calibration collapse (ADR-0029 Decision 11) - 2026-10-11" in text
+    assert "6/9" in text and "85%" in text and "not rewritten" in text
+    assert text.startswith("# Notes\n\n## Named review (Decision 12) - 2026-01-01\n")
+    # scoring the same run again on the same day does not duplicate the entry
+    freeze.run(_labelled(disagree=three), *args)
+    assert notes.read_text(encoding="utf-8").count("Calibration collapse") == 1
+
+
+def test_no_collapse_writes_no_note(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    notes = tmp_path / "report-notes.md"
+    proc = freeze.run(_labelled(), "--notes", str(notes), "--date", "2026-10-11")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert not notes.exists()
+
+
+def test_markdown_publishes_the_calibration_beside_the_rubric(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    md = tmp_path / "r.md"
+    proc = freeze.run(_labelled(disagree={"e01": "label_overlap"}), "--md", str(md))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = md.read_text(encoding="utf-8")
+    assert "## Human calibration" in text
+    assert "8/9" in text and "1 disagreement" in text
+    assert "never changes the rubric pass rate" in text
+
+
+def test_calibration_is_an_allow_listed_figure_over_its_own_sample() -> None:
+    tool = _tool()
+    assert "calibration" in tool.FIGURES
+    tool.check_figure("calibration", "the human-calibration sample")
+    with pytest.raises(ValueError, match="calibration sample"):
+        tool.check_figure("calibration", "every request")
 
 
 # --- run modes and the publish write (#276) ----------------------------------
