@@ -502,3 +502,243 @@ def test_markdown_report_states_the_interval(tmp_path: Path) -> None:
     assert "Executable-output rate" in text
     assert "8/9" in text and "Wilson 95%" in text
     assert "e01" in text
+
+
+# --- rubric pass rate over executable hits (#273) ----------------------------
+
+_FIVE = (
+    "marks_present",
+    "label_overlap",
+    "axis_labels_present",
+    "legend_presence",
+    "bar_chart_y_axis_baseline",
+)
+_APPROPRIATE = "chart_type_appropriateness"
+# A Flint Bar with no series channel: marks, overlap, axis labels, baseline.
+_BAR_ITEMS = (
+    "marks_present",
+    "label_overlap",
+    "axis_labels_present",
+    "bar_chart_y_axis_baseline",
+)
+
+
+def _verdict(case_id: str, quality: str) -> dict[str, Any]:
+    if case_id in _CUSTOM_IDS:
+        items: tuple[str, ...] = _FIVE
+        extra: dict[str, Any] = {"rail": "custom"}
+    else:
+        items = _BAR_ITEMS
+        extra = {
+            "rail": "flint",
+            "chart_type": "Bar Chart",
+            "encodings": {"x": "region", "y": "sales"},
+        }
+    return {
+        "request_id": case_id,
+        "quality": quality,
+        "judge_model": "gemini-3.8-flash",
+        "critic_model": "claude-sonnet-5-5",
+        "png_sha256": "ab" * 32,
+        "provenance": ["png", "instruction", "chart_type", "intent"],
+        "verdicts": {name: "pass" for name in (*items, _APPROPRIATE)},
+        **extra,
+    }
+
+
+def _judged() -> dict[str, Any]:
+    outputs = _records(_public_ids())
+    outputs["judge_verdicts"] = [
+        _verdict(i, q) for i in _public_ids() for q in QUALITIES
+    ]
+    return outputs
+
+
+def _verdict_of(outputs: dict[str, Any], case_id: str, quality: str) -> dict[str, Any]:
+    for v in outputs["judge_verdicts"]:
+        if v["request_id"] == case_id and v["quality"] == quality:
+            found: dict[str, Any] = v
+            return found
+    raise AssertionError("no such verdict")
+
+
+def _drop_verdicts(outputs: dict[str, Any], quality: str, *ids: str) -> None:
+    outputs["judge_verdicts"] = [
+        v
+        for v in outputs["judge_verdicts"]
+        if not (v["quality"] == quality and v["request_id"] in ids)
+    ]
+
+
+def _rubric(freeze: Freeze, outputs: dict[str, Any]) -> dict[str, Any]:
+    out = freeze.repo / "r.json"
+    proc = freeze.run(outputs, "--json", str(out))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    report: dict[str, Any] = json.loads(out.read_text(encoding="utf-8"))
+    rubric: dict[str, Any] = report["rubric"]
+    return rubric
+
+
+def test_rubric_denominator_is_executable_hits_with_excluded_beside_it(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    _with(outputs, "e01", "balanced", painted="fail")
+    _with(outputs, "e04", "balanced", raster_nonblank=False)
+    _drop_verdicts(outputs, "balanced", "e01", "e04")
+    row = _rubric(freeze, outputs)["by_quality"]["balanced"]
+    assert row["n"] == 7 and row["excluded"] == 2
+    assert row["n"] + row["excluded"] == len(PUBLIC)
+    assert row["k"] == 7 and row["rate"] == 1.0
+    assert set(row["wilson_95"]) == {"lower", "upper"}
+
+
+def test_one_failed_sent_item_fails_the_case(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    _verdict_of(outputs, "e01", "fast")["verdicts"]["label_overlap"] = "fail"
+    row = _rubric(freeze, outputs)["by_quality"]["fast"]
+    assert row["k"] == 8 and row["n"] == 9
+    assert row["failed"] == ["e01"]
+
+
+def test_not_checked_on_a_sent_item_fails_and_is_counted_per_item(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    _verdict_of(outputs, "e01", "fast")["verdicts"][_APPROPRIATE] = "not_checked"
+    _verdict_of(outputs, "e02", "fast")["verdicts"][_APPROPRIATE] = "not_checked"
+    _verdict_of(outputs, "e04", "fast")["verdicts"]["legend_presence"] = "not_checked"
+    row = _rubric(freeze, outputs)["by_quality"]["fast"]
+    assert row["k"] == 6
+    counts = row["not_checked_by_item"]
+    assert counts[_APPROPRIATE] == 2 and counts["legend_presence"] == 1
+    assert counts["marks_present"] == 0
+
+
+def test_inapplicable_flint_items_are_omitted_and_never_fail_a_case(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    # A Bar with no series channel: legend_presence cannot apply on Flint,
+    # so even a judge "fail" on it must not fail the case.
+    _verdict_of(outputs, "e01", "fast")["verdicts"]["legend_presence"] = "fail"
+    row = _rubric(freeze, outputs)["by_quality"]["fast"]
+    assert row["k"] == 9
+    assert row["not_checked_by_item"].get("legend_presence", 0) == 0
+
+
+def test_a_sent_flint_item_with_no_verdict_fails_the_case(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    del _verdict_of(outputs, "e01", "fast")["verdicts"]["axis_labels_present"]
+    row = _rubric(freeze, outputs)["by_quality"]["fast"]
+    assert row["failed"] == ["e01"]
+    assert row["not_checked_by_item"]["axis_labels_present"] == 1
+
+
+def test_appropriateness_is_always_sent_and_custom_sends_all_five(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    del _verdict_of(outputs, "e01", "fast")["verdicts"][_APPROPRIATE]
+    del _verdict_of(outputs, "e04", "fast")["verdicts"]["axis_labels_present"]
+    row = _rubric(freeze, outputs)["by_quality"]["fast"]
+    assert row["failed"] == ["e01", "e04"]
+
+
+def test_a_non_cartesian_flint_chart_omits_axis_labels(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    verdict = _verdict_of(outputs, "e01", "fast")
+    verdict["chart_type"] = "Pie Chart"
+    verdict["encodings"] = {"color": "region", "value": "sales"}
+    verdict["verdicts"] = {
+        "marks_present": "pass",
+        "label_overlap": "pass",
+        "legend_presence": "pass",
+        _APPROPRIATE: "pass",
+    }
+    assert _rubric(freeze, outputs)["by_quality"]["fast"]["k"] == 9
+
+
+def test_judge_verdict_for_a_case_with_no_executable_hit_is_refused(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    _with(outputs, "e01", "fast", painted="fail")
+    line = _refused(freeze.run(outputs), "JUDGE")
+    assert "e01" in line and "executable" in line
+
+
+def test_judge_verdict_without_a_png_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    del _verdict_of(outputs, "e02", "balanced")["png_sha256"]
+    line = _refused(freeze.run(outputs), "JUDGE")
+    assert "e02" in line and "PNG" in line
+
+
+def test_executable_hit_with_no_verdict_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    for quality in QUALITIES:
+        _drop_verdicts(outputs, quality, "e03")
+    line = _refused(freeze.run(outputs), "JUDGE")
+    assert "e03" in line and "no verdict" in line
+
+
+def test_judge_in_the_critics_family_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    _verdict_of(outputs, "e01", "fast")["judge_model"] = "claude-haiku-4-5"
+    line = _refused(freeze.run(outputs), "FAMILY")
+    assert "e01" in line
+
+
+def test_a_judge_from_another_family_than_the_critic_is_accepted(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    for v in outputs["judge_verdicts"]:
+        v["critic_model"] = "gpt-5"
+    assert _rubric(freeze, outputs)["by_quality"]["fast"]["k"] == 9
+
+
+def test_judge_provenance_with_review_report_critic_note_or_module_is_refused(
+    tmp_path: Path,
+) -> None:
+    for banned in ("ReviewReport", "critic_note", "module"):
+        (tmp_path / banned).mkdir()
+        freeze = _make_freeze(tmp_path / banned)
+        outputs = _judged()
+        _verdict_of(outputs, "e05", "best")["provenance"].append(banned)
+        line = _refused(freeze.run(outputs), "PROVENANCE")
+        assert "e05" in line and banned in line
+
+
+def test_rubric_is_absent_when_no_judge_verdicts_are_supplied(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    out = tmp_path / "r.json"
+    assert freeze.run(_records(_public_ids()), "--json", str(out)).returncode == 0
+    assert "rubric" not in json.loads(out.read_text(encoding="utf-8"))
+
+
+def test_markdown_states_the_rubric_denominator_and_excluded(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    _with(outputs, "e01", "balanced", painted="fail")
+    _drop_verdicts(outputs, "balanced", "e01")
+    md = tmp_path / "r.md"
+    proc = freeze.run(outputs, "--md", str(md))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = md.read_text(encoding="utf-8")
+    assert "Rubric pass rate" in text and "8/8" in text and "excluded" in text

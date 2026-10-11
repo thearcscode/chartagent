@@ -273,6 +273,159 @@ def _executable(records: Iterable[Mapping[str, Any]], n: int) -> dict[str, Any]:
     return {"target": EXECUTABLE_TARGET, "by_quality": by_quality}
 
 
+# --- rubric pass rate over executable hits (#273) ----------------------------
+
+APPROPRIATENESS = "chart_type_appropriateness"
+CUSTOM_ITEMS = (
+    "marks_present",
+    "label_overlap",
+    "axis_labels_present",
+    "legend_presence",
+    "bar_chart_y_axis_baseline",
+)
+_BANNED_PROVENANCE = ("ReviewReport", "critic_note", "module")
+_FAMILIES = (
+    ("anthropic", ("claude", "anthropic")),
+    ("google", ("gemini", "google", "gemma")),
+    ("openai", ("gpt", "openai", "o1", "o3", "o4")),
+)
+
+
+def _family(model: str) -> str:
+    """The vendor family of a model id, with or without a ``vendor:`` prefix."""
+    name = model.lower().rsplit(":", 1)[-1].rsplit("/", 1)[-1]
+    for family, markers in _FAMILIES:
+        if any(name.startswith(m) for m in markers):
+            return family
+    return name.split("-", 1)[0]
+
+
+def _sent_items(verdict: Mapping[str, Any]) -> tuple[str, ...]:
+    """What the judge was sent: the Tier-2 host table on Flint, all five on the
+    custom rail, and chart-type appropriateness always."""
+    if verdict.get("rail") == "custom":
+        return (*CUSTOM_ITEMS, APPROPRIATENESS)
+    from chartagent.review import applicable_tier2_items
+
+    items = applicable_tier2_items(
+        str(verdict.get("chart_type")), verdict.get("encodings") or {}
+    )
+    return (*items, APPROPRIATENESS)
+
+
+def _judge_issues(
+    verdicts: list[Mapping[str, Any]],
+    records: Mapping[tuple[str, str], Mapping[str, Any]],
+) -> list[str]:
+    issues: list[str] = []
+    for v in verdicts:
+        key = (str(v.get("request_id")), str(v.get("quality")))
+        name = f"{key[0]} ({key[1]})"
+        record = records.get(key)
+        if record is None or not _is_hit(record):
+            issues.append(
+                _issue(
+                    "JUDGE",
+                    f"{name}: verdict for a case with no executable hit; "
+                    "the judge never runs without a picture",
+                )
+            )
+            continue
+        if not v.get("png_sha256"):
+            issues.append(
+                _issue("JUDGE", f"{name}: verdict has no PNG; the judge needs one")
+            )
+        if _family(str(v.get("judge_model"))) == _family(str(v.get("critic_model"))):
+            issues.append(
+                _issue(
+                    "FAMILY",
+                    f"{name}: judge {v.get('judge_model')} is in the critic's "
+                    f"family ({v.get('critic_model')})",
+                )
+            )
+        banned = [b for b in _BANNED_PROVENANCE if b in (v.get("provenance") or [])]
+        if banned:
+            issues.append(
+                _issue(
+                    "PROVENANCE",
+                    f"{name}: judge provenance includes {', '.join(banned)}",
+                )
+            )
+    judged = {(str(v.get("request_id")), str(v.get("quality"))) for v in verdicts}
+    for key in sorted(k for k, r in records.items() if _is_hit(r) and k not in judged):
+        issues.append(
+            _issue("JUDGE", f"{key[0]} ({key[1]}): executable hit has no verdict")
+        )
+    return issues
+
+
+def _rubric(
+    records: Iterable[Mapping[str, Any]],
+    verdicts: Iterable[Mapping[str, Any]],
+    n: int,
+) -> dict[str, Any]:
+    hits: dict[str, int] = {}
+    for record in records:
+        quality = str(record["quality"])
+        hits.setdefault(quality, 0)
+        hits[quality] += 1 if _is_hit(record) else 0
+    passed: dict[str, int] = {q: 0 for q in hits}
+    failed: dict[str, list[str]] = {q: [] for q in hits}
+    unchecked: dict[str, dict[str, int]] = {q: {} for q in hits}
+    for v in verdicts:
+        quality = str(v["quality"])
+        given = v.get("verdicts") or {}
+        ok = True
+        for item in _sent_items(v):
+            outcome = given.get(item, "not_checked")
+            unchecked[quality].setdefault(item, 0)
+            if outcome == "not_checked":
+                unchecked[quality][item] += 1
+            ok = ok and outcome == "pass"
+        if ok:
+            passed[quality] += 1
+        else:
+            failed[quality].append(str(v["request_id"]))
+    by_quality: dict[str, Any] = {}
+    for quality in sorted(hits):
+        k, total = passed[quality], hits[quality]
+        by_quality[quality] = {
+            "k": k,
+            "n": total,
+            "excluded": n - total,
+            "rate": k / total if total else 0.0,
+            "wilson_95": _wilson_interval(k, total),
+            "failed": sorted(failed[quality]),
+            "not_checked_by_item": dict(sorted(unchecked[quality].items())),
+        }
+    return {"by_quality": by_quality}
+
+
+def _rubric_markdown(report: Mapping[str, Any]) -> list[str]:
+    lines = [
+        "",
+        "## Rubric pass rate",
+        "",
+        "Executable hits only; the excluded count never reached the judge. A "
+        "case passes only if every sent item is `pass`.",
+        "",
+        "| Quality | Passed | Rate | Wilson 95% | Excluded |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    rows = report["rubric"]["by_quality"]
+    for quality, row in rows.items():
+        w = row["wilson_95"]
+        lines.append(
+            f"| {quality} | {row['k']}/{row['n']} | {row['rate']:.3f} | "
+            f"Wilson 95% [{w['lower']:.3f}, {w['upper']:.3f}] | "
+            f"{row['excluded']} excluded |"
+        )
+    for quality, row in rows.items():
+        counts = ", ".join(f"{i} {c}" for i, c in row["not_checked_by_item"].items())
+        lines += ["", f"`not_checked` at {quality}: {counts}"]
+    return lines
+
+
 def render_markdown(report: Mapping[str, Any]) -> str:
     executable = report["executable"]
     target = executable["target"]
@@ -300,6 +453,8 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     for quality, row in executable["by_quality"].items():
         if row["misses"]:
             lines += ["", f"Misses at {quality}: {', '.join(row['misses'])}"]
+    if "rubric" in report:
+        lines += _rubric_markdown(report)
     return "\n".join(lines) + "\n"
 
 
@@ -361,12 +516,23 @@ def score(
     ]
     for record in well_formed:
         issues.extend(_record_issues(record))
+    verdicts = [
+        v for v in outputs.get("judge_verdicts") or [] if isinstance(v, Mapping)
+    ]
+    if "judge_verdicts" in outputs:
+        issues.extend(
+            _judge_issues(
+                verdicts,
+                {(str(r["request_id"]), str(r["quality"])): r for r in well_formed},
+            )
+        )
     issues.extend(_id_issues(prereg, mode, seen))
     issues.extend(_overlap_issues(prereg, instruments))
     if issues:
         raise Refusal(issues)
 
-    return {
+    n = len(expected_ids(prereg, mode))
+    report: dict[str, Any] = {
         "status": "accepted",
         "mode": mode,
         "tag": TAG,
@@ -375,8 +541,11 @@ def score(
         "fixture_commit": prereg.get("fixture_commit"),
         "n": len(expected_ids(prereg, mode)),
         "qualities": sorted({q for _, q in seen}),
-        "executable": _executable(well_formed, len(expected_ids(prereg, mode))),
+        "executable": _executable(well_formed, n),
     }
+    if "judge_verdicts" in outputs:
+        report["rubric"] = _rubric(well_formed, verdicts, n)
+    return report
 
 
 def _load_json(path: Path) -> Any:
