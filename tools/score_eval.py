@@ -426,6 +426,158 @@ def _rubric_markdown(report: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+# --- the figure allow-list and the delivery companion (#274) -----------------
+#
+# The report publishes exactly the figures ADR-0029 defines, each with its
+# denominator in words. ``FIGURES`` is the allow-list; ``REPORT_META`` is every
+# other top-level key (provenance, no figures). ``enforce_allow_list`` runs on
+# every report, so a figure outside the set cannot be rendered. To add a
+# figure, add it to ``FIGURES`` through ``_figure`` (which refuses any name or
+# denominator the ADR does not define: the rubric pass rate is only ever over
+# executable hits) and put its section in the report.
+
+REPORT_META = (
+    "status",
+    "mode",
+    "tag",
+    "prereg_sha256",
+    "flint_version",
+    "fixture_commit",
+    "n",
+    "qualities",
+)
+_DENOMINATORS = {
+    "executable": "every request",
+    "delivery": "served",
+    "rubric": "executable hits",
+}
+
+
+class Figure:
+    def __init__(self, name: str, title: str, definition: str, denominator: str):
+        check_figure(name, denominator)
+        self.name = name
+        self.title = title
+        self.definition = definition
+        self.denominator = denominator
+
+
+def check_figure(name: str, denominator: str) -> None:
+    """Refuse a figure the ADR does not define, or one over the wrong denominator."""
+    if name not in _DENOMINATORS:
+        raise ValueError(f"figure {name!r} is not in the ADR-0029 allow-list")
+    if _DENOMINATORS[name] not in denominator:
+        raise ValueError(
+            f"figure {name!r} must be over {_DENOMINATORS[name]}, got {denominator!r}"
+        )
+
+
+def _figure(name: str, title: str, definition: str, denominator: str) -> Figure:
+    return Figure(name, title, definition, denominator)
+
+
+FIGURES: dict[str, Figure] = {
+    f.name: f
+    for f in (
+        _figure(
+            "executable",
+            "Executable-output rate",
+            "the share of requests whose output built and drew a non-blank chart",
+            "every request in the set (n is the frozen set size); raises, blank "
+            "canvases and raster/assemble throws are misses",
+        ),
+        _figure(
+            "delivery",
+            "Delivery rate",
+            "the share of served Flint-rail requests that painted with the "
+            "compiled row count equal to the bound row count",
+            "served requests only (a record without an error); the excluded "
+            "count of unserved requests is published beside it",
+        ),
+        _figure(
+            "rubric",
+            "Rubric pass rate",
+            "the share of judged cases where every sent item is pass; "
+            "not_checked on a sent item fails the case",
+            "executable hits only; the excluded count (raises, blanks, throws) "
+            "is published beside it",
+        ),
+    )
+}
+
+
+def enforce_allow_list(report: Mapping[str, Any]) -> None:
+    """Raise unless every top-level key is provenance or an allow-listed figure."""
+    for key in report:
+        if key not in REPORT_META and key not in FIGURES:
+            raise ValueError(f"report key {key!r} is not an allow-listed figure")
+
+
+def _delivery(records: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
+    """Served-only delivery (the Q1 predicate), per quality, excluded count beside.
+
+    Flint rail only: ``painted`` and the row counts are Flint-rail concepts, and
+    the custom rail's verdict is the rasteriser's, so it is not in this figure.
+    """
+    delivered: dict[str, int] = {}
+    served: dict[str, int] = {}
+    excluded: dict[str, list[str]] = {}
+    for record in records:
+        if record.get("rail") != "flint":
+            continue
+        quality = str(record["quality"])
+        delivered.setdefault(quality, 0)
+        served.setdefault(quality, 0)
+        excluded.setdefault(quality, [])
+        if record.get("error"):
+            excluded[quality].append(str(record["request_id"]))
+            continue
+        served[quality] += 1
+        if _is_hit(record):
+            delivered[quality] += 1
+    by_quality = {
+        quality: {
+            "delivered": delivered[quality],
+            "served": served[quality],
+            "rate": delivered[quality] / served[quality] if served[quality] else 0.0,
+            "excluded": len(excluded[quality]),
+            "excluded_ids": sorted(excluded[quality]),
+        }
+        for quality in sorted(delivered)
+    }
+    return {"by_quality": by_quality}
+
+
+def _definitions_markdown() -> list[str]:
+    lines = ["", "## Definitions", ""]
+    for figure in FIGURES.values():
+        lines.append(
+            f"- **{figure.title}**: {figure.definition}. "
+            f"Denominator: {figure.denominator}."
+        )
+    lines.append(
+        "- The two rates stand beside each other and are never multiplied together."
+    )
+    return lines
+
+
+def _delivery_markdown(report: Mapping[str, Any]) -> list[str]:
+    lines = [
+        "",
+        "## Delivery rate",
+        "",
+        "| Quality | Delivered | Served | Rate | Excluded (not served) |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for quality, row in report["delivery"]["by_quality"].items():
+        excluded = ", ".join(row["excluded_ids"]) or "none"
+        lines.append(
+            f"| {quality} | {row['delivered']} | {row['served']} | "
+            f"{row['rate']:.3f} | {row['excluded']} ({excluded}) |"
+        )
+    return lines
+
+
 def render_markdown(report: Mapping[str, Any]) -> str:
     executable = report["executable"]
     target = executable["target"]
@@ -455,6 +607,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             lines += ["", f"Misses at {quality}: {', '.join(row['misses'])}"]
     if "rubric" in report:
         lines += _rubric_markdown(report)
+    lines += _delivery_markdown(report) + _definitions_markdown()
     return "\n".join(lines) + "\n"
 
 
@@ -542,9 +695,11 @@ def score(
         "n": len(expected_ids(prereg, mode)),
         "qualities": sorted({q for _, q in seen}),
         "executable": _executable(well_formed, n),
+        "delivery": _delivery(well_formed),
     }
     if "judge_verdicts" in outputs:
         report["rubric"] = _rubric(well_formed, verdicts, n)
+    enforce_allow_list(report)
     return report
 
 
