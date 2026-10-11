@@ -1,0 +1,1407 @@
+{
+  "requests": [
+    {
+      "id": "c4-01",
+      "instruction": "Which product sells best?",
+      "source": "authored",
+      "source_id": "authored-c4-01-ii",
+      "query_original": "which product sells best",
+      "query_rewritten": "Which product sells best?",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "ranking / top-N",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c4-01.parquet",
+      "dataset_sha256": "25b0dc59222a300fd239d9eba0b96ed61a64ebddfb19b31e7276b534d8979b40",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "product",
+            "y": "total_revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "product"
+            ],
+            "aggregate": [
+              {
+                "name": "total_revenue",
+                "op": "sum",
+                "field": "revenue"
+              }
+            ],
+            "sort": [
+              {
+                "field": "total_revenue",
+                "dir": "desc",
+                "nulls": "last"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-02",
+      "instruction": "How are orders trending?",
+      "source": "authored",
+      "source_id": "authored-c4-02-ii",
+      "query_original": "how are orders trending",
+      "query_rewritten": "How are orders trending?",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c4-02.parquet",
+      "dataset_sha256": "df3baece0eb69b1f42aae53a07b75f6edd2b34c199acdcaae048e736286a9d48",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "month",
+            "y": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "bin": [
+              {
+                "name": "month",
+                "field": "order_date",
+                "unit": "month"
+              }
+            ],
+            "group_by": [
+              "month"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-03",
+      "instruction": "Compare the stores.",
+      "source": "authored",
+      "source_id": "authored-c4-03-ii",
+      "query_original": "compare the stores",
+      "query_rewritten": "Compare the stores.",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c4-03.parquet",
+      "dataset_sha256": "c3d1d4bdbf8892190ea554346c7579c747734bbea3232e411b08cadedff7f0bf",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "store",
+            "y": "total_sales"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "store"
+            ],
+            "aggregate": [
+              {
+                "name": "total_sales",
+                "op": "sum",
+                "field": "sales"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-04",
+      "instruction": "Show the growth.",
+      "source": "authored",
+      "source_id": "authored-c4-04-ii",
+      "query_original": "show the growth",
+      "query_rewritten": "Show the growth.",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c4-04.parquet",
+      "dataset_sha256": "b12da3178658cdcb8bc7ea93198d109f22e9ff8dd30521015496c4e683cbcc99",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "year",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-05",
+      "instruction": "How do the departments compare?",
+      "source": "authored",
+      "source_id": "authored-c4-05-ii",
+      "query_original": "how do the departments compare",
+      "query_rewritten": "How do the departments compare?",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c4-05.parquet",
+      "dataset_sha256": "e790543b7762f9c39377d1c0e6a05eea5f8dce6147dd540a2140eda831c75013",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "department",
+            "y": "actual_spend"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-06",
+      "instruction": "Does price matter?",
+      "source": "authored",
+      "source_id": "authored-c4-06-ii",
+      "query_original": "does price matter",
+      "query_rewritten": "Does price matter?",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "correlation between measures",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c4-06.parquet",
+      "dataset_sha256": "6cc51474794b2fb298b87ad359081ba8f200d49e2bb00d9cfcf4e76bbd656bb0",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Scatter Plot",
+          "encodings": {
+            "x": "price",
+            "y": "units_sold"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-07",
+      "instruction": "How is traffic doing?",
+      "source": "authored",
+      "source_id": "authored-c4-07-ii",
+      "query_original": "how is traffic doing",
+      "query_rewritten": "How is traffic doing?",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "trend over time",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c4-07.parquet",
+      "dataset_sha256": "2bd179c02da6daf7f521237c50430a28a8b9f07cecccdc80870a03ed6544d15c",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "day",
+            "y": "visits_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "day"
+            ],
+            "aggregate": [
+              {
+                "name": "visits_total",
+                "op": "sum",
+                "field": "visits"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-08",
+      "instruction": "Show sales by team.",
+      "source": "authored",
+      "source_id": "authored-c4-08-ii",
+      "query_original": "show sales by team",
+      "query_rewritten": "Show sales by team.",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "comparison across categories",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c4-08.parquet",
+      "dataset_sha256": "6143700b000e8894b6b8254c97ab18da2dd2655d31b861c6f5c156c34be9ecf1",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "team",
+            "y": "sales_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "team"
+            ],
+            "aggregate": [
+              {
+                "name": "sales_total",
+                "op": "sum",
+                "field": "sales"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-09",
+      "instruction": "How has headcount changed?",
+      "source": "authored",
+      "source_id": "authored-c4-09-ii",
+      "query_original": "how has headcount changed",
+      "query_rewritten": "How has headcount changed?",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "trend over time",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-09.parquet",
+      "dataset_sha256": "e9cf71a9709a7b062b51c223b2f48e132f00d75b6e4365ffc7f4cb9f1d7a37cc",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "month",
+            "y": "headcount_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "month"
+            ],
+            "aggregate": [
+              {
+                "name": "headcount_total",
+                "op": "sum",
+                "field": "headcount"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-10",
+      "instruction": "Compare the regions.",
+      "source": "authored",
+      "source_id": "authored-c4-10-ii",
+      "query_original": "compare the regions",
+      "query_rewritten": "Compare the regions.",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-10.parquet",
+      "dataset_sha256": "8aad8a0ae98cdcc5d91fd67af7a4368fdc1df7d2c4ba5d00ee57d9f9a3b94e06",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "region",
+            "y": "revenue_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "region"
+            ],
+            "aggregate": [
+              {
+                "name": "revenue_total",
+                "op": "sum",
+                "field": "revenue"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 2
+    },
+    {
+      "id": "c4-11",
+      "instruction": "How did monthly revenue move, and which product line is the biggest?",
+      "source": "authored",
+      "source_id": "authored-c4-11-iii",
+      "query_original": "how did monthly revenue move and which product line is the biggest",
+      "query_rewritten": "How did monthly revenue move, and which product line is the biggest?",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "iii",
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c4-11.parquet",
+      "dataset_sha256": "672f8af1b121731ec997c2fe375c09d0b60810390ebe52427b1d0c32a4aeb463",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "month",
+            "y": "revenue_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "month"
+            ],
+            "aggregate": [
+              {
+                "name": "revenue_total",
+                "op": "sum",
+                "field": "revenue"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-12",
+      "instruction": "Compare cost across departments, and also tell me which one has the most staff.",
+      "source": "authored",
+      "source_id": "authored-c4-12-iii",
+      "query_original": "compare cost across departments and also tell me who has the most staff",
+      "query_rewritten": "Compare cost across departments, and also tell me which one has the most staff.",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "iii",
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c4-12.parquet",
+      "dataset_sha256": "0c1cb7ddf0ad00c11930b3cd9ff60c06a943a828d03644feaaf332d0b2b74437",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "department",
+            "y": "cost"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-13",
+      "instruction": "What share of tickets does each channel handle, and how long do they take to close?",
+      "source": "authored",
+      "source_id": "authored-c4-13-iii",
+      "query_original": "what share of tickets does each channel handle and how long do they take to close",
+      "query_rewritten": "What share of tickets does each channel handle, and how long do they take to close?",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "iii",
+      "intent": "part-to-whole",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c4-13.parquet",
+      "dataset_sha256": "0dfecefab10d460bb89d47da80cc409fe836abc4753bb0c16d6a5dc45c992347",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "channel",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "channel"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-14",
+      "instruction": "Who are the five biggest customers, and when did each of them last order?",
+      "source": "authored",
+      "source_id": "authored-c4-14-iii",
+      "query_original": "who are the five biggest customers and when did each last order",
+      "query_rewritten": "Who are the five biggest customers, and when did each of them last order?",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "iii",
+      "intent": "ranking / top-N",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-14.parquet",
+      "dataset_sha256": "4c99075e7c1f8820411a37e2075c9d2b8cd19fd6eead0f73c15e1bed0ba941b4",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "customer",
+            "y": "spend_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "customer"
+            ],
+            "aggregate": [
+              {
+                "name": "spend_total",
+                "op": "sum",
+                "field": "amount"
+              }
+            ],
+            "sort": [
+              {
+                "field": "spend_total",
+                "dir": "desc",
+                "nulls": "last"
+              }
+            ],
+            "limit": {
+              "count": 5,
+              "offset": 0
+            }
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-15",
+      "instruction": "Show the share of each category.",
+      "source": "authored",
+      "source_id": "authored-c4-15-iv",
+      "query_original": "show the share of each category",
+      "query_rewritten": "Show the share of each category.",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "iv",
+      "intent": "part-to-whole",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c4-15.parquet",
+      "dataset_sha256": "78a71e36ec127c6ea7dc5185cb79c252400b269afbd167c2a7d6fb5a7a66901f",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "Unnamed: 0",
+            "size": "total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Unnamed: 0"
+            ],
+            "aggregate": [
+              {
+                "name": "total",
+                "op": "sum",
+                "field": "Unnamed: 1"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-16",
+      "instruction": "Compare the amount across stores.",
+      "source": "authored",
+      "source_id": "authored-c4-16-iv",
+      "query_original": "compare the amount across stores",
+      "query_rewritten": "Compare the amount across stores.",
+      "stratum": "common_path",
+      "cell": 4,
+      "cell_family": "iv",
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-16.parquet",
+      "dataset_sha256": "42975a1da691cd0c53eecf2cda9d4518d0c190e1d9f40806a2719b5ef1230333",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "Store #",
+            "y": "amt_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Store #"
+            ],
+            "aggregate": [
+              {
+                "name": "amt_total",
+                "op": "sum",
+                "field": "Amt ($)"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-17",
+      "instruction": "Draw an alluvial diagram of customers moving between plan tiers.",
+      "source": "authored",
+      "source_id": "authored-c4-17-i",
+      "query_original": "draw an alluvial diagram of customers moving between plan tiers",
+      "query_rewritten": "Draw an alluvial diagram of customers moving between plan tiers.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "i",
+      "intent": "flow or transition between states",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c4-17.parquet",
+      "dataset_sha256": "6f87e3d9f419760ef494e1c5a71bddb2df118c3db85d4d77de856a876ca26e71",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Stacked Bar Chart",
+          "encodings": {
+            "x": "from_plan",
+            "y": "customers",
+            "color": "to_plan"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-18",
+      "instruction": "Make a ridgeline plot of daily temperature by month.",
+      "source": "authored",
+      "source_id": "authored-c4-18-i",
+      "query_original": "make a ridgeline plot of daily temperature by month",
+      "query_rewritten": "Make a ridgeline plot of daily temperature by month.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "i",
+      "intent": "distribution of one measure",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-18.parquet",
+      "dataset_sha256": "fd5334932220fef60724ea063295dd6f4fcc7981b697a5e0ae1ea91c39323dd6",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Boxplot",
+          "encodings": {
+            "x": "month",
+            "y": "temp_c"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "bin": [
+              {
+                "name": "month",
+                "field": "obs_date",
+                "unit": "month"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-19",
+      "instruction": "Show a beeswarm of salaries by department.",
+      "source": "authored",
+      "source_id": "authored-c4-19-i",
+      "query_original": "show a beeswarm of salaries by department",
+      "query_rewritten": "Show a beeswarm of salaries by department.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "i",
+      "intent": "distribution of one measure",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c4-19.parquet",
+      "dataset_sha256": "781939b9b7f5c44370cf1cb54d48579da02bc69bba2b75fb67f694421552d9c4",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Strip Plot",
+          "encodings": {
+            "x": "department",
+            "y": "salary"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-20",
+      "instruction": "Give me a circle packing of spend by cost centre.",
+      "source": "authored",
+      "source_id": "authored-c4-20-i",
+      "query_original": "give me a circle packing of spend by cost centre",
+      "query_rewritten": "Give me a circle packing of spend by cost centre.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "i",
+      "intent": "part-to-whole",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-20.parquet",
+      "dataset_sha256": "f25491ea2dd2c89b9b95fdd305709e046c81fe3f979517a1dde40e0c335e76f8",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "cost_centre",
+            "size": "spend_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "cost_centre"
+            ],
+            "aggregate": [
+              {
+                "name": "spend_total",
+                "op": "sum",
+                "field": "spend"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-21",
+      "instruction": "Draw a horizon chart of server load by hour.",
+      "source": "authored",
+      "source_id": "authored-c4-21-i",
+      "query_original": "draw a horizon chart of server load by hour",
+      "query_rewritten": "Draw a horizon chart of server load by hour.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "i",
+      "intent": "trend over time",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c4-21.parquet",
+      "dataset_sha256": "0e424375ddf575aa044bbf5ec6a1892af2e165388ddb8fb658d097a128ab5d81",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Area Chart",
+          "encodings": {
+            "x": "hour",
+            "y": "load_avg"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "hour"
+            ],
+            "aggregate": [
+              {
+                "name": "load_avg",
+                "op": "mean",
+                "field": "load"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-22",
+      "instruction": "Make a pictogram of how people answered.",
+      "source": "authored",
+      "source_id": "authored-c4-22-i",
+      "query_original": "make a pictogram of how people answered",
+      "query_rewritten": "Make a pictogram of how people answered.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "i",
+      "intent": "part-to-whole",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c4-22.parquet",
+      "dataset_sha256": "a3ef3c1955df273d120885434df0f6b130a823ccd3f232d11d66a4d13a176e95",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "answer",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "answer"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-23",
+      "instruction": "Plot a hexbin of height against weight.",
+      "source": "authored",
+      "source_id": "authored-c4-23-i",
+      "query_original": "plot a hexbin of height against weight",
+      "query_rewritten": "Plot a hexbin of height against weight.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "i",
+      "intent": "correlation between measures",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c4-23.parquet",
+      "dataset_sha256": "9300e29881a1998ae69b9ffe58771405a41aa4dc5c971201437acf688cdc44e8",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Scatter Plot",
+          "encodings": {
+            "x": "height_cm",
+            "y": "weight_kg"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-24",
+      "instruction": "Show a radial bar chart of sales by region.",
+      "source": "authored",
+      "source_id": "authored-c4-24-i",
+      "query_original": "show a radial bar chart of sales by region",
+      "query_rewritten": "Show a radial bar chart of sales by region.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "i",
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-24.parquet",
+      "dataset_sha256": "81cae2d5d31a86363e19eec619efc7b5a4e3bcd3089ba0805d4bdab4815bacac",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "region",
+            "y": "sales_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "region"
+            ],
+            "aggregate": [
+              {
+                "name": "sales_total",
+                "op": "sum",
+                "field": "sales"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-25",
+      "instruction": "Give me an overview of the business.",
+      "source": "authored",
+      "source_id": "authored-c4-25-ii",
+      "query_original": "give me an overview of the business",
+      "query_rewritten": "Give me an overview of the business.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "trend over time",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c4-25.parquet",
+      "dataset_sha256": "f6f13bd165b9794bc1a164e809980a08d84053de186d12a8b5a82d6c8fdc4dd2",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "month",
+            "y": "revenue_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "month"
+            ],
+            "aggregate": [
+              {
+                "name": "revenue_total",
+                "op": "sum",
+                "field": "revenue"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 4
+    },
+    {
+      "id": "c4-26",
+      "instruction": "Show me how we're doing.",
+      "source": "authored",
+      "source_id": "authored-c4-26-ii",
+      "query_original": "show me how we're doing",
+      "query_rewritten": "Show me how we're doing.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "ii",
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-26.parquet",
+      "dataset_sha256": "16c7c1ed7aee502fe0f956a3fbb729185c9b2506e0e45359d2ad9c0b510ed7bc",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "team",
+            "y": "revenue_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "team"
+            ],
+            "aggregate": [
+              {
+                "name": "revenue_total",
+                "op": "sum",
+                "field": "revenue"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit",
+      "ambiguity_degree": 5
+    },
+    {
+      "id": "c4-27",
+      "instruction": "Which region earns the most, and has its trend been rising?",
+      "source": "authored",
+      "source_id": "authored-c4-27-iii",
+      "query_original": "which region earns the most and has its trend been rising",
+      "query_rewritten": "Which region earns the most, and has its trend been rising?",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "iii",
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c4-27.parquet",
+      "dataset_sha256": "2914bd3dd16de2bf804a8a52180a1015a0da29f93208afa0df69c0e15fc108a3",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "region",
+            "y": "revenue_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "region"
+            ],
+            "aggregate": [
+              {
+                "name": "revenue_total",
+                "op": "sum",
+                "field": "revenue"
+              }
+            ],
+            "sort": [
+              {
+                "field": "revenue_total",
+                "dir": "desc",
+                "nulls": "last"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-28",
+      "instruction": "How did sales and headcount move over the years, and are they correlated?",
+      "source": "authored",
+      "source_id": "authored-c4-28-iii",
+      "query_original": "how did sales and headcount move over the years and are they correlated",
+      "query_rewritten": "How did sales and headcount move over the years, and are they correlated?",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "iii",
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c4-28.parquet",
+      "dataset_sha256": "5171152df4b46f52395f436168a9ae89947d053a11bd833f35a26a22d238ed1a",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "year",
+            "y": "sales"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-29",
+      "instruction": "What share of orders come from each country, and which country refunds the most?",
+      "source": "authored",
+      "source_id": "authored-c4-29-iii",
+      "query_original": "what share of orders come from each country and which country refunds the most",
+      "query_rewritten": "What share of orders come from each country, and which country refunds the most?",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "iii",
+      "intent": "part-to-whole",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c4-29.parquet",
+      "dataset_sha256": "c89068d6b8a2ec2961886bf4e8e85e6f682fdba4a7e9c0fbeff672691d19d85e",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Pie Chart",
+          "encodings": {
+            "color": "country",
+            "size": "n"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "country"
+            ],
+            "aggregate": [
+              {
+                "name": "n",
+                "op": "count"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-30",
+      "instruction": "Does tenure relate to salary, and how does that differ by gender?",
+      "source": "authored",
+      "source_id": "authored-c4-30-iii",
+      "query_original": "does tenure relate to salary and how does it differ by gender",
+      "query_rewritten": "Does tenure relate to salary, and how does that differ by gender?",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "iii",
+      "intent": "correlation between measures",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-30.parquet",
+      "dataset_sha256": "a4b8afbdaf0387162507f5aa8b4d3b7dff463700fd5986b829c4b9d51fea50e9",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Scatter Plot",
+          "encodings": {
+            "x": "tenure",
+            "y": "salary",
+            "color": "gender"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-31",
+      "instruction": "Plot the figures over time.",
+      "source": "authored",
+      "source_id": "authored-c4-31-iv",
+      "query_original": "plot the figures over time",
+      "query_rewritten": "Plot the figures over time.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "iv",
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c4-31.parquet",
+      "dataset_sha256": "a47f63a5f7c6589a3365b35a8dad6f85fdd4f964ab8fa519d8c1db4a249a54ba",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "Unnamed: 0",
+            "y": "figures_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "Unnamed: 0"
+            ],
+            "aggregate": [
+              {
+                "name": "figures_total",
+                "op": "sum",
+                "field": "Unnamed: 1"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-32",
+      "instruction": "Compare revenue across regions.",
+      "source": "authored",
+      "source_id": "authored-c4-32-iv",
+      "query_original": "compare revenue across regions",
+      "query_rewritten": "Compare revenue across regions.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "iv",
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c4-32.parquet",
+      "dataset_sha256": "d8e19f7ed80a6460fb29f6f83f3e4b1960e686a46fe7e6cfed32d12ed2543284",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "REGION",
+            "y": "rev_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "REGION"
+            ],
+            "aggregate": [
+              {
+                "name": "rev_total",
+                "op": "sum",
+                "field": "Rev ($)"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-33",
+      "instruction": "Rank the entries by the number and show the top five.",
+      "source": "authored",
+      "source_id": "authored-c4-33-iv",
+      "query_original": "rank the entries by the number and show the top five",
+      "query_rewritten": "Rank the entries by the number and show the top five.",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "iv",
+      "intent": "ranking / top-N",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c4-33.parquet",
+      "dataset_sha256": "a5814fedf4df4542be76f309a5e8fa6b05750c0fe27c75f832097f8fd3754d6b",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "col_1",
+            "y": "col_3"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "sort": [
+              {
+                "field": "col_3",
+                "dir": "desc",
+                "nulls": "last"
+              }
+            ],
+            "limit": {
+              "count": 5,
+              "offset": 0
+            }
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    },
+    {
+      "id": "c4-34",
+      "instruction": "How did it change month to month?",
+      "source": "authored",
+      "source_id": "authored-c4-34-iv",
+      "query_original": "how did it change month to month",
+      "query_rewritten": "How did it change month to month?",
+      "stratum": "adversarial",
+      "cell": 4,
+      "cell_family": "iv",
+      "intent": "trend over time",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c4-34.parquet",
+      "dataset_sha256": "14f8e080dd4f6d888df5bf1184108ed6e47be2ec8b20498656ac2f5407432289",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "date",
+            "y": "v_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "group_by": [
+              "date"
+            ],
+            "aggregate": [
+              {
+                "name": "v_total",
+                "op": "sum",
+                "field": "v"
+              }
+            ]
+          }
+        }
+      },
+      "expected_outcome": "hit"
+    }
+  ]
+}
