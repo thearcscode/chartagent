@@ -1107,3 +1107,170 @@ def test_calibration_is_an_allow_listed_figure_over_its_own_sample() -> None:
     tool.check_figure("calibration", "the human-calibration sample")
     with pytest.raises(ValueError, match="calibration sample"):
         tool.check_figure("calibration", "every request")
+
+
+# --- run modes and the publish write (#276) ----------------------------------
+
+
+def _eval_files(repo: Path) -> set[str]:
+    """Every file under eval/ except the freeze itself and the datasets."""
+    root = repo / "eval"
+    return {
+        p.relative_to(repo).as_posix()
+        for p in root.rglob("*")
+        if p.is_file() and p.relative_to(root).parts[0] != "data"
+    } - {"eval/pre-registration.json"}
+
+
+def test_publish_writes_the_latest_table_and_a_dated_snapshot_only(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    proc = freeze.run(_records(_public_ids()), "--date", "2026-10-11", mode="publish")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert _eval_files(tmp_path) == {
+        "eval/report.json",
+        "eval/report.md",
+        "eval/outputs.json",
+        "eval/runs/2026-10-11/report.json",
+        "eval/runs/2026-10-11/report.md",
+        "eval/runs/2026-10-11/outputs.json",
+    }
+    latest = json.loads((tmp_path / "eval/report.json").read_text(encoding="utf-8"))
+    dated = json.loads(
+        (tmp_path / "eval/runs/2026-10-11/report.json").read_text(encoding="utf-8")
+    )
+    assert latest == dated
+    assert latest["mode"] == "publish"
+
+
+def test_publish_refuses_caller_chosen_report_paths(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    proc = freeze.run(
+        _records(_public_ids()), "--json", str(tmp_path / "x.json"), mode="publish"
+    )
+    assert proc.returncode == 2
+    assert not (tmp_path / "x.json").exists()
+    assert _eval_files(tmp_path) == set()
+
+
+def test_a_refused_publish_writes_nothing(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    outputs["records"].pop()
+    assert freeze.run(outputs, mode="publish").returncode == 1
+    assert not (tmp_path / "eval").exists() or _eval_files(tmp_path) == set()
+
+
+def test_publish_requires_all_three_qualities(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    proc = freeze.run(_records(_public_ids(), ("balanced",)), mode="publish")
+    line = _refused(proc, "IDS")
+    assert "fast" in line
+    assert "best" in line
+    assert _eval_files(tmp_path) == set()
+
+
+def test_nightly_writes_none_of_the_committed_files(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    proc = freeze.run(_records(_public_ids()), mode="nightly")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert _eval_files(tmp_path) == set()
+    for committed in (
+        "eval/report.json",
+        "eval/report.md",
+        "eval/outputs.json",
+        "eval/runs/2026-10-11/report.md",
+        "eval/holdout/report.md",
+    ):
+        bad = freeze.run(_records(_public_ids()), "--json", str(tmp_path / committed))
+        assert bad.returncode == 1, committed
+        assert "WRITE" in bad.stdout
+    assert _eval_files(tmp_path) == set()
+
+
+def test_smoke_refuses_committed_paths_too(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    proc = freeze.run(
+        _records(SMOKE, ("balanced",)),
+        "--json",
+        str(tmp_path / "eval/report.json"),
+        mode="smoke",
+    )
+    assert proc.returncode == 1
+    assert "WRITE" in proc.stdout
+
+
+def test_holdout_writes_only_under_the_holdout_report_path(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    proc = freeze.run(_records(HOLDOUT, ("balanced",)), mode="holdout")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    files = _eval_files(tmp_path)
+    assert "eval/holdout/report.md" in files
+    assert all(f.startswith("eval/holdout/") for f in files)
+    bad = freeze.run(
+        _records(HOLDOUT, ("balanced",)),
+        "--md",
+        str(tmp_path / "eval/report.md"),
+        mode="holdout",
+    )
+    assert bad.returncode == 1
+    assert "WRITE" in bad.stdout
+    assert "eval/report.md" not in _eval_files(tmp_path)
+
+
+def test_smoke_has_no_judge_and_no_rubric_number(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(SMOKE, ("balanced",))
+    outputs["judge_verdicts"] = []
+    _refused(freeze.run(outputs, mode="smoke"), "JUDGE")
+    out = tmp_path / "s.json"
+    ok = freeze.run(_records(SMOKE, ("balanced",)), "--json", str(out), mode="smoke")
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    assert "rubric" not in json.loads(out.read_text(encoding="utf-8"))
+
+
+def test_smoke_list_differing_from_the_frozen_thirty_is_refused(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(["e01", "e04", "e09"], ("balanced",))
+    line = _refused(freeze.run(outputs, mode="smoke"), "IDS")
+    assert "missing e08" in line
+    assert "extra e09" in line
+
+
+def test_reference_lines_come_from_the_balanced_run_only(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    out = tmp_path / "r.json"
+    proc = freeze.run(outputs, "--json", str(out))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    report = json.loads(out.read_text(encoding="utf-8"))
+    lines = report["reference_lines"]
+    assert lines["basis"] == "balanced"
+    assert lines["executable"]["target"] == 0.95
+    assert lines["rubric"]["target"] == 0.85
+    for q in ("fast", "best"):
+        assert "interval_spans_target" not in report["executable"]["by_quality"][q]
+        assert "interval_spans_target" not in report["rubric"]["by_quality"][q]
+    assert "interval_spans_target" in report["rubric"]["by_quality"]["balanced"]
+
+
+@pytest.mark.parametrize("mode", ["nightly", "publish"])
+def test_two_create_chart_calls_for_one_case_and_quality_is_refused(
+    tmp_path: Path, mode: str
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e02", "best", create_chart_calls=2)
+    line = _refused(freeze.run(outputs, mode=mode), "CALLS")
+    assert "e02" in line
+    assert "best" in line
+
+
+def test_repeats_are_refused_in_smoke_too(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(SMOKE, ("balanced",))
+    outputs["records"].append(dict(outputs["records"][0]))
+    _refused(freeze.run(outputs, mode="smoke"), "REPEATS")
