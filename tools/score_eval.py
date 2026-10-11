@@ -1208,10 +1208,12 @@ def render_markdown(report: Mapping[str, Any]) -> str:
 # cell-1 raises and the two row-drops are named *as authored*. Nothing in a run
 # or a note lowers 95% or 85%; that is a new ADR.
 #
-# Cost and latency misses (ADR-0028 D9) arrive as the optional run-level list
-# ``outputs["cost_latency_misses"]`` of names such as ``cost_p50`` /
-# ``latency_p50``; it is copied to ``report["cost_latency_misses"]``. The
-# ADR-0028 table slice (#277) can fill it from its own table instead.
+# Cost and latency misses (ADR-0028 D9) are derived from the balanced targets of
+# the cost table (``cost_p50``, ``deterministic_latency_p50``,
+# ``custom_latency_p50``) and merged with the optional caller-supplied list
+# ``outputs["cost_latency_misses"]``; the union is
+# ``report["cost_latency_misses"]``. They never fire the review alone, but when
+# it fires the notes entry must cover them.
 
 NOTES_PATH = "eval/report-notes.md"
 _ENTRY_HEAD = re.compile(r"^\*\*Named review\b[^\n]*", re.MULTILINE | re.IGNORECASE)
@@ -1239,6 +1241,20 @@ def _entries_for(notes: str, day: str) -> list[str]:
     return found
 
 
+def _cost_latency_misses(
+    table: Mapping[str, Any] | None, outputs: Mapping[str, Any]
+) -> list[str]:
+    """Missed ADR-0028 balanced targets (``cost_p50``, ``deterministic_latency_p50``,
+    ...) read off the cost table, merged with any the caller supplied."""
+    names = [str(m) for m in outputs.get("cost_latency_misses") or []]
+    row = ((table or {}).get("by_quality") or {}).get(REFERENCE_QUALITY) or {}
+    for key, target in (row.get("targets") or {}).items():
+        name = re.sub(r"_(?:usd|s)$", "", str(key))
+        if target.get("met") is False and name not in names:
+            names.append(name)
+    return names
+
+
 def _named_review(
     report: Mapping[str, Any], outputs: Mapping[str, Any], mode: str
 ) -> dict[str, Any]:
@@ -1251,7 +1267,7 @@ def _named_review(
         if rub is not None and rub["rate"] < RUBRIC_TARGET:
             misses += ["rubric", *rub["failed"]]
         if misses:
-            misses += [str(m) for m in outputs.get("cost_latency_misses") or []]
+            misses += [str(m) for m in report.get("cost_latency_misses") or []]
     return {"fires": bool(misses), "misses": misses}
 
 
@@ -1475,8 +1491,9 @@ def score(
             labels,
             calibration_quality,
         )
-    if outputs.get("cost_latency_misses"):
-        report["cost_latency_misses"] = [str(m) for m in outputs["cost_latency_misses"]]
+    cost_misses = _cost_latency_misses(report.get("cost_latency"), outputs)
+    if cost_misses:
+        report["cost_latency_misses"] = cost_misses
     report["named_review"] = _named_review(report, outputs, mode)
     review_issues = _review_issues(report["named_review"], notes, day)
     if review_issues:

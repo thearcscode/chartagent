@@ -1763,6 +1763,31 @@ def test_cost_and_latency_misses_must_be_covered_too(tmp_path: Path) -> None:
     assert _latest(tmp_path)["cost_latency_misses"] == ["cost_p50", "latency_p50"]
 
 
+def test_a_missed_cost_target_in_the_table_must_be_covered(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _exec_miss()
+    for case_id in _public_ids():
+        _set_usage(outputs, case_id, "balanced", 5000)  # $0.078 > $0.05
+    _write_notes(tmp_path, _entry())
+    assert "cost_p50" in _refused(_publish(freeze, outputs), "REVIEW")
+    _write_notes(tmp_path, _entry(body="executable: e01. cost_p50."))
+    assert _publish(freeze, outputs).returncode == 0
+    assert _latest(tmp_path)["cost_latency_misses"] == ["cost_p50"]
+
+
+def test_a_cost_miss_from_the_table_alone_does_not_fire_the_review(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    for case_id in _public_ids():
+        _set_usage(outputs, case_id, "balanced", 5000)
+    assert _publish(freeze, outputs).returncode == 0
+    report = _latest(tmp_path)
+    assert report["cost_latency_misses"] == ["cost_p50"]
+    assert report["named_review"]["fires"] is False
+
+
 def test_cost_latency_misses_alone_do_not_fire_the_review(tmp_path: Path) -> None:
     freeze = _make_freeze(tmp_path)
     outputs = _judged()
