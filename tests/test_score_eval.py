@@ -502,3 +502,116 @@ def test_markdown_report_states_the_interval(tmp_path: Path) -> None:
     assert "Executable-output rate" in text
     assert "8/9" in text and "Wilson 95%" in text
     assert "e01" in text
+
+
+# --- cell-1 era reading and the designed-miss budget (#275) -------------------
+
+
+def _report(
+    freeze: Freeze, outputs: dict[str, Any], *args: str
+) -> tuple[dict[str, Any], str]:
+    out = freeze.repo / "r.json"
+    md = freeze.repo / "r.md"
+    proc = freeze.run(outputs, "--json", str(out), "--md", str(md), *args)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    report: dict[str, Any] = json.loads(out.read_text(encoding="utf-8"))
+    return report, md.read_text(encoding="utf-8")
+
+
+def test_shipped_seam_is_detected_and_cell1_is_an_expected_hit(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    report, _ = _report(freeze, _records(_public_ids()))
+    cell1 = report["cell1"]
+    assert cell1["era"] == "shipped"
+    assert cell1["era_source"] == "detected"
+    assert cell1["expected_executable"] is True
+    assert cell1["case_ids"] == ["e04"]
+    assert cell1["by_quality"]["balanced"]["unexpected"] == []
+
+
+def test_shipped_cell1_raise_is_an_unexpected_miss(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e04", "balanced", error="PlanError: raised")
+    report, _ = _report(freeze, outputs)
+    assert report["cell1"]["by_quality"]["balanced"]["unexpected"] == ["e04"]
+    assert report["cell1"]["by_quality"]["fast"]["unexpected"] == []
+
+
+def test_absent_override_reads_cell1_as_expected_misses_without_changing_n(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    raised = _records(_public_ids())
+    for quality in QUALITIES:
+        _with(raised, "e04", quality, error="PlanError: no custom rail")
+    shipped, _ = _report(freeze, raised, "--cell1-era", "shipped")
+    absent, _ = _report(freeze, raised, "--cell1-era", "absent")
+    assert absent["cell1"]["era"] == "absent"
+    assert absent["cell1"]["era_source"] == "override"
+    assert absent["cell1"]["expected_executable"] is False
+    assert absent["cell1"]["by_quality"]["balanced"]["unexpected"] == []
+    assert shipped["cell1"]["by_quality"]["balanced"]["unexpected"] == ["e04"]
+    # Scoring is the same either way: n and the executable counts do not move.
+    assert absent["n"] == shipped["n"] == len(PUBLIC)
+    assert absent["executable"] == shipped["executable"]
+    assert absent["executable"]["by_quality"]["balanced"]["k"] == len(PUBLIC) - 1
+
+
+def test_era_reading_never_edits_the_tag(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    before = freeze.prereg_path.read_bytes()
+    report, _ = _report(freeze, _records(_public_ids()), "--cell1-era", "absent")
+    assert freeze.prereg_path.read_bytes() == before
+    assert report["cell1"]["expected_rail"] == "custom"
+    assert report["prereg_sha256"] == hashlib.sha256(before).hexdigest()
+
+
+def test_appropriateness_for_cell1_stays_on_the_intent_tag(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    for era in ("shipped", "absent"):
+        report, _ = _report(freeze, _records(_public_ids()), "--cell1-era", era)
+        assert report["cell1"]["appropriateness_basis"] == "intent_tag"
+
+
+def test_bad_era_value_is_a_usage_error(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    proc = freeze.run(_records(_public_ids()), "--cell1-era", "sometime")
+    assert proc.returncode == 2
+
+
+def test_budget_states_six_authored_one_discretionary_then_two(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    report, md = _report(freeze, _records(_public_ids()))
+    budget = report["designed_miss_budget"]
+    assert budget["before_seam"] == {
+        "cell1_raises": 4,
+        "row_drops": 2,
+        "authored": 6,
+        "discretionary": 1,
+    }
+    assert budget["after_seam"] == {"row_drops": 2, "authored": 2}
+    assert "six authored misses" in md
+    assert "four cell-1 raises and two row-drops" in md
+    assert "one discretionary" in md
+    assert "two row-drops" in md
+
+
+def test_budget_ceilings_are_computed_from_n(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    report, _ = _report(freeze, _records(_public_ids()))
+    ceilings = report["designed_miss_budget"]["ceilings"]
+    n = len(PUBLIC)
+    assert ceilings["before_seam"]["authored"] == (n - 6) / n
+    assert ceilings["before_seam"]["with_discretionary"] == (n - 7) / n
+    assert ceilings["after_seam"]["authored"] == (n - 2) / n
+    assert report["designed_miss_budget"]["era"] == "shipped"
+
+
+def test_markdown_names_the_era_and_how_to_read_it(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _, shipped = _report(freeze, _records(_public_ids()))
+    _, absent = _report(freeze, _records(_public_ids()), "--cell1-era", "absent")
+    assert "seam shipped" in shipped
+    assert "seam absent" in absent
+    assert "expected miss" in absent
