@@ -21,6 +21,8 @@ Files:
     ``holdout_permutation``, ``smoke_ids``, ``human_calibration_permutation``.
   * outputs.json: ``{"records": [{"request_id", "quality", ...}]}``, one record
     per (case, quality). Harness records only, never PNG bytes.
+  * eval/report-notes.md: a publish run that misses a balanced target needs one
+    dated "Named review" entry in it (format: see the #278 section below).
   * ``--instrument``: another instrument's requests, a JSON list or an object
     with ``requests``; each entry carries ``instruction`` (or
     ``query_rewritten``) and ``dataset_sha256``.
@@ -32,6 +34,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from datetime import date as _date
@@ -467,6 +470,183 @@ def _rubric_markdown(report: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+# --- human calibration of the judge (#279, ADR-0029 Decision 11) -------------
+#
+# One rater labels the first 30 executable hits of the run in the pre-registered
+# ``human_calibration_permutation`` order, with the same rubric and applicability
+# as the judge. Labels arrive as ``outputs["human_labels"]`` in the
+# ``judge_verdicts`` format (without the judge fields). They are published beside
+# the rubric rate and read nowhere else: the rubric, executable and delivery
+# figures are computed without them.
+#
+# Collapse: case-level exact match below CALIBRATION_FLOOR. A case matches only
+# if the rater agrees with the judge on every sent item. 80% means the rater
+# disagrees on more than one case in five: at that point the judge's "pass" on
+# the 85% line is not something a human would reproduce. It is a point estimate
+# on purpose, like the Decision 12 lines; a sample of 30 from one rater cannot
+# carry a tighter rule, and a collapse only triggers a dated note, never a
+# change to any rate.
+
+CALIBRATION_SAMPLE = 30
+CALIBRATION_FLOOR = 0.80
+CALIBRATION_QUALITY = "balanced"
+
+
+def calibration_sample(permutation: Iterable[str], hits: Iterable[str]) -> list[str]:
+    """First ``CALIBRATION_SAMPLE`` executable hits, in permutation order."""
+    hit_set = set(hits)
+    return [c for c in permutation if c in hit_set][:CALIBRATION_SAMPLE]
+
+
+def _calibration_quality(records: Iterable[Mapping[str, Any]]) -> str:
+    qualities = sorted({str(r["quality"]) for r in records})
+    return CALIBRATION_QUALITY if CALIBRATION_QUALITY in qualities else qualities[0]
+
+
+def _calibration_issues(
+    labels: list[Mapping[str, Any]],
+    sample: list[str],
+    quality: str,
+    judged: set[str],
+) -> list[str]:
+    issues: list[str] = []
+    labelled = [str(x.get("request_id")) for x in labels]
+    for case_id in sorted(set(labelled) - set(sample)):
+        issues.append(
+            _issue(
+                "CALIBRATION",
+                f"{case_id}: human label outside the calibration sample "
+                f"(first {CALIBRATION_SAMPLE} executable hits at {quality})",
+            )
+        )
+    for case_id in sample:
+        if labelled.count(case_id) > 1:
+            issues.append(_issue("CALIBRATION", f"{case_id}: more than one label"))
+        if case_id not in labelled:
+            issues.append(
+                _issue("CALIBRATION", f"{case_id}: sampled case has no human label")
+            )
+        if case_id not in judged:
+            issues.append(
+                _issue("CALIBRATION", f"{case_id}: sampled case has no judge verdict")
+            )
+    return issues
+
+
+def _calibration(
+    permutation: list[str],
+    records: list[Mapping[str, Any]],
+    verdicts: list[Mapping[str, Any]],
+    labels: list[Mapping[str, Any]],
+    quality: str,
+) -> dict[str, Any]:
+    hits = [
+        str(r["request_id"]) for r in records if r["quality"] == quality and _is_hit(r)
+    ]
+    sample = calibration_sample(permutation, hits)
+    judge = {str(v["request_id"]): v for v in verdicts if v["quality"] == quality}
+    human = {str(x["request_id"]): x for x in labels}
+    cases: list[dict[str, Any]] = []
+    by_item: dict[str, dict[str, int]] = {}
+    for case_id in sample:
+        given = judge[case_id].get("verdicts") or {}
+        said = human[case_id].get("verdicts") or {}
+        differing: list[str] = []
+        for item in _sent_items(judge[case_id]):
+            row = by_item.setdefault(item, {"agree": 0, "n": 0})
+            row["n"] += 1
+            if given.get(item, "not_checked") == said.get(item, "not_checked"):
+                row["agree"] += 1
+            else:
+                differing.append(item)
+        cases.append(
+            {"request_id": case_id, "match": not differing, "disagreements": differing}
+        )
+    k = sum(1 for c in cases if c["match"])
+    n = len(cases)
+    rate = k / n if n else 0.0
+    return {
+        "quality": quality,
+        "sample": sample,
+        "exact_match": {"k": k, "n": n, "rate": rate},
+        "disagreement_count": n - k,
+        "by_item": dict(sorted(by_item.items())),
+        "cases": cases,
+        "floor": CALIBRATION_FLOOR,
+        "collapsed": n > 0 and rate < CALIBRATION_FLOOR,
+    }
+
+
+def _calibration_markdown(report: Mapping[str, Any]) -> list[str]:
+    c = report["calibration"]
+    m = c["exact_match"]
+    word = "disagreement" if c["disagreement_count"] == 1 else "disagreements"
+    lines = [
+        "",
+        "## Human calibration",
+        "",
+        f"One rater, {m['n']} executable hits at {c['quality']} in the "
+        "pre-registered permutation order. It never changes the rubric pass "
+        "rate or the 85% line.",
+        "",
+        f"Exact match against the judge: {m['k']}/{m['n']} ({m['rate']:.3f}); "
+        f"{c['disagreement_count']} {word}.",
+        "",
+        "| Item | Agree | Cases |",
+        "| --- | --- | --- |",
+    ]
+    for item, row in c["by_item"].items():
+        lines.append(f"| {item} | {row['agree']} | {row['n']} |")
+    for case in c["cases"]:
+        if not case["match"]:
+            on = ", ".join(case["disagreements"])
+            lines += ["", f"Disagrees: {case['request_id']} on {on}"]
+    if c["collapsed"]:
+        lines += [
+            "",
+            f"Collapse: exact match is below {c['floor']:.0%}; see the dated "
+            "calibration note in the report notes.",
+        ]
+    return lines
+
+
+def calibration_collapse_note(report: Mapping[str, Any], *, date: str) -> str | None:
+    """The dated Decision 11 note, or ``None`` when there is no collapse.
+
+    Distinct from the Decision 12 named review: a different heading, and it says
+    that no rate was rewritten.
+    """
+    c = report.get("calibration")
+    if not c or not c["collapsed"]:
+        return None
+    m = c["exact_match"]
+    worst = ", ".join(
+        f"{case['request_id']} ({', '.join(case['disagreements'])})"
+        for case in c["cases"]
+        if not case["match"]
+    )
+    return (
+        f"## Calibration collapse (ADR-0029 Decision 11) - {date}\n\n"
+        f"Human exact match against the judge is {m['k']}/{m['n']} "
+        f"({m['rate']:.1%}) at {c['quality']}, below the {c['floor']:.0%} floor.\n\n"
+        f"Disagreements: {worst}.\n\n"
+        "The 85% rubric line and the rubric pass rate are not rewritten from "
+        "human labels. This is not a target-miss note (Decision 12); it records "
+        "that the judge should not be trusted until it is re-examined.\n"
+    )
+
+
+def append_calibration_note(notes: Path, note: str) -> bool:
+    """Append ``note`` once; a heading already present is not repeated."""
+    heading = note.splitlines()[0]
+    existing = notes.read_text(encoding="utf-8") if notes.is_file() else ""
+    if heading in existing.splitlines():
+        return False
+    prefix = f"{existing.rstrip()}\n\n" if existing else ""
+    notes.write_text(prefix + note, encoding="utf-8")
+    return True
+
+
 # --- the figure allow-list and the delivery companion (#274) -----------------
 #
 # The report publishes exactly the figures ADR-0029 defines, each with its
@@ -489,8 +669,11 @@ REPORT_META = (
     "cell1",
     "designed_miss_budget",
     "reference_lines",
+    "named_review",
+    "cost_latency_misses",
 )
 _DENOMINATORS = {
+    "calibration": "calibration sample",
     "executable": "every request",
     "delivery": "served",
     "rubric": "executable hits",
@@ -547,6 +730,15 @@ FIGURES: dict[str, Figure] = {
             "10 s and 60 s figures are working targets, not gates",
             "returned results only (raises are counted beside the sample, by "
             "class); latency is split by the rail of the returned artifact",
+        ),
+        _figure(
+            "calibration",
+            "Human calibration",
+            "per-item exact match of one human rater against the judge, and "
+            "the count of cases where they differ",
+            "the human-calibration sample: the first 30 executable hits of the "
+            "run in the pre-registered permutation order (all if fewer); it "
+            "never changes the rubric pass rate",
         ),
         _figure(
             "rubric",
@@ -985,12 +1177,147 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             lines += ["", f"Misses at {quality}: {', '.join(row['misses'])}"]
     if "rubric" in report:
         lines += _rubric_markdown(report)
+    if "calibration" in report:
+        lines += _calibration_markdown(report)
     lines += _render_cell1(report)
+    lines += _render_review(report)
     lines += _delivery_markdown(report)
     if "cost_latency" in report:
         lines += _cost_markdown(report)
     lines += _definitions_markdown()
     return "\n".join(lines) + "\n"
+
+
+# --- the named review on a missed target (#278) -------------------------------
+#
+# ADR-0029 Decision 12. Fires only on a ``publish`` run (the full set, every
+# quality) whose ``balanced`` executable point estimate is under 95% or whose
+# rubric point estimate is under 85%. A Wilson interval spanning the target is
+# not a trip; fast, best, p95, smoke, nightly and hold-out never fire it.
+#
+# The gate does not fail the run for the miss. It blocks the publish write
+# until ``eval/report-notes.md`` holds exactly one entry for the run's date:
+#
+#     **Named review (ADR-0029 Decision 12) — YYYY-MM-DD.**
+#     <free text>
+#
+# An entry runs from its heading line to the next line that starts with ``**``.
+# It must contain every missed case id (balanced executable misses, balanced
+# rubric failures), the word of each target missed (``executable``, ``rubric``),
+# every cost/latency miss name (see below), and must say that the pre-seam
+# cell-1 raises and the two row-drops are named *as authored*. Nothing in a run
+# or a note lowers 95% or 85%; that is a new ADR.
+#
+# Cost and latency misses (ADR-0028 D9) arrive as the optional run-level list
+# ``outputs["cost_latency_misses"]`` of names such as ``cost_p50`` /
+# ``latency_p50``; it is copied to ``report["cost_latency_misses"]``. The
+# ADR-0028 table slice (#277) can fill it from its own table instead.
+
+NOTES_PATH = "eval/report-notes.md"
+_ENTRY_HEAD = re.compile(r"^\*\*Named review\b[^\n]*", re.MULTILINE | re.IGNORECASE)
+_LOWERING = re.compile(
+    r"\b(?:lower\w*|relax\w*|reduc\w*|soften\w*)\b[^.\n]{0,60}"
+    r"(?:\btargets?\b|\b95\s*%|\b85\s*%)",
+    re.IGNORECASE,
+)
+_TARGET_KEYS = ("executable_target", "rubric_target", "target", "targets")
+
+
+def _entries_for(notes: str, day: str) -> list[str]:
+    """Named-review entries dated ``day``: heading line through the next ``**``."""
+    lines = notes.splitlines()
+    found: list[str] = []
+    for i, line in enumerate(lines):
+        if not _ENTRY_HEAD.match(line) or day not in line:
+            continue
+        body = [line]
+        for follow in lines[i + 1 :]:
+            if follow.startswith("**"):
+                break
+            body.append(follow)
+        found.append("\n".join(body))
+    return found
+
+
+def _named_review(
+    report: Mapping[str, Any], outputs: Mapping[str, Any], mode: str
+) -> dict[str, Any]:
+    misses: list[str] = []
+    if mode == "publish":
+        ex = report["executable"]["by_quality"].get(REFERENCE_QUALITY)
+        if ex is not None and ex["rate"] < EXECUTABLE_TARGET:
+            misses += ["executable", *ex["misses"]]
+        rub = (report.get("rubric") or {}).get("by_quality", {}).get(REFERENCE_QUALITY)
+        if rub is not None and rub["rate"] < RUBRIC_TARGET:
+            misses += ["rubric", *rub["failed"]]
+        if misses:
+            misses += [str(m) for m in outputs.get("cost_latency_misses") or []]
+    return {"fires": bool(misses), "misses": misses}
+
+
+def _review_issues(review: Mapping[str, Any], notes: str | None, day: str) -> list[str]:
+    if not review["fires"]:
+        return []
+    where = f"{NOTES_PATH} needs one entry dated {day}"
+    entries = _entries_for(notes or "", day)
+    if not entries:
+        return [
+            _issue(
+                "REVIEW",
+                f"named review fires (a balanced target is missed): {where} "
+                f"covering {', '.join(review['misses'])}",
+            )
+        ]
+    if len(entries) > 1:
+        return [_issue("REVIEW", f"{NOTES_PATH} has {len(entries)} entries dated {day}; one entry per run")]
+    entry = entries[0]
+    issues: list[str] = []
+    if _LOWERING.search(entry):
+        issues.append(
+            _issue(
+                "TARGET",
+                f"{NOTES_PATH} entry {day} lowers 95% or 85%; that needs a new ADR",
+            )
+        )
+    uncovered = [
+        m
+        for m in review["misses"]
+        if not re.search(rf"(?<![\w-]){re.escape(m)}(?![\w-])", entry)
+    ]
+    if uncovered:
+        issues.append(
+            _issue(
+                "REVIEW",
+                f"{NOTES_PATH} entry {day} does not cover: {', '.join(uncovered)}",
+            )
+        )
+    low = entry.lower()
+    if not (
+        "cell-1" in low and "row-drop" in low and "as authored" in low
+    ):
+        issues.append(
+            _issue(
+                "REVIEW",
+                f"{NOTES_PATH} entry {day} must name the pre-seam cell-1 raises "
+                "and the two row-drops as authored, not as a new lever",
+            )
+        )
+    return issues
+
+
+def _render_review(report: Mapping[str, Any]) -> list[str]:
+    review = report["named_review"]
+    if not review["fires"]:
+        return []
+    return [
+        "",
+        "## Named review (ADR-0029 Decision 12)",
+        "",
+        f"A balanced target was missed. {NOTES_PATH} holds the dated entry "
+        f"covering: {', '.join(review['misses'])}. The pre-seam cell-1 raises "
+        "and the two row-drops are named there as authored, not as a new "
+        "lever. Neither 95% nor 85% is lowered by a run or a note.",
+    ]
 
 
 def score(
@@ -1003,6 +1330,8 @@ def score(
     dataset_sha256: Mapping[str, str | None],
     instruments: Mapping[str, Iterable[tuple[str, str]]],
     cell1_era: str = "auto",
+    notes: str | None = None,
+    day: str = "",
 ) -> dict[str, Any]:
     """Accept the run and return its report, or raise ``Refusal``."""
     issues: list[str] = []
@@ -1071,8 +1400,45 @@ def score(
     costing = _costing_required(mode, outputs)
     if costing:
         issues.extend(_cost_issues(outputs, well_formed))
+    labels = [x for x in outputs.get("human_labels") or [] if isinstance(x, Mapping)]
+    calibration_quality = ""
+    if "human_labels" in outputs:
+        if "judge_verdicts" not in outputs or not well_formed:
+            issues.append(
+                _issue("CALIBRATION", "human labels need the judge's verdicts")
+            )
+        else:
+            calibration_quality = _calibration_quality(well_formed)
+            hits = [
+                str(r["request_id"])
+                for r in well_formed
+                if r["quality"] == calibration_quality and _is_hit(r)
+            ]
+            issues.extend(
+                _calibration_issues(
+                    labels,
+                    calibration_sample(
+                        prereg.get("human_calibration_permutation") or [], hits
+                    ),
+                    calibration_quality,
+                    {
+                        str(v["request_id"])
+                        for v in verdicts
+                        if v.get("quality") == calibration_quality
+                    },
+                )
+            )
     issues.extend(_id_issues(prereg, mode, seen))
     issues.extend(_overlap_issues(prereg, instruments))
+    for key in _TARGET_KEYS:
+        if key in outputs:
+            issues.append(
+                _issue(
+                    "TARGET",
+                    f"outputs carry {key!r}: 95% and 85% are fixed; "
+                    "lowering them needs a new ADR",
+                )
+            )
     if issues:
         raise Refusal(issues)
 
@@ -1101,6 +1467,20 @@ def score(
         report["cost_latency"] = _cost_latency(well_formed, outputs["list_prices"])
     if "judge_verdicts" in outputs:
         report["rubric"] = _rubric(well_formed, verdicts, n)
+    if calibration_quality:
+        report["calibration"] = _calibration(
+            list(prereg.get("human_calibration_permutation") or []),
+            well_formed,
+            verdicts,
+            labels,
+            calibration_quality,
+        )
+    if outputs.get("cost_latency_misses"):
+        report["cost_latency_misses"] = [str(m) for m in outputs["cost_latency_misses"]]
+    report["named_review"] = _named_review(report, outputs, mode)
+    review_issues = _review_issues(report["named_review"], notes, day)
+    if review_issues:
+        raise Refusal(review_issues)
     enforce_allow_list(report)
     return report
 
@@ -1181,6 +1561,11 @@ def _write_publish(
         _write(base / "outputs.json", outputs_text)
 
 
+def _read_notes(repo: Path) -> str | None:
+    path = repo / NOTES_PATH
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
 def _fail(issues: list[str]) -> int:
     for line in issues:
         print(line)
@@ -1207,6 +1592,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--cell1-era", dest="cell1_era", choices=ERAS, default="auto")
     parser.add_argument("--date", default=None)
     parser.add_argument("--instrument", action="append", default=[])
+    parser.add_argument("--notes", default=None)
     try:
         ns = parser.parse_args(args)
     except SystemExit as exc:
@@ -1256,6 +1642,8 @@ def main(argv: list[str] | None = None) -> int:
             dataset_sha256=_dataset_digests(repo, prereg),
             instruments=instruments,
             cell1_era=ns.cell1_era,
+            notes=_read_notes(repo),
+            day=day,
         )
     except Refusal as refusal:
         return _fail(refusal.issues)
@@ -1271,6 +1659,9 @@ def main(argv: list[str] | None = None) -> int:
             _write(Path(json_path), json.dumps(report, indent=2) + "\n")
         if md_path:
             _write(Path(md_path), render_markdown(report))
+    note = calibration_collapse_note(report, date=day)
+    if note is not None and ns.notes:
+        append_calibration_note(Path(ns.notes), note)
     print(f"OK: {ns.mode} run accepted ({report['n']} cases).")
     return 0
 

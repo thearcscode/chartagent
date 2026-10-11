@@ -846,7 +846,13 @@ def test_no_figure_outside_the_allow_list_in_any_output_form(
         "delivery",
         "cost_latency",
     }
-    assert set(tool.FIGURES) == {"executable", "delivery", "rubric", "cost_latency"}
+    assert set(tool.FIGURES) == {
+        "executable",
+        "delivery",
+        "rubric",
+        "calibration",
+        "cost_latency",
+    }
     for text in forms:
         lowered = text.lower()
         for banned in ("end-to-end", "combined", "overall"):
@@ -985,6 +991,167 @@ def test_markdown_names_the_era_and_how_to_read_it(tmp_path: Path) -> None:
     assert "seam shipped" in shipped
     assert "seam absent" in absent
     assert "expected miss" in absent
+
+
+# --- human calibration of the judge (#279) ------------------------------------
+
+
+def _labelled(*, disagree: dict[str, str] | None = None) -> dict[str, Any]:
+    """A judged balanced run plus one human label per executable hit.
+
+    ``disagree`` maps a case id to the item the rater marks ``fail`` where the
+    judge said ``pass``.
+    """
+    outputs = _judged()
+    labels = []
+    for case_id in _public_ids():
+        verdict = copy.deepcopy(_verdict_of(outputs, case_id, "balanced"))
+        for key in ("judge_model", "critic_model", "png_sha256", "provenance"):
+            verdict.pop(key)
+        if disagree and case_id in disagree:
+            verdict["verdicts"][disagree[case_id]] = "fail"
+        labels.append(verdict)
+    outputs["human_labels"] = labels
+    return outputs
+
+
+def _calibration(freeze: Freeze, outputs: dict[str, Any]) -> dict[str, Any]:
+    section: dict[str, Any] = _report(freeze, outputs)["calibration"]
+    return section
+
+
+def test_sample_is_first_thirty_hits_in_permutation_order() -> None:
+    tool = _tool()
+    permutation = [f"c{i:02d}" for i in range(40)]
+    hits = {f"c{i:02d}" for i in range(40) if i % 4 != 1}
+    sample = tool.calibration_sample(permutation, hits)
+    assert len(sample) == 30
+    assert sample == [c for c in permutation if c in hits][:30]
+    assert tool.calibration_sample(permutation, {"c07", "c03"}) == ["c03", "c07"]
+
+
+def test_sample_skips_misses_and_follows_the_permutation(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _labelled()
+    _with(outputs, "e02", "balanced", painted="fail")
+    _drop_verdicts(outputs, "balanced", "e02")
+    outputs["human_labels"] = [
+        label for label in outputs["human_labels"] if label["request_id"] != "e02"
+    ]
+    section = _calibration(freeze, outputs)
+    assert section["quality"] == "balanced"
+    assert section["sample"] == [i for i in _public_ids() if i != "e02"]
+    assert section["exact_match"]["n"] == 8
+
+
+def test_agreement_is_per_item_exact_match_with_a_disagreement_count(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    section = _calibration(
+        freeze,
+        _labelled(disagree={"e01": "label_overlap", "e04": "legend_presence"}),
+    )
+    assert section["exact_match"] == {"k": 7, "n": 9, "rate": 7 / 9}
+    assert section["disagreement_count"] == 2
+    by_id = {row["request_id"]: row for row in section["cases"]}
+    assert by_id["e01"]["match"] is False
+    assert by_id["e01"]["disagreements"] == ["label_overlap"]
+    assert by_id["e02"]["match"] is True
+    assert section["by_item"]["label_overlap"] == {"agree": 8, "n": 9}
+    assert section["by_item"]["legend_presence"] == {"agree": 2, "n": 3}
+
+
+def test_labels_never_move_the_rubric_or_executable_figures(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    plain = _report(freeze, _judged())
+    labelled = _report(freeze, _labelled(disagree={"e01": "label_overlap"}))
+    assert labelled["rubric"] == plain["rubric"]
+    assert labelled["executable"] == plain["executable"]
+    assert labelled["delivery"] == plain["delivery"]
+    assert "calibration" not in plain
+
+
+def test_a_label_outside_the_sample_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _labelled()
+    _with(outputs, "e02", "balanced", painted="fail")
+    _drop_verdicts(outputs, "balanced", "e02")
+    line = _refused(freeze.run(outputs), "CALIBRATION")
+    assert "e02" in line
+
+
+def test_a_missing_label_in_the_sample_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _labelled()
+    outputs["human_labels"] = outputs["human_labels"][:-1]
+    line = _refused(freeze.run(outputs), "CALIBRATION")
+    assert "e09" in line
+
+
+def test_labels_without_judge_verdicts_are_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _labelled()
+    del outputs["judge_verdicts"]
+    _refused(freeze.run(outputs), "CALIBRATION")
+
+
+def test_collapse_threshold_is_below_eighty_percent_exact_match(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    one = {"e01": "label_overlap"}
+    two = {**one, "e02": "label_overlap"}
+    three = {**two, "e03": "label_overlap"}
+    assert _calibration(freeze, _labelled(disagree=one))["collapsed"] is False
+    assert _calibration(freeze, _labelled(disagree=two))["collapsed"] is True  # 7/9
+    assert _calibration(freeze, _labelled(disagree=three))["collapsed"] is True
+
+
+def test_collapse_appends_a_dated_note_distinct_from_the_named_review(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    notes = tmp_path / "report-notes.md"
+    notes.write_text("# Notes\n\n## Named review (Decision 12) - 2026-01-01\n")
+    three = {i: "label_overlap" for i in ("e01", "e02", "e03")}
+    args = ("--notes", str(notes), "--date", "2026-10-11")
+    proc = freeze.run(_labelled(disagree=three), *args)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = notes.read_text(encoding="utf-8")
+    assert "## Calibration collapse (ADR-0029 Decision 11) - 2026-10-11" in text
+    assert "6/9" in text and "85%" in text and "not rewritten" in text
+    assert text.startswith("# Notes\n\n## Named review (Decision 12) - 2026-01-01\n")
+    # scoring the same run again on the same day does not duplicate the entry
+    freeze.run(_labelled(disagree=three), *args)
+    assert notes.read_text(encoding="utf-8").count("Calibration collapse") == 1
+
+
+def test_no_collapse_writes_no_note(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    notes = tmp_path / "report-notes.md"
+    proc = freeze.run(_labelled(), "--notes", str(notes), "--date", "2026-10-11")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert not notes.exists()
+
+
+def test_markdown_publishes_the_calibration_beside_the_rubric(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    md = tmp_path / "r.md"
+    proc = freeze.run(_labelled(disagree={"e01": "label_overlap"}), "--md", str(md))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = md.read_text(encoding="utf-8")
+    assert "## Human calibration" in text
+    assert "8/9" in text and "1 disagreement" in text
+    assert "never changes the rubric pass rate" in text
+
+
+def test_calibration_is_an_allow_listed_figure_over_its_own_sample() -> None:
+    tool = _tool()
+    assert "calibration" in tool.FIGURES
+    tool.check_figure("calibration", "the human-calibration sample")
+    with pytest.raises(ValueError, match="calibration sample"):
+        tool.check_figure("calibration", "every request")
 
 
 # --- run modes and the publish write (#276) ----------------------------------
@@ -1431,3 +1598,195 @@ def test_markdown_prints_the_sample_the_raise_counts_and_the_percentiles(
     assert "PlannerFailureError 1" in text
     assert "p50" in text and "p95" in text
     assert "2026-09-20" in text
+
+
+# --- the named-review requirement on a missed target (#278) -------------------
+
+_NOTES = "eval/report-notes.md"
+_AUTHORED = (
+    "Pre-seam cell-1 raises and the two row-drops are named as authored, "
+    "not as a new lever."
+)
+
+
+def _entry(
+    day: str = "2026-10-11", body: str = "executable: e01.", authored: str = _AUTHORED
+) -> str:
+    return f"**Named review (ADR-0029 Decision 12) — {day}.**\n{body} {authored}\n"
+
+
+def _write_notes(repo: Path, text: str) -> None:
+    path = repo / _NOTES
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _published(repo: Path) -> set[str]:
+    return {p for p in _eval_files(repo) if p != _NOTES}
+
+
+def _exec_miss() -> dict[str, Any]:
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", painted="fail")
+    return outputs
+
+
+def _publish(
+    freeze: Freeze, outputs: dict[str, Any]
+) -> subprocess.CompletedProcess[str]:
+    return freeze.run(outputs, "--date", "2026-10-11", mode="publish")
+
+
+def _latest(repo: Path) -> dict[str, Any]:
+    report: dict[str, Any] = json.loads(
+        (repo / "eval/report.json").read_text(encoding="utf-8")
+    )
+    return report
+
+
+def test_a_missed_executable_target_blocks_the_publish_write(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    proc = _publish(freeze, _exec_miss())
+    line = _refused(proc, "REVIEW")
+    assert "2026-10-11" in line
+    assert "e01" in line
+    assert _published(tmp_path) == set()
+
+
+def test_a_dated_entry_covering_the_miss_lets_the_publish_write_through(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry())
+    proc = _publish(freeze, _exec_miss())
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    report = _latest(tmp_path)
+    assert report["named_review"]["fires"] is True
+    assert report["named_review"]["misses"] == ["executable", "e01"]
+
+
+def test_the_entry_must_carry_the_run_date(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry(day="2026-10-10"))
+    assert _refused(_publish(freeze, _exec_miss()), "REVIEW")
+    assert _published(tmp_path) == set()
+
+
+def test_the_entry_must_cover_every_missed_case(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _exec_miss()
+    _with(outputs, "e02", "balanced", painted="fail")
+    _write_notes(tmp_path, _entry())
+    line = _refused(_publish(freeze, outputs), "REVIEW")
+    assert "e02" in line and "e01" not in line
+    assert _published(tmp_path) == set()
+
+
+def test_a_longer_token_does_not_cover_a_case_id(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry(body="executable: e011."))
+    assert "e01" in _refused(_publish(freeze, _exec_miss()), "REVIEW")
+
+
+def test_two_entries_for_one_run_are_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry() + "\n" + _entry())
+    assert "one entry" in _refused(_publish(freeze, _exec_miss()), "REVIEW")
+
+
+def test_an_entry_for_another_run_does_not_hide_this_ones(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry() + "\n" + _entry("2026-11-01", body="rubric: e03."))
+    assert _publish(freeze, _exec_miss()).returncode == 0
+
+
+def test_the_entry_names_cell1_and_row_drops_as_authored(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    for authored in (
+        "No levers pulled.",
+        "Cell-1 raises are as authored.",
+        "Row-drops are as authored.",
+    ):
+        _write_notes(tmp_path, _entry(authored=authored))
+        line = _refused(_publish(freeze, _exec_miss()), "REVIEW")
+        assert "as authored" in line
+    assert _published(tmp_path) == set()
+
+
+def test_a_missed_rubric_target_fires_it_and_needs_its_failed_cases(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    for case in ("e03", "e05"):
+        _verdict_of(outputs, case, "balanced")["verdicts"]["label_overlap"] = "fail"
+    assert "e03" in _refused(_publish(freeze, outputs), "REVIEW")
+    _write_notes(tmp_path, _entry(body="rubric: e03, e05."))
+    assert _publish(freeze, outputs).returncode == 0
+
+
+def test_a_target_met_needs_no_entry_and_does_not_fire(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    assert _publish(freeze, _judged()).returncode == 0
+    assert _latest(tmp_path)["named_review"] == {"fires": False, "misses": []}
+
+
+def test_other_qualities_missing_never_fire_it(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    for quality in ("fast", "best"):
+        _with(outputs, "e01", quality, painted="fail")
+        _with(outputs, "e02", quality, error="boom")
+    assert _publish(freeze, outputs).returncode == 0
+
+
+@pytest.mark.parametrize("mode", ["nightly", "smoke", "holdout"])
+def test_smoke_nightly_and_holdout_never_fire_it(tmp_path: Path, mode: str) -> None:
+    freeze = _make_freeze(tmp_path)
+    ids = {"smoke": SMOKE, "holdout": HOLDOUT}.get(mode, _public_ids())
+    qualities = ("balanced",) if mode == "smoke" else QUALITIES
+    outputs = _records(ids, qualities)
+    _with(outputs, ids[0], "balanced", painted="fail", error="boom")
+    proc = freeze.run(outputs, mode=mode)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_cost_and_latency_misses_must_be_covered_too(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _exec_miss()
+    outputs["cost_latency_misses"] = ["cost_p50", "latency_p50"]
+    _write_notes(tmp_path, _entry())
+    line = _refused(_publish(freeze, outputs), "REVIEW")
+    assert "cost_p50" in line and "latency_p50" in line
+    _write_notes(tmp_path, _entry(body="executable: e01. cost_p50, latency_p50."))
+    assert _publish(freeze, outputs).returncode == 0
+    assert _latest(tmp_path)["cost_latency_misses"] == ["cost_p50", "latency_p50"]
+
+
+def test_cost_latency_misses_alone_do_not_fire_the_review(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    outputs["cost_latency_misses"] = ["cost_p50"]
+    assert _publish(freeze, outputs).returncode == 0
+
+
+def test_a_note_cannot_lower_either_target(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry(body="executable: e01. We lower the target to 90%."))
+    assert "new ADR" in _refused(_publish(freeze, _exec_miss()), "TARGET")
+    assert _published(tmp_path) == set()
+
+
+def test_a_run_cannot_carry_its_own_targets(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    outputs["executable_target"] = 0.90
+    assert "new ADR" in _refused(_publish(freeze, outputs), "TARGET")
+
+
+def test_the_markdown_states_the_review_and_what_it_covers(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry())
+    assert _publish(freeze, _exec_miss()).returncode == 0
+    text = (tmp_path / "eval/report.md").read_text(encoding="utf-8")
+    assert "Named review" in text and "eval/report-notes.md" in text
