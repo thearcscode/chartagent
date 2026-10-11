@@ -1113,3 +1113,195 @@ def test_repeats_are_refused_in_smoke_too(tmp_path: Path) -> None:
     outputs = _records(SMOKE, ("balanced",))
     outputs["records"].append(dict(outputs["records"][0]))
     _refused(freeze.run(outputs, mode="smoke"), "REPEATS")
+
+
+# --- the named-review requirement on a missed target (#278) -------------------
+
+_NOTES = "eval/report-notes.md"
+_AUTHORED = (
+    "Pre-seam cell-1 raises and the two row-drops are named as authored, "
+    "not as a new lever."
+)
+
+
+def _entry(
+    day: str = "2026-10-11", body: str = "executable: e01.", authored: str = _AUTHORED
+) -> str:
+    return f"**Named review (ADR-0029 Decision 12) — {day}.**\n{body} {authored}\n"
+
+
+def _write_notes(repo: Path, text: str) -> None:
+    path = repo / _NOTES
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _published(repo: Path) -> set[str]:
+    return {p for p in _eval_files(repo) if p != _NOTES}
+
+
+def _exec_miss() -> dict[str, Any]:
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", painted="fail")
+    return outputs
+
+
+def _publish(
+    freeze: Freeze, outputs: dict[str, Any]
+) -> subprocess.CompletedProcess[str]:
+    return freeze.run(outputs, "--date", "2026-10-11", mode="publish")
+
+
+def _latest(repo: Path) -> dict[str, Any]:
+    report: dict[str, Any] = json.loads(
+        (repo / "eval/report.json").read_text(encoding="utf-8")
+    )
+    return report
+
+
+def test_a_missed_executable_target_blocks_the_publish_write(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    proc = _publish(freeze, _exec_miss())
+    line = _refused(proc, "REVIEW")
+    assert "2026-10-11" in line
+    assert "e01" in line
+    assert _published(tmp_path) == set()
+
+
+def test_a_dated_entry_covering_the_miss_lets_the_publish_write_through(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry())
+    proc = _publish(freeze, _exec_miss())
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    report = _latest(tmp_path)
+    assert report["named_review"]["fires"] is True
+    assert report["named_review"]["misses"] == ["executable", "e01"]
+
+
+def test_the_entry_must_carry_the_run_date(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry(day="2026-10-10"))
+    assert _refused(_publish(freeze, _exec_miss()), "REVIEW")
+    assert _published(tmp_path) == set()
+
+
+def test_the_entry_must_cover_every_missed_case(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _exec_miss()
+    _with(outputs, "e02", "balanced", painted="fail")
+    _write_notes(tmp_path, _entry())
+    line = _refused(_publish(freeze, outputs), "REVIEW")
+    assert "e02" in line and "e01" not in line
+    assert _published(tmp_path) == set()
+
+
+def test_a_longer_token_does_not_cover_a_case_id(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry(body="executable: e011."))
+    assert "e01" in _refused(_publish(freeze, _exec_miss()), "REVIEW")
+
+
+def test_two_entries_for_one_run_are_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry() + "\n" + _entry())
+    assert "one entry" in _refused(_publish(freeze, _exec_miss()), "REVIEW")
+
+
+def test_an_entry_for_another_run_does_not_hide_this_ones(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry() + "\n" + _entry("2026-11-01", body="rubric: e03."))
+    assert _publish(freeze, _exec_miss()).returncode == 0
+
+
+def test_the_entry_names_cell1_and_row_drops_as_authored(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    for authored in (
+        "No levers pulled.",
+        "Cell-1 raises are as authored.",
+        "Row-drops are as authored.",
+    ):
+        _write_notes(tmp_path, _entry(authored=authored))
+        line = _refused(_publish(freeze, _exec_miss()), "REVIEW")
+        assert "as authored" in line
+    assert _published(tmp_path) == set()
+
+
+def test_a_missed_rubric_target_fires_it_and_needs_its_failed_cases(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    for case in ("e03", "e05"):
+        _verdict_of(outputs, case, "balanced")["verdicts"]["label_overlap"] = "fail"
+    assert "e03" in _refused(_publish(freeze, outputs), "REVIEW")
+    _write_notes(tmp_path, _entry(body="rubric: e03, e05."))
+    assert _publish(freeze, outputs).returncode == 0
+
+
+def test_a_target_met_needs_no_entry_and_does_not_fire(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    assert _publish(freeze, _judged()).returncode == 0
+    assert _latest(tmp_path)["named_review"] == {"fires": False, "misses": []}
+
+
+def test_other_qualities_missing_never_fire_it(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    for quality in ("fast", "best"):
+        _with(outputs, "e01", quality, painted="fail")
+        _with(outputs, "e02", quality, error="boom")
+    assert _publish(freeze, outputs).returncode == 0
+
+
+@pytest.mark.parametrize("mode", ["nightly", "smoke", "holdout"])
+def test_smoke_nightly_and_holdout_never_fire_it(tmp_path: Path, mode: str) -> None:
+    freeze = _make_freeze(tmp_path)
+    ids = {"smoke": SMOKE, "holdout": HOLDOUT}.get(mode, _public_ids())
+    qualities = ("balanced",) if mode == "smoke" else QUALITIES
+    outputs = _records(ids, qualities)
+    _with(outputs, ids[0], "balanced", painted="fail", error="boom")
+    proc = freeze.run(outputs, mode=mode)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_cost_and_latency_misses_must_be_covered_too(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _exec_miss()
+    outputs["cost_latency_misses"] = ["cost_p50", "latency_p50"]
+    _write_notes(tmp_path, _entry())
+    line = _refused(_publish(freeze, outputs), "REVIEW")
+    assert "cost_p50" in line and "latency_p50" in line
+    _write_notes(tmp_path, _entry(body="executable: e01. cost_p50, latency_p50."))
+    assert _publish(freeze, outputs).returncode == 0
+    assert _latest(tmp_path)["cost_latency_misses"] == ["cost_p50", "latency_p50"]
+
+
+def test_cost_latency_misses_alone_do_not_fire_the_review(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _judged()
+    outputs["cost_latency_misses"] = ["cost_p50"]
+    assert _publish(freeze, outputs).returncode == 0
+
+
+def test_a_note_cannot_lower_either_target(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry(body="executable: e01. We lower the target to 90%."))
+    assert "new ADR" in _refused(_publish(freeze, _exec_miss()), "TARGET")
+    assert _published(tmp_path) == set()
+
+
+def test_a_run_cannot_carry_its_own_targets(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    outputs["executable_target"] = 0.90
+    assert "new ADR" in _refused(_publish(freeze, outputs), "TARGET")
+
+
+def test_the_markdown_states_the_review_and_what_it_covers(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    _write_notes(tmp_path, _entry())
+    assert _publish(freeze, _exec_miss()).returncode == 0
+    text = (tmp_path / "eval/report.md").read_text(encoding="utf-8")
+    assert "Named review" in text and "eval/report-notes.md" in text

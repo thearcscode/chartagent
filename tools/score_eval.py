@@ -21,6 +21,8 @@ Files:
     ``holdout_permutation``, ``smoke_ids``, ``human_calibration_permutation``.
   * outputs.json: ``{"records": [{"request_id", "quality", ...}]}``, one record
     per (case, quality). Harness records only, never PNG bytes.
+  * eval/report-notes.md: a publish run that misses a balanced target needs one
+    dated "Named review" entry in it (format: see the #278 section below).
   * ``--instrument``: another instrument's requests, a JSON list or an object
     with ``requests``; each entry carries ``instruction`` (or
     ``query_rewritten``) and ``dataset_sha256``.
@@ -32,6 +34,7 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 from datetime import date as _date
@@ -489,6 +492,8 @@ REPORT_META = (
     "cell1",
     "designed_miss_budget",
     "reference_lines",
+    "named_review",
+    "cost_latency_misses",
 )
 _DENOMINATORS = {
     "executable": "every request",
@@ -779,8 +784,141 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     if "rubric" in report:
         lines += _rubric_markdown(report)
     lines += _render_cell1(report)
+    lines += _render_review(report)
     lines += _delivery_markdown(report) + _definitions_markdown()
     return "\n".join(lines) + "\n"
+
+
+# --- the named review on a missed target (#278) -------------------------------
+#
+# ADR-0029 Decision 12. Fires only on a ``publish`` run (the full set, every
+# quality) whose ``balanced`` executable point estimate is under 95% or whose
+# rubric point estimate is under 85%. A Wilson interval spanning the target is
+# not a trip; fast, best, p95, smoke, nightly and hold-out never fire it.
+#
+# The gate does not fail the run for the miss. It blocks the publish write
+# until ``eval/report-notes.md`` holds exactly one entry for the run's date:
+#
+#     **Named review (ADR-0029 Decision 12) — YYYY-MM-DD.**
+#     <free text>
+#
+# An entry runs from its heading line to the next line that starts with ``**``.
+# It must contain every missed case id (balanced executable misses, balanced
+# rubric failures), the word of each target missed (``executable``, ``rubric``),
+# every cost/latency miss name (see below), and must say that the pre-seam
+# cell-1 raises and the two row-drops are named *as authored*. Nothing in a run
+# or a note lowers 95% or 85%; that is a new ADR.
+#
+# Cost and latency misses (ADR-0028 D9) arrive as the optional run-level list
+# ``outputs["cost_latency_misses"]`` of names such as ``cost_p50`` /
+# ``latency_p50``; it is copied to ``report["cost_latency_misses"]``. The
+# ADR-0028 table slice (#277) can fill it from its own table instead.
+
+NOTES_PATH = "eval/report-notes.md"
+_ENTRY_HEAD = re.compile(r"^\*\*Named review\b[^\n]*", re.MULTILINE | re.IGNORECASE)
+_LOWERING = re.compile(
+    r"\b(?:lower\w*|relax\w*|reduc\w*|soften\w*)\b[^.\n]{0,60}"
+    r"(?:\btargets?\b|\b95\s*%|\b85\s*%)",
+    re.IGNORECASE,
+)
+_TARGET_KEYS = ("executable_target", "rubric_target", "target", "targets")
+
+
+def _entries_for(notes: str, day: str) -> list[str]:
+    """Named-review entries dated ``day``: heading line through the next ``**``."""
+    lines = notes.splitlines()
+    found: list[str] = []
+    for i, line in enumerate(lines):
+        if not _ENTRY_HEAD.match(line) or day not in line:
+            continue
+        body = [line]
+        for follow in lines[i + 1 :]:
+            if follow.startswith("**"):
+                break
+            body.append(follow)
+        found.append("\n".join(body))
+    return found
+
+
+def _named_review(
+    report: Mapping[str, Any], outputs: Mapping[str, Any], mode: str
+) -> dict[str, Any]:
+    misses: list[str] = []
+    if mode == "publish":
+        ex = report["executable"]["by_quality"].get(REFERENCE_QUALITY)
+        if ex is not None and ex["rate"] < EXECUTABLE_TARGET:
+            misses += ["executable", *ex["misses"]]
+        rub = (report.get("rubric") or {}).get("by_quality", {}).get(REFERENCE_QUALITY)
+        if rub is not None and rub["rate"] < RUBRIC_TARGET:
+            misses += ["rubric", *rub["failed"]]
+        if misses:
+            misses += [str(m) for m in outputs.get("cost_latency_misses") or []]
+    return {"fires": bool(misses), "misses": misses}
+
+
+def _review_issues(review: Mapping[str, Any], notes: str | None, day: str) -> list[str]:
+    if not review["fires"]:
+        return []
+    where = f"{NOTES_PATH} needs one entry dated {day}"
+    entries = _entries_for(notes or "", day)
+    if not entries:
+        return [
+            _issue(
+                "REVIEW",
+                f"named review fires (a balanced target is missed): {where} "
+                f"covering {', '.join(review['misses'])}",
+            )
+        ]
+    if len(entries) > 1:
+        return [_issue("REVIEW", f"{NOTES_PATH} has {len(entries)} entries dated {day}; one entry per run")]
+    entry = entries[0]
+    issues: list[str] = []
+    if _LOWERING.search(entry):
+        issues.append(
+            _issue(
+                "TARGET",
+                f"{NOTES_PATH} entry {day} lowers 95% or 85%; that needs a new ADR",
+            )
+        )
+    uncovered = [
+        m
+        for m in review["misses"]
+        if not re.search(rf"(?<![\w-]){re.escape(m)}(?![\w-])", entry)
+    ]
+    if uncovered:
+        issues.append(
+            _issue(
+                "REVIEW",
+                f"{NOTES_PATH} entry {day} does not cover: {', '.join(uncovered)}",
+            )
+        )
+    low = entry.lower()
+    if not (
+        "cell-1" in low and "row-drop" in low and "as authored" in low
+    ):
+        issues.append(
+            _issue(
+                "REVIEW",
+                f"{NOTES_PATH} entry {day} must name the pre-seam cell-1 raises "
+                "and the two row-drops as authored, not as a new lever",
+            )
+        )
+    return issues
+
+
+def _render_review(report: Mapping[str, Any]) -> list[str]:
+    review = report["named_review"]
+    if not review["fires"]:
+        return []
+    return [
+        "",
+        "## Named review (ADR-0029 Decision 12)",
+        "",
+        f"A balanced target was missed. {NOTES_PATH} holds the dated entry "
+        f"covering: {', '.join(review['misses'])}. The pre-seam cell-1 raises "
+        "and the two row-drops are named there as authored, not as a new "
+        "lever. Neither 95% nor 85% is lowered by a run or a note.",
+    ]
 
 
 def score(
@@ -793,6 +931,8 @@ def score(
     dataset_sha256: Mapping[str, str | None],
     instruments: Mapping[str, Iterable[tuple[str, str]]],
     cell1_era: str = "auto",
+    notes: str | None = None,
+    day: str = "",
 ) -> dict[str, Any]:
     """Accept the run and return its report, or raise ``Refusal``."""
     issues: list[str] = []
@@ -860,6 +1000,15 @@ def score(
         )
     issues.extend(_id_issues(prereg, mode, seen))
     issues.extend(_overlap_issues(prereg, instruments))
+    for key in _TARGET_KEYS:
+        if key in outputs:
+            issues.append(
+                _issue(
+                    "TARGET",
+                    f"outputs carry {key!r}: 95% and 85% are fixed; "
+                    "lowering them needs a new ADR",
+                )
+            )
     if issues:
         raise Refusal(issues)
 
@@ -886,6 +1035,12 @@ def score(
     }
     if "judge_verdicts" in outputs:
         report["rubric"] = _rubric(well_formed, verdicts, n)
+    if outputs.get("cost_latency_misses"):
+        report["cost_latency_misses"] = [str(m) for m in outputs["cost_latency_misses"]]
+    report["named_review"] = _named_review(report, outputs, mode)
+    review_issues = _review_issues(report["named_review"], notes, day)
+    if review_issues:
+        raise Refusal(review_issues)
     enforce_allow_list(report)
     return report
 
@@ -966,6 +1121,11 @@ def _write_publish(
         _write(base / "outputs.json", outputs_text)
 
 
+def _read_notes(repo: Path) -> str | None:
+    path = repo / NOTES_PATH
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
 def _fail(issues: list[str]) -> int:
     for line in issues:
         print(line)
@@ -1041,6 +1201,8 @@ def main(argv: list[str] | None = None) -> int:
             dataset_sha256=_dataset_digests(repo, prereg),
             instruments=instruments,
             cell1_era=ns.cell1_era,
+            notes=_read_notes(repo),
+            day=day,
         )
     except Refusal as refusal:
         return _fail(refusal.issues)
