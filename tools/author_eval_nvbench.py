@@ -76,7 +76,8 @@ NV_FILES = {
 
 BASE = {"width": 640, "height": 400}
 MIN_LEFTOVER = 102
-DB_CAP = 3
+DB_CAP = 4
+TABLE_CAP = 3
 MAX_ROWS = 3000
 
 # The common-path design (ADR-0029 Decision 6) for the 102 drawn here. The 18
@@ -121,7 +122,7 @@ ORDERWORDS = re.compile(
     re.I,
 )
 YEARISH = re.compile(r"(year|date|month|time|day|period|season|born|dob|hire|creation)", re.I)
-STATUSISH = re.compile(r"(status|stage|step|phase|outcome|decision)", re.I)
+STATUSISH = re.compile(r"(status|stage|step|phase|outcome|decision|result)", re.I)
 GEOISH = re.compile(r"(country|nation|state|province|citizenship)", re.I)
 RANKWORDS = re.compile(
     r"\b(top|most|highest|largest|biggest|fewest|lowest|least|best|worst|greatest|"
@@ -530,8 +531,10 @@ def make_candidate(
         return None
     # ordering vocabulary must agree with the SQL: a request that asks for an
     # order has an ORDER BY the frame can carry, and vice versa.
-    if bool(ORDERWORDS.search(q)) != (p.order is not None):
+    if ORDERWORDS.search(q) and p.order is None:
         return None
+    if p.order is not None and not ORDERWORDS.search(q):
+        p.order = None  # ORDER BY the request never asks for: not carried
     needed = _needed(p)
     names = _names(needed)
     con = sqlite3.connect(_dbpath(p.db))
@@ -564,6 +567,9 @@ def make_candidate(
         con.close()
     gold = rec["vis_obj"]
     gold_y: list[Any] = [v for series in gold["y_data"] for v in series]
+    if p.bin is not None:
+        # nvBench zero-fills empty bins; the engine only emits occupied ones.
+        gold_y = [v for v in gold_y if v != 0]
     if p.bin is None and _norm_num(gold_y) != _norm_num(oracle):
         return None
     ncols_table = len(p.columns[p.tables[0][0]])
@@ -629,6 +635,8 @@ def intents_of(c: Cand) -> list[str]:
         if p.chart == "Scatter" and c.x_numeric and c.y_numeric:
             out.append("correlation between measures")
         if p.chart == "Line" and c.y_numeric and (YEARISH.search(xname) or c.x_numeric):
+            out.append("trend over time")
+        elif p.chart in {"Bar", "Scatter"} and c.y_numeric and YEARISH.search(xname) and not c.x_numeric:
             out.append("trend over time")
         if p.chart == "Bar" and c.y_numeric and not c.x_numeric:
             out.append("comparison across categories")
@@ -919,7 +927,13 @@ def check_result(table: pa.Table, ycol: str, expected: list[Any], *, ordered: st
 # Query rewrite: fluency only, both versions stored
 # ---------------------------------------------------------------------------
 
-TYPOS = {"forwhat": "for what", "aboutthe": "about the", "giveing": "giving"}
+TYPOS = {
+    "forwhat": "for what",
+    "aboutthe": "about the",
+    "giveing": "giving",
+    "indstries": "industries",
+    r"\bthe the\b": "the",
+}
 QWORDS = (
     "what", "which", "who", "whom", "whose", "where", "when", "how", "is", "are", "do", "does",
     "did", "can", "could", "will", "would", "have", "has", "was", "were",
@@ -946,7 +960,8 @@ def rewrite(source_id: str, q: str) -> str:
         sentence = sentence[0].upper() + sentence[1:]
         first = re.match(r"[A-Za-z']+", sentence)
         asks = first is not None and first.group(0).lower() in QWORDS
-        out.append(sentence.rstrip(".?! ") + ("?" if asks else "."))
+        asked = asks or sentence.endswith("?")
+        out.append(sentence.rstrip(".?! ") + ("?" if asked else "."))
     return " ".join(out)
 
 
@@ -984,6 +999,10 @@ CELL0_ORDER = [
 def cue_ok(query: str, intent: str) -> bool:
     for owner, rx in CUES:
         if rx.search(query) and owner != intent:
+            # nvBench has only four status/outcome/result group queries in the
+            # unnamed pool, two of which say "proportion": flow may carry it.
+            if intent == "flow or transition between states" and owner == "part-to-whole":
+                continue
             return False
     if COMPARE.search(query) and intent not in {
         "comparison across categories",
@@ -1013,18 +1032,21 @@ def draw_candidates(nv: dict[str, Any], used_keys: set[str], used_dbs: set[str])
 class Taken:
     def __init__(self) -> None:
         self.keys: set[str] = set()
+        self.texts: set[tuple[str, str]] = set()
         self.dbs: collections.Counter[str] = collections.Counter()
         self.tables: collections.Counter[tuple[str, str]] = collections.Counter()
 
     def ok(self, c: Cand) -> bool:
         return (
             _base_key(c.p.key) not in self.keys
+            and (" ".join(c.p.query.lower().split()), c.p.db) not in self.texts
             and self.dbs[c.p.db] < DB_CAP
-            and self.tables[(c.p.db, c.p.tables[0][1])] < 1
+            and self.tables[(c.p.db, c.p.tables[0][1])] < TABLE_CAP
         )
 
     def add(self, c: Cand) -> None:
         self.keys.add(_base_key(c.p.key))
+        self.texts.add((" ".join(c.p.query.lower().split()), c.p.db))
         self.dbs[c.p.db] += 1
         self.tables[(c.p.db, c.p.tables[0][1])] += 1
 
@@ -1041,7 +1063,16 @@ def select(
             if intent in c.intents and cue_ok(c.p.query, intent) and (not cell2 or cell2_ok(c))
         ]
         picks = PICKS.get(intent, [])
-        pool.sort(key=lambda c: (c.source_id not in picks, _h(c.source_id)))
+        # the two bulk intents fill the wide-table quota (a whole six-plus
+        # column table), which only single-table cases can carry.
+        bulk = intent in {"part-to-whole", "comparison across categories"} and not cell2
+        pool.sort(
+            key=lambda c: (
+                c.source_id not in picks,
+                bulk and not (len(c.p.tables) == 1 and c.ncols_table >= 6),
+                _h(c.source_id),
+            )
+        )
         got = 0
         for c in pool:
             if got == need:
@@ -1344,9 +1375,9 @@ def main() -> None:
         )
     cands = draw_candidates(nv, used_keys, used_dbs)
     taken = Taken()
-    cell0 = select(cands, CELL0_INTENTS, taken, CELL0_ORDER, cell2=False)
     pool2 = [replace(c, intents=cell2_intents(c)) for c in cands if cell2_ok(c)]
     cell2 = select(pool2, CELL2_INTENTS, taken, list(CELL2_INTENTS), cell2=True)
+    cell0 = select(cands, CELL0_INTENTS, taken, CELL0_ORDER, cell2=False)
     shapes0 = assign_shapes(cell0, CELL0_SHAPES, cell2=False)
     shapes2 = assign_shapes(cell2, CELL2_SHAPES, cell2=True)
     records, expected = build_all(cell0, cell2, shapes0, shapes2)
