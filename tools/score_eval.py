@@ -48,6 +48,8 @@ PREREG_IN_TAG = "eval/pre-registration.json"
 MODES = ("smoke", "nightly", "holdout", "publish")
 QUALITIES = ("fast", "balanced", "best")
 HOLDOUT_SIZE = 30
+PUBLIC_SIZE = 150
+SMOKE_SIZE = 30
 EXECUTABLE_TARGET = 0.95
 RUBRIC_TARGET = 0.85
 REFERENCE_QUALITY = "balanced"
@@ -193,15 +195,58 @@ def _overlap_issues(
 
 
 def _carries_png(value: Any) -> bool:
-    if isinstance(value, (bytes, bytearray)):
+    """PNG bytes anywhere in a record: raw bytes, or a base64 / data-URI string."""
+    if isinstance(value, (bytes, bytearray, memoryview)):
         return True
     if isinstance(value, str):
-        return value.startswith(_PNG_MARKERS)
+        return any(marker in value for marker in _PNG_MARKERS)
     if isinstance(value, Mapping):
         return any(_carries_png(v) for v in value.values())
-    if isinstance(value, list):
+    if isinstance(value, (list, tuple, set, frozenset)):
         return any(_carries_png(v) for v in value)
     return False
+
+
+def _prereg_size_issues(prereg: Mapping[str, Any]) -> list[str]:
+    """The freeze must hold exactly the public and smoke counts it declares
+    (``n_public`` / ``n_smoke``; 150 and 30 when the freeze does not say)."""
+    issues: list[str] = []
+    for label, field, declared, default in (
+        ("public requests", "requests", "n_public", PUBLIC_SIZE),
+        ("smoke ids", "smoke_ids", "n_smoke", SMOKE_SIZE),
+    ):
+        want = int(prereg.get(declared, default))
+        got = len(prereg.get(field) or [])
+        if got != want:
+            issues.append(
+                _issue(
+                    "PREREG",
+                    f"pre-registration has {got} {label}; exactly {want} required",
+                )
+            )
+    return issues
+
+
+def _few_shot_issues(
+    prereg: Mapping[str, Any], outputs: Mapping[str, Any]
+) -> list[str]:
+    """Story 49: no benchmark case may be a few-shot example. The run declares
+    its few-shot case ids as ``outputs["few_shot_ids"]``."""
+    benchmark = {
+        *_ids(prereg.get("requests") or []),
+        *_ids(prereg.get("holdout_pool") or []),
+    }
+    used = sorted(
+        str(i) for i in outputs.get("few_shot_ids") or [] if str(i) in benchmark
+    )
+    if not used:
+        return []
+    return [
+        _issue(
+            "FEWSHOT",
+            f"benchmark case used as a few-shot example: {', '.join(used)}",
+        )
+    ]
 
 
 def _record_issues(record: Mapping[str, Any]) -> list[str]:
@@ -323,6 +368,11 @@ _FAMILIES = (
 )
 
 
+def _flat(name: str) -> str:
+    """Case- and separator-insensitive form: ``review_report`` == ``ReviewReport``."""
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
 def _family(model: str) -> str:
     """The vendor family of a model id, with or without a ``vendor:`` prefix."""
     name = model.lower().rsplit(":", 1)[-1].rsplit("/", 1)[-1]
@@ -375,7 +425,8 @@ def _judge_issues(
                     f"family ({v.get('critic_model')})",
                 )
             )
-        banned = [b for b in _BANNED_PROVENANCE if b in (v.get("provenance") or [])]
+        seen = {_flat(str(p)) for p in v.get("provenance") or []}
+        banned = [b for b in _BANNED_PROVENANCE if any(_flat(b) in p for p in seen)]
         if banned:
             issues.append(
                 _issue(
@@ -1396,7 +1447,8 @@ def score(
     day: str = "",
 ) -> dict[str, Any]:
     """Accept the run and return its report, or raise ``Refusal``."""
-    issues: list[str] = []
+    issues: list[str] = _prereg_size_issues(prereg)
+    issues.extend(_few_shot_issues(prereg, outputs))
     if tag_digest is None:
         issues.append(
             _issue("TAG", f"tag {TAG} does not exist; no fallback digest is used")

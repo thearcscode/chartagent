@@ -66,6 +66,8 @@ def _prereg() -> dict[str, Any]:
     return {
         "flint_version": "0.0.0",
         "fixture_commit": "abc123",
+        "n_public": len(PUBLIC),
+        "n_smoke": len(SMOKE),
         "smoke_ids": list(SMOKE),
         "requests": [_request(i, c, r) for i, c, r in PUBLIC],
         "holdout_pool": [_request(i, 0, "flint") for i in HOLDOUT],
@@ -517,6 +519,54 @@ def test_png_bytes_in_outputs_are_refused(tmp_path: Path) -> None:
     assert "e04" in _refused(freeze.run(outputs), "PNG")
 
 
+def test_png_bytes_nested_or_raw_are_refused(tmp_path: Path) -> None:
+    tool = _tool()
+    assert tool._carries_png({"a": [{"b": ("x", b"\x89PNG")}]})
+    assert tool._carries_png({"a": {"b": ["data:image/png;base64,AAAA"]}})
+    assert tool._carries_png({"a": [["xx iVBORw0KGgoAAAA"]]})
+    assert not tool._carries_png({"a": [1, "plain", {"b": None}]})
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e04", "fast", trace={"steps": [{"img": "iVBORw0KGgoAAAA"}]})
+    assert "e04" in _refused(freeze.run(outputs), "PNG")
+
+
+def test_seam_in_wheel_detects_the_shipped_generate_recipe() -> None:
+    assert _tool().seam_in_wheel() is True
+
+
+def test_a_benchmark_case_used_as_a_few_shot_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    outputs["few_shot_ids"] = ["e03", "h02", "not-in-benchmark"]
+    line = _refused(freeze.run(outputs), "FEWSHOT")
+    assert "e03" in line and "h02" in line and "not-in-benchmark" not in line
+    outputs["few_shot_ids"] = ["elsewhere"]
+    assert freeze.run(outputs).returncode == 0
+
+
+def test_prereg_without_the_declared_public_count_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    prereg = _prereg()
+    prereg["n_public"] = len(PUBLIC) + 1
+    freeze.write_prereg(prereg)
+    _git(tmp_path, "commit", "-qam", "edit")
+    _git(tmp_path, "tag", "-f", "eval-benchmark-v1")
+    assert "public requests" in _refused(freeze.run(_records(_public_ids())), "PREREG")
+
+
+def test_prereg_without_the_declared_smoke_count_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    prereg = _prereg()
+    del prereg["n_public"], prereg["n_smoke"]  # falls back to 150 / 30
+    freeze.write_prereg(prereg)
+    _git(tmp_path, "commit", "-qam", "edit")
+    _git(tmp_path, "tag", "-f", "eval-benchmark-v1")
+    proc = freeze.run(_records(_public_ids()))
+    assert "exactly 150" in _refused(proc, "PREREG")
+    assert "exactly 30" in proc.stdout
+
+
 def test_interval_spanning_the_target_is_never_a_gate_result(
     tmp_path: Path,
 ) -> None:
@@ -761,13 +811,24 @@ def test_a_judge_from_another_family_than_the_critic_is_accepted(
 def test_judge_provenance_with_review_report_critic_note_or_module_is_refused(
     tmp_path: Path,
 ) -> None:
-    for banned in ("ReviewReport", "critic_note", "module"):
-        (tmp_path / banned).mkdir()
-        freeze = _make_freeze(tmp_path / banned)
+    for n, banned in enumerate(
+        (
+            "ReviewReport",
+            "critic_note",
+            "module",
+            "review_report",
+            "critic.note",
+            "Module",
+            "REVIEW-REPORT",
+        )
+    ):
+        root = tmp_path / str(n)
+        root.mkdir()
+        freeze = _make_freeze(root)
         outputs = _judged()
         _verdict_of(outputs, "e05", "best")["provenance"].append(banned)
         line = _refused(freeze.run(outputs), "PROVENANCE")
-        assert "e05" in line and banned in line
+        assert "e05" in line
 
 
 def test_rubric_is_absent_when_no_judge_verdicts_are_supplied(
@@ -1489,6 +1550,7 @@ def test_the_custom_companion_line_is_omitted_while_recipe_n_is_zero(
     prereg = _prereg()
     prereg["requests"] = [r for r in prereg["requests"] if r["id"] in ids]
     prereg["smoke_ids"] = ["e01", "e07", "e08"]
+    prereg["n_public"] = len(ids)
     freeze.write_prereg(prereg)
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "flint only")
