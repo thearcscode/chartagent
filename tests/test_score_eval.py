@@ -72,12 +72,25 @@ def _prereg() -> dict[str, Any]:
     }
 
 
+_CUSTOM_IDS = {i for i, _, r in PUBLIC if r == "custom"}
+
+
 def _record(case_id: str, quality: str) -> dict[str, Any]:
+    if case_id in _CUSTOM_IDS:
+        return {
+            "request_id": case_id,
+            "quality": quality,
+            "rail": "custom",
+            "raster_nonblank": True,
+        }
     return {
         "request_id": case_id,
         "quality": quality,
+        "rail": "flint",
         "backend": "vega-lite",
         "painted": "pass",
+        "compiled_row_count": 10,
+        "bound_row_count": 10,
     }
 
 
@@ -344,3 +357,148 @@ def test_usage_error_exits_two(tmp_path: Path) -> None:
     assert "usage" in proc.stderr
     bad_mode = _make_freeze(tmp_path).run(_records(_public_ids()), mode="bogus")
     assert bad_mode.returncode == 2
+
+
+# --- executable-output rate (#272) -------------------------------------------
+
+
+def _with(outputs: dict[str, Any], case_id: str, quality: str, **fields: Any) -> None:
+    for record in outputs["records"]:
+        if record["request_id"] == case_id and record["quality"] == quality:
+            record.update(fields)
+            return
+    raise AssertionError("no such record")
+
+
+def _executable(freeze: Freeze, outputs: dict[str, Any]) -> dict[str, Any]:
+    out = freeze.repo / "r.json"
+    proc = freeze.run(outputs, "--json", str(out))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    report: dict[str, Any] = json.loads(out.read_text(encoding="utf-8"))
+    executable: dict[str, Any] = report["executable"]
+    return executable
+
+
+def test_all_hits_gives_full_rate_over_the_frozen_n_per_quality(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    executable = _executable(freeze, _records(_public_ids()))
+    for quality in QUALITIES:
+        row = executable["by_quality"][quality]
+        assert (row["k"], row["n"]) == (len(PUBLIC), len(PUBLIC))
+        assert row["rate"] == 1.0
+        assert 0 < row["wilson_95"]["lower"] < 1.0 <= row["wilson_95"]["upper"] + 1e-9
+
+
+def test_wilson_is_the_corpus_scorers_implementation(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", painted="fail")
+    row = _executable(freeze, outputs)["by_quality"]["balanced"]
+    spec = importlib.util.spec_from_file_location(
+        "score_corpus", _SCORE.with_name("score_corpus.py")
+    )
+    assert spec is not None and spec.loader is not None
+    corpus = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(corpus)
+    assert row["wilson_95"] == corpus.wilson_interval(8, 9)
+
+
+def test_blank_canvas_row_drop_raise_and_throw_are_misses(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", painted="fail")
+    _with(outputs, "e02", "balanced", compiled_row_count=9)
+    _with(outputs, "e03", "balanced", error="PlanError: boom")
+    _with(outputs, "e04", "balanced", raster_nonblank=False)
+    _with(outputs, "e06", "balanced", error="RasterisationError: x")
+    row = _executable(freeze, outputs)["by_quality"]["balanced"]
+    assert (row["k"], row["n"]) == (4, 9)
+    assert row["misses"] == ["e01", "e02", "e03", "e04", "e06"]
+    assert _executable(freeze, _records(_public_ids()))["by_quality"]["fast"]["k"] == 9
+
+
+def test_other_review_signals_play_no_part(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    for case_id in _public_ids():
+        _with(
+            outputs,
+            case_id,
+            "balanced",
+            marks_present="fail",
+            data_truthfulness="fail",
+            review_passed=False,
+        )
+    assert _executable(freeze, outputs)["by_quality"]["balanced"]["k"] == 9
+
+
+def test_custom_hit_is_the_rasterisers_verdict_not_a_painted_check(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e04", "fast", raster_nonblank=False)
+    assert _executable(freeze, outputs)["by_quality"]["fast"]["misses"] == ["e04"]
+
+
+def test_custom_record_with_a_flint_shape_is_inconsistent(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e04", "fast", painted="pass")
+    assert "e04" in _refused(freeze.run(outputs), "RAIL")
+    outputs = _records(_public_ids())
+    _with(outputs, "e04", "fast", rail="flint")
+    assert "e04" in _refused(freeze.run(outputs), "RAIL")
+
+
+def test_flint_painted_not_checked_is_a_harness_misconfiguration(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "best", painted="not_checked")
+    line = _refused(freeze.run(outputs), "HARNESS")
+    assert "e01" in line and "not_checked" in line
+
+
+def test_excel_record_is_an_authoring_fault(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e02", "fast", backend="excel")
+    assert "e02" in _refused(freeze.run(outputs), "AUTHORING")
+
+
+def test_png_bytes_in_outputs_are_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e04", "fast", png="iVBORw0KGgoAAAANSUhEUg==")
+    assert "e04" in _refused(freeze.run(outputs), "PNG")
+
+
+def test_interval_spanning_the_target_is_never_a_gate_result(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", painted="fail")
+    executable = _executable(freeze, outputs)
+    assert executable["target"] == 0.95
+    row = executable["by_quality"]["balanced"]
+    assert row["interval_spans_target"] is True
+    assert "gate" not in json.dumps(executable).lower()
+    assert "passed" not in row and "pass" not in row
+
+
+def test_markdown_report_states_the_interval(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", painted="fail")
+    md = tmp_path / "r.md"
+    proc = freeze.run(outputs, "--md", str(md))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    text = md.read_text(encoding="utf-8")
+    assert "Executable-output rate" in text
+    assert "8/9" in text and "Wilson 95%" in text
+    assert "e01" in text

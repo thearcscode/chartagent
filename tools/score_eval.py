@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import subprocess
 import sys
@@ -38,6 +39,20 @@ PREREG_IN_TAG = "eval/pre-registration.json"
 MODES = ("smoke", "nightly", "holdout", "publish")
 QUALITIES = ("fast", "balanced", "best")
 HOLDOUT_SIZE = 30
+EXECUTABLE_TARGET = 0.95
+_PNG_MARKERS = ("iVBORw0KGgo", "\x89PNG", "data:image/png")
+_FLINT_ONLY_FIELDS = ("painted", "compiled_row_count", "bound_row_count")
+
+
+def _wilson_interval(k: int, n: int) -> dict[str, float]:
+    """The pressure-corpus scorer's Wilson implementation, loaded not copied."""
+    path = Path(__file__).with_name("score_corpus.py")
+    spec = importlib.util.spec_from_file_location("_score_corpus_wilson", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    result: dict[str, float] = module.wilson_interval(k, n)
+    return result
 
 
 class Refusal(Exception):
@@ -158,6 +173,136 @@ def _overlap_issues(
     return issues
 
 
+def _carries_png(value: Any) -> bool:
+    if isinstance(value, (bytes, bytearray)):
+        return True
+    if isinstance(value, str):
+        return value.startswith(_PNG_MARKERS)
+    if isinstance(value, Mapping):
+        return any(_carries_png(v) for v in value.values())
+    if isinstance(value, list):
+        return any(_carries_png(v) for v in value)
+    return False
+
+
+def _record_issues(record: Mapping[str, Any]) -> list[str]:
+    """Refusals for one record: harness faults and authoring faults, not misses."""
+    name = f"{record['request_id']} ({record['quality']})"
+    issues: list[str] = []
+    if _carries_png(record):
+        issues.append(
+            _issue("PNG", f"{name}: outputs.json carries PNG bytes; records only")
+        )
+    if str(record.get("backend") or "").lower() == "excel":
+        issues.append(
+            _issue("AUTHORING", f"{name}: names the Excel backend, an authoring fault")
+        )
+    rail = record.get("rail")
+    if rail == "flint":
+        if record.get("painted") not in ("pass", "fail", "not_checked") and not (
+            record.get("error")
+        ):
+            issues.append(
+                _issue(
+                    "RAIL",
+                    f"{name}: Flint record has no painted verdict "
+                    "(a custom-rail record mislabelled flint?)",
+                )
+            )
+        if record.get("painted") == "not_checked":
+            issues.append(
+                _issue(
+                    "HARNESS",
+                    f"{name}: Flint record has painted: not_checked; "
+                    "the harness is misconfigured (no rasteriser)",
+                )
+            )
+    elif rail == "custom":
+        stray = [f for f in _FLINT_ONLY_FIELDS if f in record]
+        if stray or record.get("backend") not in (None, "custom"):
+            issues.append(
+                _issue(
+                    "RAIL",
+                    f"{name}: custom-rail record carries Flint fields "
+                    f"{', '.join(stray) or 'backend'}; a custom hit is the "
+                    "rasteriser's verdict, never a painted CheckResult",
+                )
+            )
+    else:
+        issues.append(_issue("RAIL", f"{name}: rail {rail!r} is not flint or custom"))
+    return issues
+
+
+def _is_hit(record: Mapping[str, Any]) -> bool:
+    if record.get("error"):
+        return False
+    if record.get("rail") == "custom":
+        return record.get("raster_nonblank") is True
+    return (
+        record.get("painted") == "pass"
+        and record.get("compiled_row_count") is not None
+        and record.get("compiled_row_count") == record.get("bound_row_count")
+    )
+
+
+def _executable(records: Iterable[Mapping[str, Any]], n: int) -> dict[str, Any]:
+    misses: dict[str, list[str]] = {}
+    hits: dict[str, int] = {}
+    for record in records:
+        quality = str(record["quality"])
+        hits.setdefault(quality, 0)
+        misses.setdefault(quality, [])
+        if _is_hit(record):
+            hits[quality] += 1
+        else:
+            misses[quality].append(str(record["request_id"]))
+    by_quality: dict[str, Any] = {}
+    for quality in sorted(hits):
+        k = hits[quality]
+        interval = _wilson_interval(k, n)
+        by_quality[quality] = {
+            "k": k,
+            "n": n,
+            "rate": k / n if n else 0.0,
+            "wilson_95": interval,
+            "interval_spans_target": interval["lower"]
+            <= EXECUTABLE_TARGET
+            <= interval["upper"],
+            "misses": sorted(misses[quality]),
+        }
+    return {"target": EXECUTABLE_TARGET, "by_quality": by_quality}
+
+
+def render_markdown(report: Mapping[str, Any]) -> str:
+    executable = report["executable"]
+    target = executable["target"]
+    lines = [
+        f"# Executable-output rate ({report['mode']})",
+        "",
+        f"Tag `{report['tag']}`, pre-registration `{report['prereg_sha256']}`.",
+        f"Every request counts (n={report['n']}); raises, blank canvases and "
+        f"raster/assemble throws are misses. {target:.0%} is a reference "
+        "point, and the interval is the finding.",
+        "",
+        "| Quality | Hits | Rate | Wilson 95% | Interval vs reference |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for quality, row in executable["by_quality"].items():
+        w = row["wilson_95"]
+        if row["interval_spans_target"]:
+            where = "spans the reference"
+        else:
+            where = "above" if w["lower"] > target else "below"
+        lines.append(
+            f"| {quality} | {row['k']}/{row['n']} | {row['rate']:.3f} | "
+            f"Wilson 95% [{w['lower']:.3f}, {w['upper']:.3f}] | {where} |"
+        )
+    for quality, row in executable["by_quality"].items():
+        if row["misses"]:
+            lines += ["", f"Misses at {quality}: {', '.join(row['misses'])}"]
+    return "\n".join(lines) + "\n"
+
+
 def score(
     prereg: Mapping[str, Any],
     outputs: Mapping[str, Any],
@@ -209,6 +354,13 @@ def score(
             _issue("REPEATS", f"more than one record for ({case_id}, {quality})")
         )
 
+    well_formed = [
+        r
+        for r in outputs.get("records") or []
+        if isinstance(r, Mapping) and "request_id" in r and "quality" in r
+    ]
+    for record in well_formed:
+        issues.extend(_record_issues(record))
     issues.extend(_id_issues(prereg, mode, seen))
     issues.extend(_overlap_issues(prereg, instruments))
     if issues:
@@ -223,6 +375,7 @@ def score(
         "fixture_commit": prereg.get("fixture_commit"),
         "n": len(expected_ids(prereg, mode)),
         "qualities": sorted({q for _, q in seen}),
+        "executable": _executable(well_formed, len(expected_ids(prereg, mode))),
     }
 
 
@@ -276,6 +429,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repo", default=str(REPO))
     parser.add_argument("--prereg", default=None)
     parser.add_argument("--json", dest="json_path", default=None)
+    parser.add_argument("--md", dest="md_path", default=None)
     parser.add_argument("--instrument", action="append", default=[])
     try:
         ns = parser.parse_args(args)
@@ -318,6 +472,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if ns.json_path:
         Path(ns.json_path).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    if ns.md_path:
+        Path(ns.md_path).write_text(render_markdown(report), encoding="utf-8")
     print(f"OK: {ns.mode} run accepted ({report['n']} cases).")
     return 0
 
