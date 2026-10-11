@@ -18,6 +18,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+import pytest
+
 _SCORE = Path(__file__).resolve().parents[1] / "tools" / "score_eval.py"
 
 QUALITIES = ("fast", "balanced", "best")
@@ -502,3 +504,92 @@ def test_markdown_report_states_the_interval(tmp_path: Path) -> None:
     assert "Executable-output rate" in text
     assert "8/9" in text and "Wilson 95%" in text
     assert "e01" in text
+
+
+# --- delivery companion and the figure allow-list (#274) ---------------------
+
+
+def _report(freeze: Freeze, outputs: dict[str, Any]) -> dict[str, Any]:
+    out = freeze.repo / "r.json"
+    proc = freeze.run(outputs, "--json", str(out))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    report: dict[str, Any] = json.loads(out.read_text(encoding="utf-8"))
+    return report
+
+
+def test_delivery_is_served_only_with_the_excluded_count_beside_it(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", error="PlanError: boom")  # not served
+    _with(outputs, "e02", "balanced", painted="fail")  # served, not delivered
+    _with(outputs, "e03", "balanced", compiled_row_count=9)  # served, row-drop
+    report = _report(freeze, outputs)
+    row = report["delivery"]["by_quality"]["balanced"]
+    # Flint-rail cases: e01, e02, e03, e05, e07, e08. The custom rail has no
+    # painted verdict and sits outside the Q1 predicate.
+    assert (row["delivered"], row["served"]) == (3, 5)
+    assert row["rate"] == 3 / 5
+    assert row["excluded"] == 1
+    assert row["excluded_ids"] == ["e01"]
+    # beside, not instead: the executable rate is still over every request.
+    assert report["executable"]["by_quality"]["balanced"]["n"] == len(PUBLIC)
+    other = report["delivery"]["by_quality"]["fast"]
+    assert (other["delivered"], other["served"], other["excluded"]) == (6, 6, 0)
+
+
+def test_every_figure_states_its_definition_and_denominator_in_words(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    md = tmp_path / "r.md"
+    assert freeze.run(_records(_public_ids()), "--md", str(md)).returncode == 0
+    text = md.read_text(encoding="utf-8").lower()
+    assert "every request" in text
+    assert "served" in text and "excluded" in text
+    assert "never multiplied" in text
+
+
+def test_no_figure_outside_the_allow_list_in_any_output_form(
+    tmp_path: Path,
+) -> None:
+    tool = _tool()
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", error="PlanError: boom")
+    out, md = freeze.repo / "r.json", tmp_path / "r.md"
+    proc = freeze.run(outputs, "--json", str(out), "--md", str(md))
+    forms = [
+        out.read_text(encoding="utf-8"),
+        md.read_text(encoding="utf-8"),
+        proc.stdout,
+    ]
+    report = json.loads(forms[0])
+    assert {k for k in report if k not in tool.REPORT_META} == set(tool.FIGURES)
+    assert set(tool.FIGURES) == {"executable", "delivery"}
+    for text in forms:
+        lowered = text.lower()
+        for banned in ("end-to-end", "combined", "overall", "rubric"):
+            assert banned not in lowered, banned
+
+
+def test_report_model_refuses_an_unlisted_figure() -> None:
+    tool = _tool()
+    base: dict[str, Any] = {k: None for k in tool.REPORT_META}
+    base.update({k: {} for k in tool.FIGURES})
+    tool.enforce_allow_list(base)
+    for extra in ("end_to_end", "rubric", "executable_x_delivery"):
+        with pytest.raises(ValueError, match=extra):
+            tool.enforce_allow_list({**base, extra: {"rate": 0.5}})
+
+
+def test_a_rubric_rate_can_only_be_the_executable_hits_one() -> None:
+    tool = _tool()
+    assert "rubric" not in tool.FIGURES
+    tool.check_figure("rubric", "executable hits only, excluded count beside")
+    for denominator in ("every request", "all 150", "served requests"):
+        with pytest.raises(ValueError, match="executable hits"):
+            tool.check_figure("rubric", denominator)
+    with pytest.raises(ValueError, match="end_to_end"):
+        tool.check_figure("end_to_end", "executable hits")
