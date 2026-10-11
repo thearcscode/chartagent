@@ -37,8 +37,8 @@ import json
 import re
 import subprocess
 import sys
-from datetime import date as _date
 from collections.abc import Iterable, Mapping
+from datetime import date as _date
 from pathlib import Path
 from typing import Any
 
@@ -874,14 +874,22 @@ def _returned(record: Mapping[str, Any]) -> bool:
     return not record.get("error")
 
 
-def _cost_issues(outputs: Mapping[str, Any], records: list[Mapping[str, Any]]) -> list[str]:
+def _cost_issues(
+    outputs: Mapping[str, Any], records: list[Mapping[str, Any]]
+) -> list[str]:
     prices = outputs.get("list_prices")
     models = prices.get("models") if isinstance(prices, Mapping) else None
     if not isinstance(prices, Mapping) or not isinstance(models, Mapping):
-        return [_issue("USAGE", "no list_prices with models; dollars cannot be computed")]
+        return [
+            _issue("USAGE", "no list_prices with models; dollars cannot be computed")
+        ]
     issues: list[str] = []
     if not prices.get("snapshot_date"):
-        issues.append(_issue("USAGE", "list_prices carries no snapshot_date; prices must be dated"))
+        issues.append(
+            _issue(
+                "USAGE", "list_prices carries no snapshot_date; prices must be dated"
+            )
+        )
     for record in records:
         name = f"{record['request_id']} ({record['quality']})"
         calls = record.get("usage")
@@ -890,28 +898,41 @@ def _cost_issues(outputs: Mapping[str, Any], records: list[Mapping[str, Any]]) -
             for c in calls or []
         ):
             issues.append(
-                _issue("REPAIR", f"{name}: a fast record carries a review repair; "
-                       "a balanced repair is never clipped into a fast row")
+                _issue(
+                    "REPAIR",
+                    f"{name}: a fast record carries a review repair; "
+                    "a balanced repair is never clipped into a fast row",
+                )
             )
         if not _returned(record):
             continue
         if not isinstance(record.get("latency_s"), (int, float)):
-            issues.append(_issue("LATENCY", f"{name}: returned record has no latency_s"))
+            issues.append(
+                _issue("LATENCY", f"{name}: returned record has no latency_s")
+            )
         if not isinstance(calls, list) or not calls:
             issues.append(
-                _issue("USAGE", f"{name}: returned record has no vendor usage; "
-                       "the row cannot be dollarized")
+                _issue(
+                    "USAGE",
+                    f"{name}: returned record has no vendor usage; "
+                    "the row cannot be dollarized",
+                )
             )
             continue
         for call in calls:
             model = str(call.get("model"))
             price = models.get(model)
             if not isinstance(price, Mapping):
-                issues.append(_issue("USAGE", f"{name}: no list price for model {model}"))
+                issues.append(
+                    _issue("USAGE", f"{name}: no list price for model {model}")
+                )
             elif call.get("cache_read_tokens") and "cache_read_per_mtok" not in price:
                 issues.append(
-                    _issue("USAGE", f"{name}: cache read reported for {model} "
-                           "but no cache-read list price")
+                    _issue(
+                        "USAGE",
+                        f"{name}: cache read reported for {model} "
+                        "but no cache-read list price",
+                    )
                 )
     return issues
 
@@ -922,7 +943,9 @@ def _dollars(record: Mapping[str, Any], models: Mapping[str, Any]) -> float:
         price = models[call["model"]]
         total += call["input_tokens"] * price["input_per_mtok"]
         total += call["output_tokens"] * price["output_per_mtok"]
-        total += (call.get("cache_read_tokens") or 0) * price.get("cache_read_per_mtok", 0)
+        total += (call.get("cache_read_tokens") or 0) * price.get(
+            "cache_read_per_mtok", 0
+        )
     return total / 1_000_000
 
 
@@ -934,7 +957,9 @@ def _cost_latency(
     grouped: dict[str, list[Mapping[str, Any]]] = {}
     for record in records:
         grouped.setdefault(str(record["quality"]), []).append(record)
-    for quality in sorted(grouped, key=lambda q: (QUALITIES.index(q) if q in QUALITIES else 99, q)):
+    for quality in sorted(
+        grouped, key=lambda q: (QUALITIES.index(q) if q in QUALITIES else 99, q)
+    ):
         rows = grouped[quality]
         returned = [r for r in rows if _returned(r)]
         raises = {name: 0 for name in RAISE_CLASSES}
@@ -950,7 +975,9 @@ def _cost_latency(
             values = [float(r["latency_s"]) for r in returned if r["rail"] == rail]
             if values:
                 latency[label] = _p50_p95(values)
-        recipe = [c for r, c in zip(returned, costs, strict=True) if r["rail"] == "custom"]
+        recipe = [
+            c for r, c in zip(returned, costs, strict=True) if r["rail"] == "custom"
+        ]
         if costs:
             row["cost_usd"] = _p50_p95(costs)
         row["latency_s"] = latency
@@ -964,11 +991,18 @@ def _cost_latency(
                     "met": row["cost_usd"]["p50"] <= COST_TARGET_USD,
                 }
             for key, label, target in (
-                ("deterministic_latency_p50_s", "deterministic", DETERMINISTIC_LATENCY_TARGET_S),
+                (
+                    "deterministic_latency_p50_s",
+                    "deterministic",
+                    DETERMINISTIC_LATENCY_TARGET_S,
+                ),
                 ("custom_latency_p50_s", "custom", CUSTOM_LATENCY_TARGET_S),
             ):
                 if label in latency:
-                    targets[key] = {"target": target, "met": latency[label]["p50"] < target}
+                    targets[key] = {
+                        "target": target,
+                        "met": latency[label]["p50"] < target,
+                    }
             row["targets"] = targets
         by_quality[quality] = row
     return {
@@ -994,7 +1028,8 @@ def _cost_markdown(report: Mapping[str, Any]) -> list[str]:
         f"custom latency p50 under {CUSTOM_LATENCY_TARGET_S:g} s. Fast and best "
         "rows are observations.",
         "",
-        "| Quality | Sample | Cost p50 | Cost p95 | Latency p50 | Latency p95 | Raises |",
+        "| Quality | Sample | Cost p50 | Cost p95 | Latency p50 | Latency p95 "
+        "| Raises |",
         "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     companions: list[str] = []
@@ -1004,12 +1039,18 @@ def _cost_markdown(report: Mapping[str, Any]) -> list[str]:
         for label, lat in row["latency_s"].items():
             lines.append(
                 f"| {quality} | {row['sample']} | "
-                + (f"${cost['p50']:.4f} | ${cost['p95']:.4f} | " if cost else "n/a | n/a | ")
+                + (
+                    f"${cost['p50']:.4f} | ${cost['p95']:.4f} | "
+                    if cost
+                    else "n/a | n/a | "
+                )
                 + f"{lat['p50']:.2f} s ({label}, n={lat['n']}) | {lat['p95']:.2f} s | "
                 f"{raised} |"
             )
         if not row["latency_s"]:
-            lines.append(f"| {quality} | {row['sample']} | n/a | n/a | n/a | n/a | {raised} |")
+            lines.append(
+                f"| {quality} | {row['sample']} | n/a | n/a | n/a | n/a | {raised} |"
+            )
         recipe = row.get("recipe_cost_usd")
         if recipe:
             companions.append(
@@ -1141,7 +1182,8 @@ def _render_cell1(report: Mapping[str, Any]) -> list[str]:
         f"{ceil['before_seam']['authored']:.1%} ceiling on the authored six and "
         f"{ceil['before_seam']['with_discretionary']:.1%} with the discretionary one, "
         "so a rate near 94.7% is the budget, not a regression. After the seam "
-        f"only the two row-drops remain ({ceil['after_seam']['authored']:.1%} ceiling).",
+        "only the two row-drops remain "
+        f"({ceil['after_seam']['authored']:.1%} ceiling).",
     ]
     return lines
 
@@ -1285,7 +1327,13 @@ def _review_issues(review: Mapping[str, Any], notes: str | None, day: str) -> li
             )
         ]
     if len(entries) > 1:
-        return [_issue("REVIEW", f"{NOTES_PATH} has {len(entries)} entries dated {day}; one entry per run")]
+        return [
+            _issue(
+                "REVIEW",
+                f"{NOTES_PATH} has {len(entries)} entries dated {day}; "
+                "one entry per run",
+            )
+        ]
     entry = entries[0]
     issues: list[str] = []
     if _LOWERING.search(entry):
@@ -1308,9 +1356,7 @@ def _review_issues(review: Mapping[str, Any], notes: str | None, day: str) -> li
             )
         )
     low = entry.lower()
-    if not (
-        "cell-1" in low and "row-drop" in low and "as authored" in low
-    ):
+    if not ("cell-1" in low and "row-drop" in low and "as authored" in low):
         issues.append(
             _issue(
                 "REVIEW",
@@ -1372,7 +1418,8 @@ def score(
                 _issue(
                     "DATASET",
                     f"{case_id} {item.get('dataset_path')} sha256 "
-                    f"{actual or '(missing)'}, freeze says {item.get('dataset_sha256')}",
+                    f"{actual or '(missing)'}, "
+                    f"freeze says {item.get('dataset_sha256')}",
                 )
             )
 
