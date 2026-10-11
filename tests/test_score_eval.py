@@ -77,6 +77,37 @@ def _prereg() -> dict[str, Any]:
 _CUSTOM_IDS = {i for i, _, r in PUBLIC if r == "custom"}
 
 
+LIST_PRICES: dict[str, Any] = {
+    "snapshot_date": "2026-09-20",
+    "currency": "USD",
+    "models": {
+        "planner-m": {
+            "input_per_mtok": 3.0,
+            "output_per_mtok": 15.0,
+            "cache_read_per_mtok": 0.3,
+        },
+        "critic-m": {"input_per_mtok": 2.0, "output_per_mtok": 10.0},
+    },
+}
+
+
+def _call(role: str, model: str, tokens_in: int, tokens_out: int) -> dict[str, Any]:
+    return {
+        "role": role,
+        "model": model,
+        "input_tokens": tokens_in,
+        "output_tokens": tokens_out,
+    }
+
+
+def _usage() -> list[dict[str, Any]]:
+    # 1000 in / 200 out at 3 / 15 = $0.006; 500 in / 100 out at 2 / 10 = $0.002.
+    return [
+        _call("planner", "planner-m", 1000, 200),
+        _call("critic", "critic-m", 500, 100),
+    ]
+
+
 def _record(case_id: str, quality: str) -> dict[str, Any]:
     if case_id in _CUSTOM_IDS:
         return {
@@ -84,11 +115,15 @@ def _record(case_id: str, quality: str) -> dict[str, Any]:
             "quality": quality,
             "rail": "custom",
             "raster_nonblank": True,
+            "latency_s": 20.0,
+            "usage": _usage(),
         }
     return {
         "request_id": case_id,
         "quality": quality,
         "rail": "flint",
+        "latency_s": 2.0,
+        "usage": _usage(),
         "backend": "vega-lite",
         "painted": "pass",
         "compiled_row_count": 10,
@@ -97,7 +132,10 @@ def _record(case_id: str, quality: str) -> dict[str, Any]:
 
 
 def _records(ids: list[str], qualities: tuple[str, ...] = QUALITIES) -> dict[str, Any]:
-    return {"records": [_record(i, q) for i in ids for q in qualities]}
+    return {
+        "records": [_record(i, q) for i in ids for q in qualities],
+        "list_prices": copy.deepcopy(LIST_PRICES),
+    }
 
 
 def _git(repo: Path, *args: str) -> None:
@@ -806,8 +844,9 @@ def test_no_figure_outside_the_allow_list_in_any_output_form(
     assert {k for k in report if k not in tool.REPORT_META} == {
         "executable",
         "delivery",
+        "cost_latency",
     }
-    assert set(tool.FIGURES) == {"executable", "delivery", "rubric"}
+    assert set(tool.FIGURES) == {"executable", "delivery", "rubric", "cost_latency"}
     for text in forms:
         lowered = text.lower()
         for banned in ("end-to-end", "combined", "overall"):
@@ -1113,3 +1152,282 @@ def test_repeats_are_refused_in_smoke_too(tmp_path: Path) -> None:
     outputs = _records(SMOKE, ("balanced",))
     outputs["records"].append(dict(outputs["records"][0]))
     _refused(freeze.run(outputs, mode="smoke"), "REPEATS")
+
+
+# --- ADR-0028 cost and latency table (#277) ----------------------------------
+
+
+def _cost(freeze: Freeze, outputs: dict[str, Any]) -> dict[str, Any]:
+    table: dict[str, Any] = _report(freeze, outputs)["cost_latency"]
+    return table
+
+
+def _set_usage(
+    outputs: dict[str, Any], case_id: str, quality: str, tokens_out: int
+) -> None:
+    """One planner call of 1000 in and ``tokens_out`` out: $0.003 + out * 15e-6."""
+    _with(
+        outputs,
+        case_id,
+        quality,
+        usage=[_call("planner", "planner-m", 1000, tokens_out)],
+    )
+
+
+def _drop(outputs: dict[str, Any], case_id: str, quality: str, field: str) -> None:
+    for record in outputs["records"]:
+        if record["request_id"] == case_id and record["quality"] == quality:
+            del record[field]
+            return
+    raise AssertionError("no such record")
+
+
+def test_cost_is_usage_times_the_dated_list_price(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    table = _cost(freeze, _records(_public_ids()))
+    assert table["prices"]["snapshot_date"] == "2026-09-20"
+    row = table["by_quality"]["balanced"]
+    assert row["sample"] == len(PUBLIC)
+    assert row["cost_usd"]["p50"] == pytest.approx(0.008)
+    assert row["cost_usd"]["p95"] == pytest.approx(0.008)
+
+
+def test_p50_and_p95_are_interpolated_over_the_sample(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    for i, case_id in enumerate(["e01", "e02", "e03", "e05", "e07", "e08"]):
+        _set_usage(outputs, case_id, "balanced", 2000 * i)
+    for case_id in ("e04", "e06", "e09"):
+        _set_usage(outputs, case_id, "balanced", 0)
+    row = _cost(freeze, outputs)["by_quality"]["balanced"]
+    # Sorted dollars: 0.003 x4, 0.033, 0.063, 0.093, 0.123, 0.153 (n=9).
+    assert row["cost_usd"]["p50"] == pytest.approx(0.033)
+    assert row["cost_usd"]["p95"] == pytest.approx(0.123 + 0.6 * 0.03)
+
+
+def test_a_returned_record_without_usage_fails_the_run(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _drop(outputs, "e01", "fast", "usage")
+    line = _refused(freeze.run(outputs), "USAGE")
+    assert "e01" in line
+    assert "fast" in line
+
+
+def test_there_is_no_token_fallback_for_a_missing_price(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    del outputs["list_prices"]["models"]["critic-m"]
+    line = _refused(freeze.run(outputs), "USAGE")
+    assert "critic-m" in line
+
+
+def test_a_publish_run_without_list_prices_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    del outputs["list_prices"]
+    _refused(freeze.run(outputs, mode="publish"), "USAGE")
+    assert _eval_files(tmp_path) == set()
+
+
+def test_list_prices_must_be_dated(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    del outputs["list_prices"]["snapshot_date"]
+    _refused(freeze.run(outputs), "USAGE")
+
+
+def test_a_cache_read_is_priced_only_when_usage_reports_one(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    cached = _call("planner", "planner-m", 1000, 200)
+    cached["cache_read_tokens"] = 10000  # 10000 * 0.3 / 1e6 = $0.003 extra
+    _with(
+        outputs,
+        "e01",
+        "balanced",
+        usage=[cached, _call("critic", "critic-m", 500, 100)],
+    )
+    row = _cost(freeze, outputs)["by_quality"]["balanced"]
+    assert row["cost_usd"]["p50"] == pytest.approx(0.008)
+    assert row["cost_usd"]["p95"] == pytest.approx(0.008 + 0.6 * 0.003)
+
+
+def test_cache_read_tokens_without_a_cache_price_are_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    outputs["records"][0]["usage"][1]["cache_read_tokens"] = 5
+    assert "cache" in _refused(freeze.run(outputs), "USAGE")
+
+
+def test_raises_are_out_of_the_sample_and_counted_by_class_beside_it(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    raises = {
+        "e01": "InexpressibleRequestError: no",
+        "e02": "InexpressibleRequestError: no",
+        "e03": "UnanswerableInstructionError: x",
+        "e05": "PlannerFailureError: y",
+        "e07": "RasterisationError: z",
+    }
+    for case_id, error in raises.items():
+        _with(outputs, case_id, "balanced", error=error)
+        _drop(outputs, case_id, "balanced", "usage")  # a raise needs no dollars
+    row = _cost(freeze, outputs)["by_quality"]["balanced"]
+    assert row["sample"] == 4
+    assert row["raises"] == {
+        "InexpressibleRequestError": 2,
+        "UnanswerableInstructionError": 1,
+        "PlannerFailureError": 1,
+        "other": 1,
+    }
+
+
+def test_the_sample_includes_a_failed_returned_chart(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", painted="fail")
+    assert _cost(freeze, outputs)["by_quality"]["balanced"]["sample"] == len(PUBLIC)
+
+
+def test_latency_is_split_by_the_rail_of_the_returned_artifact(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", latency_s=8.0)
+    latency = _cost(freeze, outputs)["by_quality"]["balanced"]["latency_s"]
+    assert latency["deterministic"]["n"] == 6
+    assert latency["deterministic"]["p50"] == pytest.approx(2.0)
+    assert latency["deterministic"]["p95"] == pytest.approx(6.5)  # 2 + 0.75 * 6
+    assert latency["custom"]["n"] == 3
+    assert latency["custom"]["p50"] == pytest.approx(20.0)
+
+
+def test_a_returned_record_without_latency_fails_the_run(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _drop(outputs, "e04", "best", "latency_s")
+    line = _refused(freeze.run(outputs), "LATENCY")
+    assert "e04" in line
+
+
+def test_the_custom_companion_line_is_omitted_while_recipe_n_is_zero(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    ids = [i for i in _public_ids() if i not in _CUSTOM_IDS]
+    out, md = tmp_path / "r.json", tmp_path / "r.md"
+    outputs = _records(_public_ids())
+    prereg = _prereg()
+    prereg["requests"] = [r for r in prereg["requests"] if r["id"] in ids]
+    prereg["smoke_ids"] = ["e01", "e07", "e08"]
+    freeze.write_prereg(prereg)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-q", "-m", "flint only")
+    _git(tmp_path, "tag", "-f", "eval-benchmark-v1")
+    outputs["records"] = [r for r in outputs["records"] if r["request_id"] in ids]
+    proc = freeze.run(outputs, "--json", str(out), "--md", str(md))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    row = json.loads(out.read_text(encoding="utf-8"))["cost_latency"]["by_quality"]
+    assert "recipe_cost_usd" not in row["balanced"]
+    assert "custom" not in row["balanced"]["latency_s"]
+    section = md.read_text(encoding="utf-8").split("## Cost and latency")[1]
+    assert "companion" not in section.split("## Definitions")[0].lower()
+    assert "recipe cost" not in section.lower()
+
+
+def test_the_custom_companion_line_prints_p50_p95_and_n(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    out, md = tmp_path / "r.json", tmp_path / "r.md"
+    proc = freeze.run(_records(_public_ids()), "--json", str(out), "--md", str(md))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    row = json.loads(out.read_text(encoding="utf-8"))["cost_latency"]["by_quality"]
+    recipe = row["balanced"]["recipe_cost_usd"]
+    assert recipe["n"] == 3
+    assert recipe["p50"] == pytest.approx(0.008)
+    assert recipe["p95"] == pytest.approx(0.008)
+    assert "recipe cost p50" in md.read_text(encoding="utf-8")
+
+
+def test_a_balanced_repair_is_never_clipped_into_a_fast_row(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    for record in outputs["records"]:
+        if record["quality"] == "balanced":
+            record["usage"].append(_call("review_repair", "planner-m", 100000, 0))
+    table = _cost(freeze, outputs)["by_quality"]
+    assert table["balanced"]["cost_usd"]["p50"] == pytest.approx(0.308)
+    assert table["fast"]["cost_usd"]["p50"] == pytest.approx(0.008)
+    assert table["best"]["cost_usd"]["p50"] == pytest.approx(0.008)
+
+
+def test_a_fast_record_carrying_a_review_repair_is_refused(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    outputs["records"][0]["usage"].append(_call("review_repair", "planner-m", 1, 1))
+    assert "fast" in _refused(freeze.run(outputs), "REPAIR")
+
+
+def test_emit_repair_tokens_are_on_the_invoice(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    for record in outputs["records"]:
+        record["usage"].append(_call("emit_repair", "planner-m", 2000, 0))
+    row = _cost(freeze, outputs)["by_quality"]["fast"]
+    assert row["cost_usd"]["p50"] == pytest.approx(0.014)
+
+
+def test_only_the_balanced_row_states_the_working_targets(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    table = _cost(freeze, _records(_public_ids()))["by_quality"]
+    targets = table["balanced"]["targets"]
+    assert targets["cost_p50_usd"] == {"target": 0.05, "met": True}
+    assert targets["deterministic_latency_p50_s"] == {"target": 10.0, "met": True}
+    assert targets["custom_latency_p50_s"] == {"target": 60.0, "met": True}
+    for quality in ("fast", "best"):
+        assert "targets" not in table[quality]
+
+
+def test_fast_and_best_appear_in_the_table_but_not_in_the_reference_lines(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    md = tmp_path / "r.md"
+    out = tmp_path / "r.json"
+    proc = freeze.run(_records(_public_ids()), "--json", str(out), "--md", str(md))
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    report = json.loads(out.read_text(encoding="utf-8"))
+    assert set(report["reference_lines"]) == {"basis", "executable", "rubric"}
+    assert report["reference_lines"]["basis"] == "balanced"
+    section = md.read_text(encoding="utf-8").split("## Cost and latency")[1]
+    for quality in QUALITIES:
+        assert f"| {quality} | " in section
+
+
+def test_smoke_has_no_cost_table_and_needs_no_usage(tmp_path: Path) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(SMOKE, ("balanced",))
+    for record in outputs["records"]:
+        del record["usage"]
+    del outputs["list_prices"]
+    out = tmp_path / "r.json"
+    proc = freeze.run(outputs, "--json", str(out), mode="smoke")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "cost_latency" not in json.loads(out.read_text(encoding="utf-8"))
+
+
+def test_markdown_prints_the_sample_the_raise_counts_and_the_percentiles(
+    tmp_path: Path,
+) -> None:
+    freeze = _make_freeze(tmp_path)
+    outputs = _records(_public_ids())
+    _with(outputs, "e01", "balanced", error="PlannerFailureError: y")
+    _drop(outputs, "e01", "balanced", "usage")
+    md = tmp_path / "r.md"
+    assert freeze.run(outputs, "--md", str(md)).returncode == 0
+    text = md.read_text(encoding="utf-8")
+    assert "$0.05" in text
+    assert "PlannerFailureError 1" in text
+    assert "p50" in text and "p95" in text
+    assert "2026-09-20" in text

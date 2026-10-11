@@ -494,6 +494,7 @@ _DENOMINATORS = {
     "executable": "every request",
     "delivery": "served",
     "rubric": "executable hits",
+    "cost_latency": "returned",
 }
 
 
@@ -537,6 +538,15 @@ FIGURES: dict[str, Figure] = {
             "compiled row count equal to the bound row count",
             "served requests only (a record without an error); the excluded "
             "count of unserved requests is published beside it",
+        ),
+        _figure(
+            "cost_latency",
+            "Cost and latency",
+            "vendor-reported usage times the dated list price (USD), and "
+            "create_chart wall-clock, as p50 and p95 per quality; the $0.05, "
+            "10 s and 60 s figures are working targets, not gates",
+            "returned results only (raises are counted beside the sample, by "
+            "class); latency is split by the rail of the returned artifact",
         ),
         _figure(
             "rubric",
@@ -619,6 +629,203 @@ def _delivery_markdown(report: Mapping[str, Any]) -> list[str]:
             f"| {quality} | {row['delivered']} | {row['served']} | "
             f"{row['rate']:.3f} | {row['excluded']} ({excluded}) |"
         )
+    return lines
+
+
+# --- ADR-0028 cost and latency table (#277) -----------------------------------
+#
+# Harness-record fields this table reads (the harness meters, core stays free
+# of measurement; nothing here is public library surface):
+#   record["latency_s"]  create_chart wall-clock seconds.
+#   record["usage"]      one entry per in-loop model call:
+#                        {"role": planner|emit_repair|review_repair|critic|codegen,
+#                         "model", "input_tokens", "output_tokens",
+#                         "cache_read_tokens" (optional, only if the vendor
+#                         reported a cache read; input_tokens excludes it)}.
+#   outputs["list_prices"]  {"snapshot_date": "YYYY-MM-DD", "currency": "USD",
+#                         "models": {model: {"input_per_mtok", "output_per_mtok",
+#                         "cache_read_per_mtok" (optional)}}}.
+# A returned record without usage or latency, or a model without a price,
+# refuses the run: never a token-count fallback (ADR-0028 Decision 10).
+
+COST_TARGET_USD = 0.05
+DETERMINISTIC_LATENCY_TARGET_S = 10.0
+CUSTOM_LATENCY_TARGET_S = 60.0
+RAISE_CLASSES = (
+    "InexpressibleRequestError",
+    "UnanswerableInstructionError",
+    "PlannerFailureError",
+)
+
+
+def _percentile(values: list[float], p: float) -> float:
+    ordered = sorted(values)
+    position = p * (len(ordered) - 1)
+    low = int(position)
+    high = min(low + 1, len(ordered) - 1)
+    return ordered[low] + (ordered[high] - ordered[low]) * (position - low)
+
+
+def _p50_p95(values: list[float]) -> dict[str, Any]:
+    return {
+        "n": len(values),
+        "p50": _percentile(values, 0.5),
+        "p95": _percentile(values, 0.95),
+    }
+
+
+def _costing_required(mode: str, outputs: Mapping[str, Any]) -> bool:
+    return mode != "smoke" and (mode == "publish" or "list_prices" in outputs)
+
+
+def _returned(record: Mapping[str, Any]) -> bool:
+    return not record.get("error")
+
+
+def _cost_issues(outputs: Mapping[str, Any], records: list[Mapping[str, Any]]) -> list[str]:
+    prices = outputs.get("list_prices")
+    models = prices.get("models") if isinstance(prices, Mapping) else None
+    if not isinstance(prices, Mapping) or not isinstance(models, Mapping):
+        return [_issue("USAGE", "no list_prices with models; dollars cannot be computed")]
+    issues: list[str] = []
+    if not prices.get("snapshot_date"):
+        issues.append(_issue("USAGE", "list_prices carries no snapshot_date; prices must be dated"))
+    for record in records:
+        name = f"{record['request_id']} ({record['quality']})"
+        calls = record.get("usage")
+        if record["quality"] == "fast" and any(
+            isinstance(c, Mapping) and c.get("role") == "review_repair"
+            for c in calls or []
+        ):
+            issues.append(
+                _issue("REPAIR", f"{name}: a fast record carries a review repair; "
+                       "a balanced repair is never clipped into a fast row")
+            )
+        if not _returned(record):
+            continue
+        if not isinstance(record.get("latency_s"), (int, float)):
+            issues.append(_issue("LATENCY", f"{name}: returned record has no latency_s"))
+        if not isinstance(calls, list) or not calls:
+            issues.append(
+                _issue("USAGE", f"{name}: returned record has no vendor usage; "
+                       "the row cannot be dollarized")
+            )
+            continue
+        for call in calls:
+            model = str(call.get("model"))
+            price = models.get(model)
+            if not isinstance(price, Mapping):
+                issues.append(_issue("USAGE", f"{name}: no list price for model {model}"))
+            elif call.get("cache_read_tokens") and "cache_read_per_mtok" not in price:
+                issues.append(
+                    _issue("USAGE", f"{name}: cache read reported for {model} "
+                           "but no cache-read list price")
+                )
+    return issues
+
+
+def _dollars(record: Mapping[str, Any], models: Mapping[str, Any]) -> float:
+    total = 0.0
+    for call in record["usage"]:
+        price = models[call["model"]]
+        total += call["input_tokens"] * price["input_per_mtok"]
+        total += call["output_tokens"] * price["output_per_mtok"]
+        total += (call.get("cache_read_tokens") or 0) * price.get("cache_read_per_mtok", 0)
+    return total / 1_000_000
+
+
+def _cost_latency(
+    records: Iterable[Mapping[str, Any]], prices: Mapping[str, Any]
+) -> dict[str, Any]:
+    models = prices["models"]
+    by_quality: dict[str, Any] = {}
+    grouped: dict[str, list[Mapping[str, Any]]] = {}
+    for record in records:
+        grouped.setdefault(str(record["quality"]), []).append(record)
+    for quality in sorted(grouped, key=lambda q: (QUALITIES.index(q) if q in QUALITIES else 99, q)):
+        rows = grouped[quality]
+        returned = [r for r in rows if _returned(r)]
+        raises = {name: 0 for name in RAISE_CLASSES}
+        raises["other"] = 0
+        for r in rows:
+            if not _returned(r):
+                head = str(r["error"]).split(":", 1)[0].strip()
+                raises[head if head in RAISE_CLASSES else "other"] += 1
+        costs = [_dollars(r, models) for r in returned]
+        row: dict[str, Any] = {"sample": len(returned), "raises": raises}
+        latency: dict[str, Any] = {}
+        for label, rail in (("deterministic", "flint"), ("custom", "custom")):
+            values = [float(r["latency_s"]) for r in returned if r["rail"] == rail]
+            if values:
+                latency[label] = _p50_p95(values)
+        recipe = [c for r, c in zip(returned, costs, strict=True) if r["rail"] == "custom"]
+        if costs:
+            row["cost_usd"] = _p50_p95(costs)
+        row["latency_s"] = latency
+        if recipe:
+            row["recipe_cost_usd"] = _p50_p95(recipe)
+        if quality == REFERENCE_QUALITY:
+            targets: dict[str, Any] = {}
+            if costs:
+                targets["cost_p50_usd"] = {
+                    "target": COST_TARGET_USD,
+                    "met": row["cost_usd"]["p50"] <= COST_TARGET_USD,
+                }
+            for key, label, target in (
+                ("deterministic_latency_p50_s", "deterministic", DETERMINISTIC_LATENCY_TARGET_S),
+                ("custom_latency_p50_s", "custom", CUSTOM_LATENCY_TARGET_S),
+            ):
+                if label in latency:
+                    targets[key] = {"target": target, "met": latency[label]["p50"] < target}
+            row["targets"] = targets
+        by_quality[quality] = row
+    return {
+        "prices": {
+            "snapshot_date": prices["snapshot_date"],
+            "currency": prices.get("currency", "USD"),
+            "models": models,
+        },
+        "by_quality": by_quality,
+    }
+
+
+def _cost_markdown(report: Mapping[str, Any]) -> list[str]:
+    table = report["cost_latency"]
+    lines = [
+        "",
+        "## Cost and latency",
+        "",
+        f"Usage times list prices dated {table['prices']['snapshot_date']} "
+        f"({table['prices']['currency']}). Working targets, not gates: balanced "
+        f"cost p50 at most ${COST_TARGET_USD:.2f} on the sample below, "
+        f"deterministic latency p50 under {DETERMINISTIC_LATENCY_TARGET_S:g} s, "
+        f"custom latency p50 under {CUSTOM_LATENCY_TARGET_S:g} s. Fast and best "
+        "rows are observations.",
+        "",
+        "| Quality | Sample | Cost p50 | Cost p95 | Latency p50 | Latency p95 | Raises |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    companions: list[str] = []
+    for quality, row in table["by_quality"].items():
+        cost = row.get("cost_usd")
+        raised = ", ".join(f"{k} {v}" for k, v in row["raises"].items() if v) or "none"
+        for label, lat in row["latency_s"].items():
+            lines.append(
+                f"| {quality} | {row['sample']} | "
+                + (f"${cost['p50']:.4f} | ${cost['p95']:.4f} | " if cost else "n/a | n/a | ")
+                + f"{lat['p50']:.2f} s ({label}, n={lat['n']}) | {lat['p95']:.2f} s | "
+                f"{raised} |"
+            )
+        if not row["latency_s"]:
+            lines.append(f"| {quality} | {row['sample']} | n/a | n/a | n/a | n/a | {raised} |")
+        recipe = row.get("recipe_cost_usd")
+        if recipe:
+            companions.append(
+                f"- {quality}: custom-rail recipe cost p50 ${recipe['p50']:.4f}, "
+                f"p95 ${recipe['p95']:.4f} (n={recipe['n']})"
+            )
+    if companions:
+        lines += ["", "Custom-rail companion (recipe results only):", *companions]
     return lines
 
 
@@ -779,7 +986,10 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     if "rubric" in report:
         lines += _rubric_markdown(report)
     lines += _render_cell1(report)
-    lines += _delivery_markdown(report) + _definitions_markdown()
+    lines += _delivery_markdown(report)
+    if "cost_latency" in report:
+        lines += _cost_markdown(report)
+    lines += _definitions_markdown()
     return "\n".join(lines) + "\n"
 
 
@@ -858,6 +1068,9 @@ def score(
                 {(str(r["request_id"]), str(r["quality"])): r for r in well_formed},
             )
         )
+    costing = _costing_required(mode, outputs)
+    if costing:
+        issues.extend(_cost_issues(outputs, well_formed))
     issues.extend(_id_issues(prereg, mode, seen))
     issues.extend(_overlap_issues(prereg, instruments))
     if issues:
@@ -884,6 +1097,8 @@ def score(
             "rubric": {"target": RUBRIC_TARGET},
         },
     }
+    if costing:
+        report["cost_latency"] = _cost_latency(well_formed, outputs["list_prices"])
     if "judge_verdicts" in outputs:
         report["rubric"] = _rubric(well_formed, verdicts, n)
     enforce_allow_list(report)
