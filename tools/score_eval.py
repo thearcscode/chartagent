@@ -101,9 +101,7 @@ def expected_ids(prereg: Mapping[str, Any], mode: str) -> list[str]:
     if mode == "smoke":
         return [str(i) for i in prereg.get("smoke_ids") or []]
     if mode == "holdout":
-        return [str(i) for i in prereg.get("holdout_permutation") or []][
-            :HOLDOUT_SIZE
-        ]
+        return [str(i) for i in prereg.get("holdout_permutation") or []][:HOLDOUT_SIZE]
     return _ids(prereg.get("requests") or [])
 
 
@@ -445,6 +443,8 @@ REPORT_META = (
     "fixture_commit",
     "n",
     "qualities",
+    "cell1",
+    "designed_miss_budget",
 )
 _DENOMINATORS = {
     "executable": "every request",
@@ -578,6 +578,131 @@ def _delivery_markdown(report: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+# --- cell-1 era and designed-miss budget (#275) ------------------------------
+
+CELL1_RAISES_BEFORE_SEAM = 4
+ROW_DROPS = 2
+DISCRETIONARY_BEFORE_SEAM = 1
+ERAS = ("auto", "shipped", "absent")
+
+
+def seam_in_wheel() -> bool:
+    """True when the ``generate_recipe`` seam (ADR-0030) is importable."""
+    try:
+        from chartagent.plan.recipe import generate_recipe  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+def _cell1(
+    prereg: Mapping[str, Any],
+    records: Iterable[Mapping[str, Any]],
+    mode: str,
+    *,
+    era_flag: str,
+) -> dict[str, Any]:
+    """Read cell-1 by era. The tag is never consulted for an expected outcome."""
+    shipped = seam_in_wheel() if era_flag == "auto" else era_flag == "shipped"
+    in_run = set(expected_ids(prereg, mode))
+    cases = [
+        item
+        for item in [
+            *(prereg.get("requests") or []),
+            *(prereg.get("holdout_pool") or []),
+        ]
+        if item.get("cell") == 1 and str(item["id"]) in in_run
+    ]
+    ids = sorted(str(item["id"]) for item in cases)
+    by_quality: dict[str, Any] = {}
+    for record in records:
+        if str(record["request_id"]) not in ids:
+            continue
+        row = by_quality.setdefault(
+            str(record["quality"]), {"hits": 0, "unexpected": []}
+        )
+        hit = _is_hit(record)
+        row["hits"] += int(hit)
+        if hit != shipped:
+            row["unexpected"].append(str(record["request_id"]))
+    for row in by_quality.values():
+        row["unexpected"].sort()
+    return {
+        "era": "shipped" if shipped else "absent",
+        "era_source": "detected" if era_flag == "auto" else "override",
+        "expected_executable": shipped,
+        "expected_rail": "custom",
+        "case_ids": ids,
+        "intents": {str(i["id"]): i.get("intent") for i in cases},
+        "appropriateness_basis": "intent_tag",
+        "by_quality": dict(sorted(by_quality.items())),
+    }
+
+
+def _budget(n: int, era: str) -> dict[str, Any]:
+    before = CELL1_RAISES_BEFORE_SEAM + ROW_DROPS
+    return {
+        "era": era,
+        "n": n,
+        "before_seam": {
+            "cell1_raises": CELL1_RAISES_BEFORE_SEAM,
+            "row_drops": ROW_DROPS,
+            "authored": before,
+            "discretionary": DISCRETIONARY_BEFORE_SEAM,
+        },
+        "after_seam": {"row_drops": ROW_DROPS, "authored": ROW_DROPS},
+        "ceilings": {
+            "before_seam": {
+                "authored": (n - before) / n if n else 0.0,
+                "with_discretionary": (n - before - DISCRETIONARY_BEFORE_SEAM) / n
+                if n
+                else 0.0,
+            },
+            "after_seam": {"authored": (n - ROW_DROPS) / n if n else 0.0},
+        },
+    }
+
+
+def _render_cell1(report: Mapping[str, Any]) -> list[str]:
+    cell1 = report["cell1"]
+    budget = report["designed_miss_budget"]
+    ceil = budget["ceilings"]
+    n = budget["n"]
+    lines = ["", "## Cell-1 era and the designed-miss budget", ""]
+    if cell1["era"] == "shipped":
+        lines.append(
+            f"The `generate_recipe` seam shipped ({cell1['era_source']}): cell-1 "
+            "is an expected hit, read from the library, not from a stored tag."
+        )
+    else:
+        lines.append(
+            f"The `generate_recipe` seam absent ({cell1['era_source']}): cell-1 "
+            "is an expected miss, scored as if the seam were not in the wheel."
+        )
+    lines.append(
+        f"The tag is not edited and n stays {n} either way; cell-1 cases "
+        f"({', '.join(cell1['case_ids']) or 'none'}) keep their uncarryable "
+        "intent tag for appropriateness."
+    )
+    for quality, row in cell1["by_quality"].items():
+        extra = (
+            f"; against expectation: {', '.join(row['unexpected'])}"
+            if row["unexpected"]
+            else ""
+        )
+        lines.append(f"- {quality}: {row['hits']} cell-1 executable{extra}")
+    lines += [
+        "",
+        f"Before the seam the corpus carries six authored misses: four cell-1 "
+        f"raises and two row-drops, plus one discretionary. At n={n} that is "
+        f"{ceil['before_seam']['authored']:.1%} ceiling on the authored six and "
+        f"{ceil['before_seam']['with_discretionary']:.1%} with the discretionary one, "
+        "so a rate near 94.7% is the budget, not a regression. After the seam "
+        f"only the two row-drops remain ({ceil['after_seam']['authored']:.1%} ceiling).",
+    ]
+    return lines
+
+
 def render_markdown(report: Mapping[str, Any]) -> str:
     executable = report["executable"]
     target = executable["target"]
@@ -607,6 +732,7 @@ def render_markdown(report: Mapping[str, Any]) -> str:
             lines += ["", f"Misses at {quality}: {', '.join(row['misses'])}"]
     if "rubric" in report:
         lines += _rubric_markdown(report)
+    lines += _render_cell1(report)
     lines += _delivery_markdown(report) + _definitions_markdown()
     return "\n".join(lines) + "\n"
 
@@ -620,6 +746,7 @@ def score(
     prereg_sha256: str,
     dataset_sha256: Mapping[str, str | None],
     instruments: Mapping[str, Iterable[tuple[str, str]]],
+    cell1_era: str = "auto",
 ) -> dict[str, Any]:
     """Accept the run and return its report, or raise ``Refusal``."""
     issues: list[str] = []
@@ -654,7 +781,9 @@ def score(
         try:
             key = (str(record["request_id"]), str(record["quality"]))
         except (KeyError, TypeError):
-            issues.append(_issue("PARSE", f"record lacks request_id/quality: {record!r}"))
+            issues.append(
+                _issue("PARSE", f"record lacks request_id/quality: {record!r}")
+            )
             continue
         (repeated if key in seen else seen).add(key)
     for case_id, quality in sorted(repeated):
@@ -685,6 +814,7 @@ def score(
         raise Refusal(issues)
 
     n = len(expected_ids(prereg, mode))
+    cell1 = _cell1(prereg, well_formed, mode, era_flag=cell1_era)
     report: dict[str, Any] = {
         "status": "accepted",
         "mode": mode,
@@ -696,6 +826,8 @@ def score(
         "qualities": sorted({q for _, q in seen}),
         "executable": _executable(well_formed, n),
         "delivery": _delivery(well_formed),
+        "cell1": cell1,
+        "designed_miss_budget": _budget(len(expected_ids(prereg, mode)), cell1["era"]),
     }
     if "judge_verdicts" in outputs:
         report["rubric"] = _rubric(well_formed, verdicts, n)
@@ -719,9 +851,7 @@ def _instrument_pairs(path: Path) -> list[tuple[str, str]]:
     ]
 
 
-def _dataset_digests(
-    repo: Path, prereg: Mapping[str, Any]
-) -> dict[str, str | None]:
+def _dataset_digests(repo: Path, prereg: Mapping[str, Any]) -> dict[str, str | None]:
     out: dict[str, str | None] = {}
     for item in [*(prereg.get("requests") or []), *(prereg.get("holdout_pool") or [])]:
         path = repo / str(item.get("dataset_path"))
@@ -754,6 +884,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--prereg", default=None)
     parser.add_argument("--json", dest="json_path", default=None)
     parser.add_argument("--md", dest="md_path", default=None)
+    parser.add_argument("--cell1-era", dest="cell1_era", choices=ERAS, default="auto")
     parser.add_argument("--instrument", action="append", default=[])
     try:
         ns = parser.parse_args(args)
@@ -790,12 +921,15 @@ def main(argv: list[str] | None = None) -> int:
             prereg_sha256=digest(prereg_bytes),
             dataset_sha256=_dataset_digests(repo, prereg),
             instruments=instruments,
+            cell1_era=ns.cell1_era,
         )
     except Refusal as refusal:
         return _fail(refusal.issues)
 
     if ns.json_path:
-        Path(ns.json_path).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        Path(ns.json_path).write_text(
+            json.dumps(report, indent=2) + "\n", encoding="utf-8"
+        )
     if ns.md_path:
         Path(ns.md_path).write_text(render_markdown(report), encoding="utf-8")
     print(f"OK: {ns.mode} run accepted ({report['n']} cases).")

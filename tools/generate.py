@@ -83,7 +83,9 @@ def annotation(prop: dict[str, object]) -> tuple[str, str]:
     elif kind is None:
         ann = "object | None"
     else:
-        raise SystemExit(f"unknown property type {kind!r} — bundle widened, regenerate deliberately")
+        raise SystemExit(
+            f"unknown property type {kind!r} — bundle widened, regenerate deliberately"
+        )
 
     return ann, "Field(" + ", ".join(constraints) + ")"
 
@@ -130,11 +132,19 @@ def main() -> None:
                 out.append("    pass")
             for prop in props:
                 ann, field = annotation(prop)
-                alias = "" if ident(prop["key"]) == prop["key"] else f", alias={prop['key']!r}"
-                note = (
-                    "  # data-dependent: check() runs client-side" if prop["data_dependent"] else ""
+                alias = (
+                    ""
+                    if ident(prop["key"]) == prop["key"]
+                    else f", alias={prop['key']!r}"
                 )
-                out.append(f"    {ident(prop['key'])}: {ann} = {field[:-1]}{alias}){note}")
+                note = (
+                    "  # data-dependent: check() runs client-side"
+                    if prop["data_dependent"]
+                    else ""
+                )
+                out.append(
+                    f"    {ident(prop['key'])}: {ann} = {field[:-1]}{alias}){note}"
+                )
             out.append("")
 
     out.append("__all__ = [")

@@ -143,18 +143,25 @@ def _check_sql(sql: str) -> None:
 def build() -> None:
     DATA.mkdir(parents=True, exist_ok=True)
 
-    faculty = _sql_table("activity_1", "SELECT FacID, Lname, Fname, Rank, Sex, Building FROM Faculty")
+    faculty = _sql_table(
+        "activity_1", "SELECT FacID, Lname, Fname, Rank, Sex, Building FROM Faculty"
+    )
     faculty_students = _sql_table(
         "activity_1",
         "SELECT T1.Rank, T1.Sex, T1.Building, T1.FacID, T2.StuID "
         "FROM Faculty AS T1 JOIN Student AS T2 ON T1.FacID = T2.Advisor",
     )
-    hof = _sql_table("baseball_1", "SELECT player_id, yearid, votes, inducted, category FROM hall_of_fame")
+    hof = _sql_table(
+        "baseball_1",
+        "SELECT player_id, yearid, votes, inducted, category FROM hall_of_fame",
+    )
     home = _sql_table(
         "baseball_1",
         "SELECT year, league_id, team_id, games, openings, attendance FROM home_game",
     )
-    mill = _sql_table("architecture", "SELECT id, name, type, built_year, location FROM mill")
+    mill = _sql_table(
+        "architecture", "SELECT id, name, type, built_year, location FROM mill"
+    )
     architect_bridge = _sql_table(
         "architecture",
         "SELECT T1.id AS architect_id, T1.name, T1.nationality, "
@@ -177,15 +184,25 @@ def build() -> None:
         "allergy_1",
         "SELECT StuID, LName, Age, Sex, city_code FROM Student",
     )
-    people = _sql_table("candidate_poll", "SELECT People_ID, Name, Height, Weight, Date_of_Birth FROM people")
-    body = _sql_table("body_builder", "SELECT Body_Builder_ID, Snatch, Clean_Jerk, Total FROM body_builder")
-    cars = _sql_table("car_1", "SELECT Id, Cylinders, Accelerate, Weight, Year FROM cars_data")
+    people = _sql_table(
+        "candidate_poll",
+        "SELECT People_ID, Name, Height, Weight, Date_of_Birth FROM people",
+    )
+    body = _sql_table(
+        "body_builder",
+        "SELECT Body_Builder_ID, Snatch, Clean_Jerk, Total FROM body_builder",
+    )
+    cars = _sql_table(
+        "car_1", "SELECT Id, Cylinders, Accelerate, Weight, Year FROM cars_data"
+    )
     countries = _sql_table(
         "car_1",
         "SELECT T1.CountryName, T1.CountryId, T2.Id AS maker_id "
         "FROM COUNTRIES AS T1 JOIN CAR_MAKERS AS T2 ON T1.CountryId = T2.Country",
     )
-    climber = _sql_table("climbing", "SELECT Climber_ID, Name, Country, Time, Points FROM climber")
+    climber = _sql_table(
+        "climbing", "SELECT Climber_ID, Name, Country, Time, Points FROM climber"
+    )
     singer = _sql_table(
         "concert_singer",
         "SELECT Singer_ID, Name, Country, Age, Song_release_year, Is_male FROM singer",
@@ -259,7 +276,13 @@ def build() -> None:
     commute = pa.table(
         {
             "origin": ["Manhattan", "Brooklyn", "Queens", "Bronx", "Staten Island"],
-            "destination": ["Brooklyn", "Manhattan", "Manhattan", "Manhattan", "Manhattan"],
+            "destination": [
+                "Brooklyn",
+                "Manhattan",
+                "Manhattan",
+                "Manhattan",
+                "Manhattan",
+            ],
             "riders": [12000, 9000, 8000, 7000, 2000],
         }
     )
@@ -392,9 +415,7 @@ def build() -> None:
         "SELECT yearid, n, SUM(n) OVER (ORDER BY yearid) AS running "
         "FROM (SELECT yearid, count(*) AS n FROM source GROUP BY yearid)"
     )
-    pivot_sql = (
-        "PIVOT source ON Sex IN ('M', 'F') USING count(*) GROUP BY Rank"
-    )
+    pivot_sql = "PIVOT source ON Sex IN ('M', 'F') USING count(*) GROUP BY Rank"
     cond_sql = (
         "SELECT Rank, "
         "count(*) FILTER (WHERE Sex = 'M') AS men, "
@@ -459,7 +480,10 @@ def build() -> None:
     pin("r38", _add_sparse(hof, 6))
     pin("r39", _add_sparse(faculty, 6))
     pin("r40", _add_sparse(faculty, 6))
-    pin("r41", _with_json(empty_filter.append_column("note", pa.array(["x", "y"])), ["note"]))
+    pin(
+        "r41",
+        _with_json(empty_filter.append_column("note", pa.array(["x", "y"])), ["note"]),
+    )
     pin("r42", _with_json(pyramid.append_column("note", pa.array(["x"] * 8)), ["note"]))
     pin("r43", ohlc)
     pin(
@@ -472,7 +496,16 @@ def build() -> None:
     pin("r45", _add_sparse(words, 6))
     share_long = pa.table(
         {
-            "category": ["hardware", "hardware", "clothes", "clothes", "food", "food", "other", "other"],
+            "category": [
+                "hardware",
+                "hardware",
+                "clothes",
+                "clothes",
+                "food",
+                "food",
+                "other",
+                "other",
+            ],
             "region": ["north", "south"] * 4,
             "share": [20, 15, 10, 25, 30, 10, 5, 8],
         }
@@ -924,7 +957,7 @@ def build() -> None:
             "r24",
             source="nvbench1",
             source_id="80@1",
-            original="Return the number of the date of birth for all the guests with gender code \"Male\".",
+            original='Return the number of the date of birth for all the guests with gender code "Male".',
             rewritten="Return the number of the date of birth for all the guests with gender code Male.",
             stratum="common_path",
             cell=2,
@@ -1476,7 +1509,9 @@ def build() -> None:
         "reserves": reserves,
     }
     out = REPO / "corpus" / "pre-registration.json"
-    out.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    out.write_text(
+        json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     print(f"wrote {out} ({out.stat().st_size} bytes)")
 
     notice = REPO / "corpus" / "NOTICE"
