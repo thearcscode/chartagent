@@ -8,7 +8,12 @@ scoring. Later slices extend ``score`` with the published figures.
 Exit codes: 0 report written, 1 named check failed, 2 usage error.
 
     python tools/score_eval.py <outputs.json> --mode nightly --json <r.json>
-        [--repo DIR] [--prereg FILE] [--instrument NAME=FILE ...]
+        [--repo DIR] [--prereg FILE] [--instrument NAME=FILE ...] [--date YYYY-MM-DD]
+
+Writes by mode: only ``publish`` writes eval/report.{json,md}, eval/outputs.json
+and the dated copy under eval/runs/<date>/ (fixed paths; --json/--md refused).
+``nightly`` and ``smoke`` write nothing under eval/. ``holdout`` writes only
+under eval/holdout/. A refused run writes nothing.
 
 Files:
   * pre-registration: ``requests`` (the public 150; each ``id``, ``instruction``,
@@ -29,6 +34,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+from datetime import date as _date
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -40,6 +46,8 @@ MODES = ("smoke", "nightly", "holdout", "publish")
 QUALITIES = ("fast", "balanced", "best")
 HOLDOUT_SIZE = 30
 EXECUTABLE_TARGET = 0.95
+RUBRIC_TARGET = 0.85
+REFERENCE_QUALITY = "balanced"
 _PNG_MARKERS = ("iVBORw0KGgo", "\x89PNG", "data:image/png")
 _FLINT_ONLY_FIELDS = ("painted", "compiled_row_count", "bound_row_count")
 
@@ -127,6 +135,16 @@ def _id_issues(
     for quality in allowed:
         if quality not in by_quality and mode == "smoke":
             by_quality[quality] = set()
+    if mode == "publish":
+        absent = [q for q in QUALITIES if q not in by_quality]
+        if absent:
+            issues.append(
+                _issue(
+                    "IDS",
+                    f"a publish run needs all three qualities; "
+                    f"missing {', '.join(absent)}",
+                )
+            )
     for quality in sorted(q for q in by_quality if q in allowed):
         got = by_quality[quality]
         parts: list[str] = []
@@ -187,6 +205,14 @@ def _record_issues(record: Mapping[str, Any]) -> list[str]:
     """Refusals for one record: harness faults and authoring faults, not misses."""
     name = f"{record['request_id']} ({record['quality']})"
     issues: list[str] = []
+    if record.get("create_chart_calls", 1) != 1:
+        issues.append(
+            _issue(
+                "CALLS",
+                f"{name}: {record.get('create_chart_calls')} create_chart calls; "
+                "exactly one per (case, quality), no retries or majority-of-three",
+            )
+        )
     if _carries_png(record):
         issues.append(
             _issue("PNG", f"{name}: outputs.json carries PNG bytes; records only")
@@ -243,6 +269,10 @@ def _is_hit(record: Mapping[str, Any]) -> bool:
     )
 
 
+def _spans(interval: Mapping[str, float], target: float) -> bool:
+    return interval["lower"] <= target <= interval["upper"]
+
+
 def _executable(records: Iterable[Mapping[str, Any]], n: int) -> dict[str, Any]:
     misses: dict[str, list[str]] = {}
     hits: dict[str, int] = {}
@@ -263,11 +293,12 @@ def _executable(records: Iterable[Mapping[str, Any]], n: int) -> dict[str, Any]:
             "n": n,
             "rate": k / n if n else 0.0,
             "wilson_95": interval,
-            "interval_spans_target": interval["lower"]
-            <= EXECUTABLE_TARGET
-            <= interval["upper"],
             "misses": sorted(misses[quality]),
         }
+        if quality == REFERENCE_QUALITY:
+            by_quality[quality]["interval_spans_target"] = _spans(
+                interval, EXECUTABLE_TARGET
+            )
     return {"target": EXECUTABLE_TARGET, "by_quality": by_quality}
 
 
@@ -396,7 +427,11 @@ def _rubric(
             "failed": sorted(failed[quality]),
             "not_checked_by_item": dict(sorted(unchecked[quality].items())),
         }
-    return {"by_quality": by_quality}
+        if quality == REFERENCE_QUALITY:
+            by_quality[quality]["interval_spans_target"] = _spans(
+                by_quality[quality]["wilson_95"], RUBRIC_TARGET
+            )
+    return {"target": RUBRIC_TARGET, "by_quality": by_quality}
 
 
 def _rubric_markdown(report: Mapping[str, Any]) -> list[str]:
@@ -418,6 +453,14 @@ def _rubric_markdown(report: Mapping[str, Any]) -> list[str]:
             f"Wilson 95% [{w['lower']:.3f}, {w['upper']:.3f}] | "
             f"{row['excluded']} excluded |"
         )
+    balanced = rows.get(REFERENCE_QUALITY)
+    if balanced is not None:
+        where = "spans" if balanced["interval_spans_target"] else "does not span"
+        lines += [
+            "",
+            f"The {report['rubric']['target']:.0%} reference line is read from "
+            f"{REFERENCE_QUALITY} only; its interval {where} it.",
+        ]
     for quality, row in rows.items():
         counts = ", ".join(f"{i} {c}" for i, c in row["not_checked_by_item"].items())
         lines += ["", f"`not_checked` at {quality}: {counts}"]
@@ -445,6 +488,7 @@ REPORT_META = (
     "qualities",
     "cell1",
     "designed_miss_budget",
+    "reference_lines",
 )
 _DENOMINATORS = {
     "executable": "every request",
@@ -719,7 +763,9 @@ def render_markdown(report: Mapping[str, Any]) -> str:
     ]
     for quality, row in executable["by_quality"].items():
         w = row["wilson_95"]
-        if row["interval_spans_target"]:
+        if "interval_spans_target" not in row:
+            where = f"no reference line ({REFERENCE_QUALITY} only)"
+        elif row["interval_spans_target"]:
             where = "spans the reference"
         else:
             where = "above" if w["lower"] > target else "below"
@@ -801,7 +847,11 @@ def score(
     verdicts = [
         v for v in outputs.get("judge_verdicts") or [] if isinstance(v, Mapping)
     ]
-    if "judge_verdicts" in outputs:
+    if mode == "smoke" and "judge_verdicts" in outputs:
+        issues.append(
+            _issue("JUDGE", "a smoke run is executable only: no judge, no rubric")
+        )
+    elif "judge_verdicts" in outputs:
         issues.extend(
             _judge_issues(
                 verdicts,
@@ -828,6 +878,11 @@ def score(
         "delivery": _delivery(well_formed),
         "cell1": cell1,
         "designed_miss_budget": _budget(len(expected_ids(prereg, mode)), cell1["era"]),
+        "reference_lines": {
+            "basis": REFERENCE_QUALITY,
+            "executable": {"target": EXECUTABLE_TARGET},
+            "rubric": {"target": RUBRIC_TARGET},
+        },
     }
     if "judge_verdicts" in outputs:
         report["rubric"] = _rubric(well_formed, verdicts, n)
@@ -861,6 +916,56 @@ def _dataset_digests(repo: Path, prereg: Mapping[str, Any]) -> dict[str, str | N
     return out
 
 
+# --- what each run mode may write (#276) -------------------------------------
+#
+# Only ``publish`` writes the committed latest table and a dated snapshot.
+# ``nightly`` and ``smoke`` write nothing under eval/ (a table goes to a path
+# the caller names outside it, or nowhere). ``holdout`` writes only under
+# eval/holdout/. The paths are fixed here, not chosen by the caller.
+
+LATEST = ("eval/report.json", "eval/report.md", "eval/outputs.json")
+RUNS_DIR = "eval/runs"
+HOLDOUT_DIR = "eval/holdout"
+
+
+def _under(path: Path, root: Path) -> bool:
+    return path.resolve().is_relative_to(root.resolve())
+
+
+def _write_issues(mode: str, repo: Path, paths: Iterable[str | None]) -> list[str]:
+    """Refuse a caller-chosen report path the mode may not write."""
+    issues: list[str] = []
+    for raw in paths:
+        if not raw:
+            continue
+        path = Path(raw)
+        if mode == "holdout":
+            ok = _under(path, repo / HOLDOUT_DIR)
+            rule = f"a hold-out run writes only under {HOLDOUT_DIR}/"
+        else:
+            ok = not _under(path, repo / "eval")
+            rule = f"a {mode} run writes none of the committed files under eval/"
+        if not ok:
+            issues.append(_issue("WRITE", f"{raw}: {rule}"))
+    return issues
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def _write_publish(
+    repo: Path, report: Mapping[str, Any], outputs_text: str, day: str
+) -> None:
+    js = json.dumps(report, indent=2) + "\n"
+    md = render_markdown(report)
+    for base in (repo / "eval", repo / RUNS_DIR / day):
+        _write(base / "report.json", js)
+        _write(base / "report.md", md)
+        _write(base / "outputs.json", outputs_text)
+
+
 def _fail(issues: list[str]) -> int:
     for line in issues:
         print(line)
@@ -885,6 +990,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", dest="json_path", default=None)
     parser.add_argument("--md", dest="md_path", default=None)
     parser.add_argument("--cell1-era", dest="cell1_era", choices=ERAS, default="auto")
+    parser.add_argument("--date", default=None)
     parser.add_argument("--instrument", action="append", default=[])
     try:
         ns = parser.parse_args(args)
@@ -893,6 +999,19 @@ def main(argv: list[str] | None = None) -> int:
         return int(code) if isinstance(code, int) else 2
 
     repo = Path(ns.repo)
+    if ns.mode == "publish" and (ns.json_path or ns.md_path):
+        print(
+            "usage: a publish run writes fixed paths; --json/--md are not accepted",
+            file=sys.stderr,
+        )
+        return 2
+    day = ns.date or _date.today().isoformat()
+    if ns.mode == "publish" and (len(day) != 10 or not day.replace("-", "").isdigit()):
+        print(f"usage: --date must be YYYY-MM-DD, got {day!r}", file=sys.stderr)
+        return 2
+    write_issues = _write_issues(ns.mode, repo, [ns.json_path, ns.md_path])
+    if write_issues:
+        return _fail(write_issues)
     prereg_path = Path(ns.prereg) if ns.prereg else repo / PREREG_IN_TAG
     instruments: dict[str, list[tuple[str, str]]] = {}
     for spec in ns.instrument:
@@ -926,12 +1045,17 @@ def main(argv: list[str] | None = None) -> int:
     except Refusal as refusal:
         return _fail(refusal.issues)
 
-    if ns.json_path:
-        Path(ns.json_path).write_text(
-            json.dumps(report, indent=2) + "\n", encoding="utf-8"
-        )
-    if ns.md_path:
-        Path(ns.md_path).write_text(render_markdown(report), encoding="utf-8")
+    if ns.mode == "publish":
+        _write_publish(repo, report, Path(ns.outputs).read_text(encoding="utf-8"), day)
+    else:
+        json_path, md_path = ns.json_path, ns.md_path
+        if ns.mode == "holdout":
+            json_path = json_path or str(repo / HOLDOUT_DIR / "report.json")
+            md_path = md_path or str(repo / HOLDOUT_DIR / "report.md")
+        if json_path:
+            _write(Path(json_path), json.dumps(report, indent=2) + "\n")
+        if md_path:
+            _write(Path(md_path), render_markdown(report))
     print(f"OK: {ns.mode} run accepted ({report['n']} cases).")
     return 0
 
