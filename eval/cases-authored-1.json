@@ -1,0 +1,479 @@
+{
+  "id_prefix": "auth-",
+  "dataset_prefix": "eval/data/authored-",
+  "counts": {
+    "cell1": 4,
+    "cell3": 2,
+    "cell2_adversarial": 8
+  },
+  "cases": [
+    {
+      "id": "auth-c1-01",
+      "instruction": "Which subscribers are on the newsletter and the podcast list but not the webinar list?",
+      "source": "authored",
+      "source_id": "authored-c1-overlap-lists",
+      "query_original": "which subscribers are on the newsletter and the podcast but not the webinar",
+      "query_rewritten": "Which subscribers are on the newsletter and the podcast list but not the webinar list?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "cell_family": null,
+      "intent": "set overlap / intersection structure",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c1-01.parquet",
+      "dataset_sha256": "10fa15452ed8939047858f5cb364241db1d08f01e350d84849dc96a75fcd4516",
+      "reference_frame": null,
+      "expressible_if": [
+        "Venn",
+        "Euler",
+        "UpSet"
+      ],
+      "ambiguity_degree": null,
+      "expected_outcome": "miss",
+      "expected_bucket": 1
+    },
+    {
+      "id": "auth-c1-02",
+      "instruction": "How do the eight clinics overlap in the conditions they treat?",
+      "source": "authored",
+      "source_id": "authored-c1-overlap-clinics",
+      "query_original": "how do the eight clinics overlap in the conditions they treat",
+      "query_rewritten": "How do the eight clinics overlap in the conditions they treat?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "cell_family": null,
+      "intent": "set overlap / intersection structure",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c1-02.parquet",
+      "dataset_sha256": "efd22f1370a4033ddc0d316de377823e98e0682e8f6b85f412b1b7cd76773a05",
+      "reference_frame": null,
+      "expressible_if": [
+        "Venn",
+        "Euler",
+        "UpSet"
+      ],
+      "ambiguity_degree": null,
+      "expected_outcome": "miss",
+      "expected_bucket": 1
+    },
+    {
+      "id": "auth-c1-03",
+      "instruction": "How does the vote split between the three parties in every district?",
+      "source": "authored",
+      "source_id": "authored-c1-simplex-vote",
+      "query_original": "how the vote splits between the three parties in every district",
+      "query_rewritten": "How does the vote split between the three parties in every district?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "cell_family": null,
+      "intent": "compositional simplex",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c1-03.parquet",
+      "dataset_sha256": "20a01e00c4bf6a890f6f0215d25f3a3ae811d37b9708efac38b832190959f028",
+      "reference_frame": null,
+      "expressible_if": [
+        "Ternary"
+      ],
+      "ambiguity_degree": null,
+      "expected_outcome": "miss",
+      "expected_bucket": 1
+    },
+    {
+      "id": "auth-c1-04",
+      "instruction": "Where does freight travel between the seven depots?",
+      "source": "authored",
+      "source_id": "authored-c1-od-freight",
+      "query_original": "where does freight travel between the seven depots",
+      "query_rewritten": "Where does freight travel between the seven depots?",
+      "stratum": "adversarial",
+      "cell": 1,
+      "cell_family": null,
+      "intent": "origin–destination flow on a geography",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c1-04.parquet",
+      "dataset_sha256": "4d18121f2c088d876135f322cfc022f55f8fb364835842c3ea34b71eb0222e93",
+      "reference_frame": null,
+      "expressible_if": [
+        "Flow Map"
+      ],
+      "ambiguity_degree": null,
+      "expected_outcome": "miss",
+      "expected_bucket": 1
+    },
+    {
+      "id": "auth-c3-01",
+      "instruction": "Compare 2023 revenue across all of our stores.",
+      "source": "authored",
+      "source_id": "authored-c3-silent-drop-stores",
+      "query_original": "compare 2023 revenue across all of our stores",
+      "query_rewritten": "Compare 2023 revenue across all of our stores.",
+      "stratum": "common_path",
+      "cell": 3,
+      "cell_family": "silent_row_drop",
+      "intent": "comparison across categories",
+      "shape": "long",
+      "dataset_path": "eval/data/authored-c3-01.parquet",
+      "dataset_sha256": "964447bb5a138b69e7999000d2090347d083e1de6a030a6f22f33fbcbe6a7d52",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "store",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {}
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    },
+    {
+      "id": "auth-c3-02",
+      "instruction": "Rank every product by total units sold.",
+      "source": "authored",
+      "source_id": "authored-c3-silent-drop-skus",
+      "query_original": "rank every product by total units sold",
+      "query_rewritten": "Rank every product by total units sold.",
+      "stratum": "common_path",
+      "cell": 3,
+      "cell_family": "silent_row_drop",
+      "intent": "ranking / top-N",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c3-02.parquet",
+      "dataset_sha256": "1a3a9d33505c469c07dd648d706b603915353d96c19772868b706b7e68d21f98",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "sku",
+            "y": "units_total"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "sort": [
+              {
+                "field": "units_total",
+                "dir": "desc",
+                "nulls": "last"
+              }
+            ]
+          }
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    },
+    {
+      "id": "auth-c2adv-01",
+      "instruction": "Plot monthly visits for each acquisition channel.",
+      "source": "authored",
+      "source_id": "authored-c2adv-unpivot-months",
+      "query_original": "plot monthly visits for each acquisition channel",
+      "query_rewritten": "Plot monthly visits for each acquisition channel.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "cell_family": null,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c2adv-01.parquet",
+      "dataset_sha256": "5633a1d447d50bc5479a0247fb89be0e0d0bff16125ea6a624eaea3ddac446a1",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "month",
+            "y": "visits",
+            "color": "channel"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT channel, month, visits FROM source UNPIVOT (visits FOR month IN (jan, feb, mar, apr, may, jun))"
+          }
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    },
+    {
+      "id": "auth-c2adv-02",
+      "instruction": "Compare each student's score before and after the course.",
+      "source": "authored",
+      "source_id": "authored-c2adv-union-phases",
+      "query_original": "compare each student's score before and after the course",
+      "query_rewritten": "Compare each student's score before and after the course.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "cell_family": null,
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c2adv-02.parquet",
+      "dataset_sha256": "ecd7789086cb3997cd746e74a24b24bf1889e90b10e2c4e13af09a451d2e390f",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Grouped Bar Chart",
+          "encodings": {
+            "x": "student",
+            "y": "score",
+            "group": "phase"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT student, 'before' AS phase, pre_score AS score FROM source UNION ALL SELECT student, 'after', post_score FROM source"
+          }
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    },
+    {
+      "id": "auth-c2adv-03",
+      "instruction": "What is the average rating for each survey question?",
+      "source": "authored",
+      "source_id": "authored-c2adv-unpivot-survey",
+      "query_original": "what is the average rating for each survey question",
+      "query_rewritten": "What is the average rating for each survey question?",
+      "stratum": "adversarial",
+      "cell": 2,
+      "cell_family": null,
+      "intent": "comparison across categories",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c2adv-03.parquet",
+      "dataset_sha256": "512130f2f084cada354491a1d6b62b116f9355e98030e2f13c26e8c04f8714bf",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "question",
+            "y": "avg_rating"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT question, avg(rating) AS avg_rating FROM (SELECT * FROM source UNPIVOT (rating FOR question IN (q1, q2, q3, q4, q5, q6, q7, q8))) GROUP BY question ORDER BY question"
+          }
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    },
+    {
+      "id": "auth-c2adv-04",
+      "instruction": "Show the cumulative share of tickets closed by day.",
+      "source": "authored",
+      "source_id": "authored-c2adv-window-closed",
+      "query_original": "show the cumulative share of tickets closed by day",
+      "query_rewritten": "Show the cumulative share of tickets closed by day.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "cell_family": null,
+      "intent": "trend over time",
+      "shape": "wide_sparse",
+      "dataset_path": "eval/data/authored-c2adv-04.parquet",
+      "dataset_sha256": "58310a92aacaeda79a25df0ed947c3e50df790a1ed7337d8f6cde321ce5f0970",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Area Chart",
+          "encodings": {
+            "x": "day",
+            "y": "cumulative_pct"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT day, 100.0 * SUM(closed) OVER (ORDER BY day) / SUM(closed) OVER () AS cumulative_pct FROM source"
+          }
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    },
+    {
+      "id": "auth-c2adv-05",
+      "instruction": "Is a higher price linked to a better rating?",
+      "source": "authored",
+      "source_id": "authored-c2adv-json-fields",
+      "query_original": "is a higher price linked to a better rating",
+      "query_rewritten": "Is a higher price linked to a better rating?",
+      "stratum": "adversarial",
+      "cell": 2,
+      "cell_family": null,
+      "intent": "correlation between measures",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c2adv-05.parquet",
+      "dataset_sha256": "15d6fb0a582720c3ab287d944b6e407d5bfe43ef4178447a5aafa1efb3b33309",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Scatter Plot",
+          "encodings": {
+            "x": "price",
+            "y": "rating"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT CAST(json_extract_string(attrs, '$.price') AS DOUBLE) AS price, CAST(json_extract_string(attrs, '$.rating') AS DOUBLE) AS rating FROM source"
+          }
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    },
+    {
+      "id": "auth-c2adv-06",
+      "instruction": "Which five articles carry the most tags?",
+      "source": "authored",
+      "source_id": "authored-c2adv-json-array",
+      "query_original": "which five articles carry the most tags",
+      "query_rewritten": "Which five articles carry the most tags?",
+      "stratum": "adversarial",
+      "cell": 2,
+      "cell_family": null,
+      "intent": "ranking / top-N",
+      "shape": "nested",
+      "dataset_path": "eval/data/authored-c2adv-06.parquet",
+      "dataset_sha256": "367d4e17702a987c42985b752a89974a08a8648048cff9f25ae5e5289bcad6f4",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "article",
+            "y": "tag_count"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT article, json_array_length(tags) AS tag_count FROM source ORDER BY tag_count DESC, article LIMIT 5"
+          }
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    },
+    {
+      "id": "auth-c2adv-07",
+      "instruction": "Plot weekly order revenue.",
+      "source": "authored",
+      "source_id": "authored-c2adv-strptime-weekly",
+      "query_original": "plot weekly order revenue",
+      "query_rewritten": "Plot weekly order revenue.",
+      "stratum": "adversarial",
+      "cell": 2,
+      "cell_family": null,
+      "intent": "trend over time",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c2adv-07.parquet",
+      "dataset_sha256": "46b07c1576657567b093a35dc76040d56a4f6c47581a27ec9edf8da743d36635",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Line Chart",
+          "encodings": {
+            "x": "week",
+            "y": "revenue"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT date_trunc('week', strptime(order_date, '%d/%m/%Y')) AS week, sum(amount) AS revenue FROM source GROUP BY week ORDER BY week"
+          }
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    },
+    {
+      "id": "auth-c2adv-08",
+      "instruction": "How far is each team's goal difference from the league average?",
+      "source": "authored",
+      "source_id": "authored-c2adv-window-vs-average",
+      "query_original": "how far is each team's goal difference from the league average",
+      "query_rewritten": "How far is each team's goal difference from the league average?",
+      "stratum": "adversarial",
+      "cell": 2,
+      "cell_family": null,
+      "intent": "comparison across categories",
+      "shape": "wide",
+      "dataset_path": "eval/data/authored-c2adv-08.parquet",
+      "dataset_sha256": "5245d53a95aa499021954d4e196ce1c620f7b68385a1e32b22cf27297b3945a9",
+      "reference_frame": {
+        "chart_spec": {
+          "chartType": "Bar Chart",
+          "encodings": {
+            "x": "team",
+            "y": "vs_average"
+          },
+          "baseSize": {
+            "width": 640,
+            "height": 400
+          }
+        },
+        "x_chartagent": {
+          "transform": {
+            "raw_sql": "SELECT team, (goals_for - goals_against) - avg(goals_for - goals_against) OVER () AS vs_average FROM source"
+          }
+        }
+      },
+      "expressible_if": null,
+      "ambiguity_degree": null,
+      "expected_outcome": "hit",
+      "expected_bucket": null
+    }
+  ]
+}

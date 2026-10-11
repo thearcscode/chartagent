@@ -1,0 +1,128 @@
+This directory carries mixed licences. It is a NOTICE, not a relicensing.
+
+nvBench 1.0 query text (source nvbench1)
+  Copyright the nvBench authors (TsinghuaDatabaseGroup/nvBench).
+  Licence: MIT, asserted in that repository's README.
+  query_original is that text; query_rewritten is a content-preserving
+  fluency rewrite by the chartagent authors.
+
+Tables extracted from nvBench 1.0 databases
+  Those tables descend from Spider (Yale / Yale-LILY).
+  Licence: CC BY-SA 4.0 (https://yale-lily.github.io/spider).
+  Share-alike and attribution apply to the Spider-derived files listed
+  below and to nothing else; they do not relicense the rest of this
+  Apache-2.0 repository. The Spider-derived files are exactly:
+
+    eval/data/nv001.parquet
+    eval/data/nv002.parquet
+    eval/data/nv003.parquet
+    eval/data/nv004.parquet
+    eval/data/nv005.parquet
+    eval/data/nv006.parquet
+    eval/data/nv007.parquet
+    eval/data/nv008.parquet
+    eval/data/nv009.parquet
+    eval/data/nv010.parquet
+    eval/data/nv011.parquet
+    eval/data/nv012.parquet
+    eval/data/nv013.parquet
+    eval/data/nv014.parquet
+    eval/data/nv015.parquet
+    eval/data/nv016.parquet
+    eval/data/nv017.parquet
+    eval/data/nv018.parquet
+    eval/data/nv019.parquet
+    eval/data/nv020.parquet
+    eval/data/nv021.parquet
+    eval/data/nv022.parquet
+    eval/data/nv023.parquet
+    eval/data/nv024.parquet
+    eval/data/nv025.parquet
+    eval/data/nv026.parquet
+    eval/data/nv027.parquet
+    eval/data/nv028.parquet
+    eval/data/nv029.parquet
+    eval/data/nv030.parquet
+    eval/data/nv031.parquet
+    eval/data/nv032.parquet
+    eval/data/nv033.parquet
+    eval/data/nv034.parquet
+    eval/data/nv035.parquet
+    eval/data/nv036.parquet
+    eval/data/nv037.parquet
+    eval/data/nv038.parquet
+    eval/data/nv039.parquet
+    eval/data/nv040.parquet
+    eval/data/nv041.parquet
+    eval/data/nv042.parquet
+    eval/data/nv043.parquet
+    eval/data/nv044.parquet
+    eval/data/nv045.parquet
+    eval/data/nv046.parquet
+    eval/data/nv047.parquet
+    eval/data/nv048.parquet
+    eval/data/nv049.parquet
+    eval/data/nv050.parquet
+    eval/data/nv051.parquet
+    eval/data/nv052.parquet
+    eval/data/nv053.parquet
+    eval/data/nv054.parquet
+    eval/data/nv055.parquet
+    eval/data/nv056.parquet
+    eval/data/nv057.parquet
+    eval/data/nv058.parquet
+    eval/data/nv059.parquet
+    eval/data/nv060.parquet
+    eval/data/nv061.parquet
+    eval/data/nv062.parquet
+    eval/data/nv063.parquet
+    eval/data/nv064.parquet
+    eval/data/nv065.parquet
+    eval/data/nv066.parquet
+    eval/data/nv067.parquet
+    eval/data/nv068.parquet
+    eval/data/nv069.parquet
+    eval/data/nv070.parquet
+    eval/data/nv071.parquet
+    eval/data/nv072.parquet
+    eval/data/nv073.parquet
+    eval/data/nv074.parquet
+    eval/data/nv075.parquet
+    eval/data/nv076.parquet
+    eval/data/nv077.parquet
+    eval/data/nv078.parquet
+    eval/data/nv079.parquet
+    eval/data/nv080.parquet
+    eval/data/nv081.parquet
+    eval/data/nv082.parquet
+    eval/data/nv083.parquet
+    eval/data/nv084.parquet
+    eval/data/nv085.parquet
+    eval/data/nv086.parquet
+    eval/data/nv087.parquet
+    eval/data/nv088.parquet
+    eval/data/nv089.parquet
+    eval/data/nv090.parquet
+    eval/data/nv091.parquet
+    eval/data/nv092.parquet
+    eval/data/nv093.parquet
+    eval/data/nv094.parquet
+    eval/data/nv095.parquet
+    eval/data/nv096.parquet
+    eval/data/nv097.parquet
+    eval/data/nv098.parquet
+    eval/data/nv099.parquet
+    eval/data/nv100.parquet
+    eval/data/nv101.parquet
+    eval/data/nv102.parquet
+
+Authored requests and tables (source authored)
+  Copyright the chartagent authors.
+  Licence: Apache-2.0, as the rest of this repository. These are every
+  other file under eval/data/ (authored-*.parquet and holdout-*.parquet)
+  and every request whose source is authored, public or hold-out.
+
+Quda is not used. NLV Corpus is a register reference only and is not
+vendored. nvBench 2.0 is not vendored: HKUSTDial/nvBench-2.0 does not
+assert a commercially usable licence in the artefact itself, so the
+cell-4 ambiguity sentences were authored to the frozen degrees.
