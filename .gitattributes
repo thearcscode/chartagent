@@ -1,3 +1,4 @@
 src/chartagent/_bundle/*.js linguist-generated=true -text
 tools/paint/vendor/*.js linguist-generated=true -text
 corpus/pre-registration.json text eol=lf
+eval/pre-registration.json text eol=lf
