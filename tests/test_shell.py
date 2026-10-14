@@ -1165,3 +1165,52 @@ def test_adversarial_library_executes_as_one_script_under_csp(
     assert main.evaluate("() => window.__marker") == _ADVERSARIAL_EXPECTED[case]
     assert main.evaluate("() => document.querySelectorAll('b').length") == 0
     assert main.evaluate("() => document.scripts.length") == 3
+
+
+# --- The residual safe embedding cannot represent (#222) ----------------
+#
+# `<!--` is the identity only inside strings, templates, regex literals and
+# comments. As bare code it is an HTML-like comment, and under
+# `String.raw` the escape's backslash is observable. Both fail safe; neither
+# is a `DocumentAssemblyError` kind (ADR-0017 D15 erratum).
+
+_BARE_COMMENT_OPEN_MODULE = "var x = 1; <!-- an HTML-like comment\n" + _RENDER_MODULE
+_STRING_RAW_MODULE = "window.__marker = String.raw`a<!--b`;\n" + _RENDER_MODULE
+
+
+def test_bare_code_comment_open_builds_without_breaking_out_of_the_script() -> None:
+    shell = build_shell(_from_scratch_document(_BARE_COMMENT_OPEN_MODULE), libraries={})
+    assert shell.html.lower().count("</script") == 2
+    assert "<!--" not in shell.html
+    assert _csp_script_hashes(shell) == set(_served_script_hashes(shell))
+
+
+@pytestmark_live
+def test_bare_code_comment_open_fails_at_paint_not_at_assembly(page: object) -> None:
+    shell = build_shell(_from_scratch_document(_BARE_COMMENT_OPEN_MODULE), libraries={})
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+    _post_paint(page, [])
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    ack = page.evaluate("() => window.__acks[0]")  # type: ignore[attr-defined]
+    main = page.frame(name="main")  # type: ignore[attr-defined]
+
+    # The module is a syntax error once escaped, so `render` never defines.
+    assert ack["ok"] is False
+    assert ack["plottedSeries"] is None
+    assert main.evaluate("() => document.scripts.length") == 2
+
+
+@pytestmark_live
+def test_string_raw_observes_the_escape_backslash(page: object) -> None:
+    shell = build_shell(_from_scratch_document(_STRING_RAW_MODULE), libraries={})
+    page.set_content(_iframe_harness(shell))  # type: ignore[attr-defined]
+    page.wait_for_timeout(100)  # type: ignore[attr-defined]
+    _post_paint(page, [])
+    page.wait_for_function("() => window.__acks.length > 0")  # type: ignore[attr-defined]
+    ack = page.evaluate("() => window.__acks[0]")  # type: ignore[attr-defined]
+    main = page.frame(name="main")  # type: ignore[attr-defined]
+
+    assert ack["ok"] is True
+    # Not the author's `a<!--b`: the raw text carries the escape.
+    assert main.evaluate("() => window.__marker") == "a\\x3C!--b"

@@ -4,6 +4,8 @@
 - **Date:** 2026-08-28
 - **Errata:** 2026-09-29 ([#208](https://github.com/thearcscode/chartagent/issues/208)) —
   Decision 7's channel message shapes for contract version 1, recorded in place.
+  2026-10-14 ([#222](https://github.com/thearcscode/chartagent/issues/222)) — Decision 15,
+  the safe-embedding residual `build_shell` cannot represent.
 - **Settled on:** [#57](https://github.com/thearcscode/chartagent/issues/57)
 - **Builds on:** ADR-0003 (rasterise in a browser), ADR-0005 (`bind` is the public seam;
   `Rasteriser` and `ReviewReport`), ADR-0006 (the server binds, the browser compiles; the
@@ -357,6 +359,16 @@ this rail only**; the Flint path keeps ADR-0003's caution as written.
 
 **Studio owns the user-facing equivalent.** It is not specified here, and no existing screen
 vocabulary is claimed to cover it.
+
+**Erratum — 2026-10-14 ([#222](https://github.com/thearcscode/chartagent/issues/222)).**
+`build_shell` makes module and library text safe to inline by escaping `</script` to `<\/script`
+and `<!--` to `\x3C!--`. That is the identity inside JS strings, templates, regex literals and
+comments. Two cases are not representable: `<!--` in bare code (an HTML-like comment), which
+becomes a syntax error, and `String.raw` or tagged templates, which observe the escape's extra
+backslash. Neither breaks out of the script, and a library pin still verifies against the
+original bytes. The bare-code case surfaces at paint time (`RasterisationError` and a
+`CheckResult`), not as a `DocumentAssemblyError` kind: telling bare code from a string needs a
+JS tokenizer, which the base wheel does not carry. The list of kinds above stays closed.
 
 ### 16. The document contract is versioned
 
